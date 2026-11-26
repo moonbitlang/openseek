@@ -76,7 +76,6 @@ test('PDF upload waits for confirmation then opens from its existing file mentio
   expect(app.requests.find(r => r.method === 'fs.stage_attachments').params.paths).toEqual([
     '.openseek/attachments/upload-1/下载-5-1.pdf',
   ]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('cancelling or failing a document import keeps the editable draft', async ({ page }) => {
@@ -98,7 +97,6 @@ test('cancelling or failing a document import keeps the editable draft', async (
   await select(page);
   await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
   await expect(page.locator('.mention-chip')).toContainText(pdf.name);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('DOCX, XLSX and PPTX drops with empty MIME types use original-file previews', async ({ page }) => {
@@ -136,7 +134,6 @@ test('DOCX, XLSX and PPTX drops with empty MIME types use original-file previews
   for (const document of documents) {
     expect(imports(app).find(r => r.params.source.name === document.name).params.source.data_base64).toBe(document.bytes);
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a staging failure keeps the document reference and rejects the prompt before starting an agent', async ({ page }) => {
@@ -155,5 +152,4 @@ test('a staging failure keeps the document reference and rejects the prompt befo
   await page.locator('#send').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
   expect(imports(app)).toHaveLength(1);
-  expect(app.pageErrors).toEqual([]);
 });

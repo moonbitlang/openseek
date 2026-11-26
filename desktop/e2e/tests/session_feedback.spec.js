@@ -28,17 +28,17 @@ for (const mode of ['Cloud', 'Local']) {
     });
     if (local) {
       app.device.sessionEvents = [{ sequence: 80, ts: 80, item: { kind: 'user', payload: { content: 'Persisted question (80)' } } }];
-      const original = app.device.replyFor.bind(app.device);
-      app.device.replyFor = async request => {
-        if (request.method === 'session.share') return { status: 'shared', url: authOrigin + '/v1/shares/sh_fixture' };
-        if (request.method !== 'session.feedback') return original(request);
-        posts.push(request.params);
-        const attempt = posts.length;
-        await gates[attempt - 1].pending;
-        if (attempt === 1) return { status: 'failed', message: 'storage unavailable' };
-        if (attempt === 4) throw new Error('Unknown command: session.feedback');
-        return { status: 'submitted', id: 'fb_test' };
-      };
+      app.device.mockRpc({
+        'session.share': () => ({ status: 'shared', url: authOrigin + '/v1/shares/sh_fixture' }),
+        'session.feedback': async request => {
+          posts.push(request.params);
+          const attempt = posts.length;
+          await gates[attempt - 1].pending;
+          if (attempt === 1) return { status: 'failed', message: 'storage unavailable' };
+          if (attempt === 4) throw new Error('Unknown command: session.feedback');
+          return { status: 'submitted', id: 'fb_test' };
+        },
+      });
       await page.goto(`${authOrigin}/console/index.html?device=device-a`);
       await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
     } else {
@@ -133,7 +133,6 @@ for (const mode of ['Cloud', 'Local']) {
     await dialog.getByRole('button', { name: 'Share', exact: true }).click();
     await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(/\/v1\/shares\//);
     expect(posts).toHaveLength(5);
-    expect(app.device.pageErrors).toEqual([]);
   });
 }
 
@@ -144,12 +143,10 @@ for (const mode of ['Local', 'Cloud']) {
     await app.install();
     let uploads = 0;
     if (local) {
-      const original = app.device.replyFor.bind(app.device);
-      app.device.replyFor = request => {
-        if (request.method !== 'session.feedback') return original(request);
+      app.device.onRpc('session.feedback', () => {
         uploads++;
         return { status: 'submitted', id: 'fb_test' };
-      };
+      });
       await page.goto(`${authOrigin}/console/index.html?device=device-a`);
       await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
     } else {

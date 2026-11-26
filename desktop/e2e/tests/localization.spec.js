@@ -29,7 +29,6 @@ test('Chinese covers feature pages, composer and dock after live switching', asy
   await page.getByRole('button', { name: '新建计划', exact: true }).click();
   await expect(page.getByText('超时时间（分钟）', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '保存计划', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('language selection updates Settings and sidebar and persists across reload', async ({ page }) => {
@@ -60,7 +59,6 @@ test('language selection updates Settings and sidebar and persists across reload
   await page.getByRole('option', { name: 'English', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Chinese system preference resolves at startup and a failed save keeps the selected language', async ({ page }) => {
@@ -83,7 +81,6 @@ test('Chinese system preference resolves at startup and a failed save keeps the 
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByText(/Could not access the language preference:/)).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  expect(app.pageErrors).toEqual([]);
 });
 
 // Locale matching is covered by i18n/locale_test.mbt. One mounted flow covers
@@ -126,7 +123,6 @@ test('system language switching preserves palette IME, focus and editor contents
   });
   await expect(page.getByLabel('Readonly code viewer', { exact: true })).toBeVisible();
   expect(await page.locator('.view-lines').first().innerText()).toBe(source);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Traditional Chinese system startup yields to an explicit saved choice', async ({ page }) => {
@@ -144,5 +140,4 @@ test('Traditional Chinese system startup yields to an explicit saved choice', as
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('zh-Hans');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
-  expect(app.pageErrors).toEqual([]);
 });

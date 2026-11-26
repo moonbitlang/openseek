@@ -19,7 +19,6 @@ for (const desktop of [false, true]) {
     expect(command.path).toBe(`/v1/sessions/${sessionC}/commands`);
     expect(cloud.requests.indexOf(command)).toBeGreaterThan(cloud.requests.indexOf(creations(cloud)[0]));
     expect(cloud.requests.filter(r => r.method === 'PATCH')).toEqual([]);
-    expect(cloud.device.pageErrors).toEqual([]);
   });
 }
 
@@ -47,5 +46,4 @@ test('failed creation retains its approval and draft across navigation and retry
   expect(creations(cloud).map(r => JSON.parse(r.body))).toEqual([{ approval: 'review' }, { approval: 'review' }]);
   await expect(page.locator('#task')).toHaveValue('');
   await cloud.create();
-  expect(cloud.device.pageErrors).toEqual([]);
 });

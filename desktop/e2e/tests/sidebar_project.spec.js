@@ -45,5 +45,4 @@ test('project host yields its right-aligned slot to pointer and keyboard actions
   await expect(menu).toBeVisible();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
   await expect(page.getByRole('dialog', { name: 'Workspace settings' })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });

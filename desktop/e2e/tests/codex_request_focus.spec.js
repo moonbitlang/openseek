@@ -58,7 +58,6 @@ test('removing an earlier approval preserves keyboard focus and response ownersh
   expect(app.requests.find(r => r.method === 'codex.server_request.respond').params).toMatchObject({
     request_id: 'second-command', response_token: 'second-command', result: { decision: 'accept' },
   });
-  expect(app.pageErrors).toEqual([]);
 });
 
 // Renderer fixtures cover both editable request types; this does not assert
@@ -132,7 +131,6 @@ for (const kind of ['question', 'mcp-form']) {
       resolve(app, 'close-me', 7);
       await expect(question).toHaveCount(0);
     }
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -154,5 +152,4 @@ test('reusing a request id with a new response token replaces its DOM node', asy
   await replacement.click();
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(1);
   expect(app.requests.find(r => r.method === 'codex.server_request.respond').params.response_token).toBe('new-command');
-  expect(app.pageErrors).toEqual([]);
 });

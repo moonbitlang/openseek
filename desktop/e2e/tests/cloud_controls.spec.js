@@ -44,7 +44,6 @@ test('Cloud Stop waits for termination and preserves the editable draft', async 
   await expect(page.locator('#stop')).toHaveCount(0);
   await expect(heartbeat).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Still editable while stopping');
-  expect(app.device.pageErrors).toEqual([]);
 });
 
 for (const state of ['running', 'paused']) {

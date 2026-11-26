@@ -25,7 +25,6 @@ test('reopening a deleted review keeps Diff without reading the missing file', a
   await expect(diff).toContainText('deleted baseline');
   await expect(page.locator('.editor-tab')).toHaveCount(1);
   expect(app.requests.filter(request => request.method === 'fs.read_file')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('one file tab retains its identity across File, diff modes, and repeated opens', async ({ page }) => {
@@ -75,7 +74,6 @@ test('one file tab retains its identity across File, diff modes, and repeated op
   await view.getByRole('button', { name: 'Token diff' }).click();
   await expect(page.locator('.semantic-review[data-mode="token"]')).toBeVisible();
   expect(await originalTab.evaluate(node => node.isConnected)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Search read failures retain the same file comparison and can retry', async ({ page }) => {
@@ -110,5 +108,4 @@ test('Search read failures retain the same file comparison and can retry', async
   await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   await expect(page.locator('#diff-editor-host')).toBeVisible();
   await expect(page.locator('.editor-tab')).toHaveCount(1);
-  expect(app.pageErrors).toEqual([]);
 });

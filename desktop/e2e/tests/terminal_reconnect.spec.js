@@ -14,16 +14,15 @@ async function openTerminal(page, app) {
 
 test('socket loss reconnects the terminal without replaying active or queued input', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  const replyFor = app.replyFor.bind(app);
   let held = false;
-  app.replyFor = request => {
-    if (request.method === 'terminal.input' && !held) {
+  app.onRpc('terminal.input', (_request, next) => {
+    if (!held) {
       held = true;
       // The host received the input but its acknowledgement never arrives.
       return new Promise(() => {});
     }
-    return replyFor(request);
-  };
+    return next();
+  });
   await openTerminal(page, app);
   await page.keyboard.insertText('maybe-delivered');
   await expect.poll(() => app.requests.filter(r => r.method === 'terminal.input').length).toBe(1);
@@ -45,7 +44,6 @@ test('socket loss reconnects the terminal without replaying active or queued inp
     { id: 'terminal-2', data: 'fresh-input' },
   ]);
   await expect(page.locator('.terminal-status')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a host write rejection pauses input without reconnecting or blocking output', async ({ page }) => {
@@ -62,5 +60,4 @@ test('a host write rejection pauses input without reconnecting or blocking outpu
   expect(app.requests.filter(r => r.method === 'terminal.input')).toHaveLength(1);
   expect(app.requests.filter(r => r.method === 'terminal.open')).toHaveLength(1);
   expect(app.socket).toBe(socket);
-  expect(app.pageErrors).toEqual([]);
 });

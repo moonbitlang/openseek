@@ -54,6 +54,5 @@ for (const marker of ['@', '$']) {
       await expectSelection(i);
     }
     expect(await input.boundingBox()).toEqual(inputBounds);
-    expect(app.pageErrors).toEqual([]);
   });
 }

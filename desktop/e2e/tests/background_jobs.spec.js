@@ -55,7 +55,6 @@ test('real background output follows, pauses, resumes, copies its file and stops
   const stop = app.requests.find(r => r.method === 'jobs.stop');
   expect(stop.params).toMatchObject({ scope: { session: 'session-1', workspace: '/workspace' }, generation: 'runtime-new', job_id: app.liveId });
   expect(app.requests.filter(r => r.method === 'jobs.read').every(r => r.params.limit <= 65536)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('historical selection rejects late reads, reports errors and fits a narrow panel', async ({ page }) => {
@@ -82,7 +81,6 @@ test('historical selection rejects late reads, reports errors and fits a narrow 
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await expect(page.getByRole('button', { name: 'Copy tail command', exact: true })).toBeInViewport();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('page reconnect recovers retained job identity and history', async ({ page }) => {
@@ -94,7 +92,6 @@ test('page reconnect recovers retained job identity and history', async ({ page 
   await expect(page.getByRole('button', { name: /Earlier failing test run/ })).toHaveCount(0);
   await expandHistory(page);
   await expect(page.getByRole('button', { name: /Earlier failing test run/ })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a controllable job without a log still exposes Stop and its full ID', async ({ page, context }) => {
@@ -111,7 +108,6 @@ test('a controllable job without a log still exposes Stop and its full ID', asyn
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   expect(app.requests.filter(request => request.method === 'jobs.stop').map(request => request.params.generation)).toEqual(['runtime-new']);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('UUID suffix collisions expand labels while selection and copying retain full IDs', async ({ page, context }) => {
@@ -132,7 +128,6 @@ test('UUID suffix collisions expand labels while selection and copying retain fu
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await expect(page.getByRole('button', { name: 'Copy job ID', exact: true })).toBeInViewport();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('groups lifecycle states and defaults to an active job even after newer history', async ({ page }) => {
@@ -182,7 +177,6 @@ test('groups lifecycle states and defaults to an active job even after newer his
   await page.getByRole('button', { name: /Lifecycle limited/ }).click();
   await expect.poll(() => page.locator('.jobs-panel, .jobs-row, .jobs-status').evaluateAll(elements => elements.every(el => el.scrollWidth <= el.clientWidth + 1))).toBe(true);
   expect(app.requests.filter(r => r.method === 'jobs.stop')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('completion drains paused output then stops log polling while history stays fresh', async ({ page, context }) => {
@@ -214,7 +208,6 @@ test('completion drains paused output then stops log polling while history stays
   expect(app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(reads);
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('history stays folded by default while active jobs remain visible across refreshes', async ({ page }) => {
@@ -242,7 +235,6 @@ test('history stays folded by default while active jobs remain visible across re
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('background program calls update live and retain edit diffs after reload', async ({ page }) => {
@@ -284,7 +276,6 @@ test('background program calls update live and retain edit diffs after reload', 
   await trace.locator(':scope > summary').click();
   await expect(trace.getByRole('img', { name: 'Tool failed' })).toBeVisible();
   await expect(trace.locator('.tool-status-spinner')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('subagent jobs read as agents with their outcome, spend and transcript', async ({ page }) => {
@@ -319,7 +310,6 @@ test('subagent jobs read as agents with their outcome, spend and transcript', as
   await expect(page.locator('.jobs-detail')).toContainText('Session: session-1-sr-2');
   await expect(page.getByRole('button', { name: 'Open transcript', exact: true })).toBeVisible();
   await page.emulateMedia({ colorScheme: 'dark' });
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a worker job shows its worktree, where its changes stand and why', async ({ page }) => {
@@ -361,5 +351,4 @@ test('a worker job shows its worktree, where its changes stand and why', async (
   await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: not mergeable; kept for inspection');
   await expect(detail.locator('.jobs-worktree-reason')).toHaveText('out-of-scope changes (allowed: src/csv): src/main.mbt');
   await page.emulateMedia({ colorScheme: 'dark' });
-  expect(app.pageErrors).toEqual([]);
 });

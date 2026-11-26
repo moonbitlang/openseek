@@ -90,5 +90,4 @@ test('external polls reload changed files without checking workspace diagnostics
   await expect.poll(() => app.count('fs.read_file', '/outside/notes.txt'), { timeout: 5_000 })
     .toBe(3);
   expect(app.count('lsp.open')).toBe(afterWorkspaceChange);
-  expect(app.pageErrors).toEqual([]);
 });

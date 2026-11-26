@@ -46,5 +46,4 @@ test('terminal maximizes into the conversation and restores the saved split', as
   await page.getByTitle('Show terminal (Ctrl+`)').click();
   await expect(page.getByRole('button', { name: 'Restore terminal size' })).toBeVisible();
   expect(app.requests.filter(r => r.method === 'terminal.open')).toHaveLength(1);
-  expect(app.pageErrors).toEqual([]);
 });

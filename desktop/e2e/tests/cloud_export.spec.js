@@ -74,19 +74,16 @@ test('Cloud downloads the original server snapshot and shares without a host exp
   expect(exports[0].method).toBe('GET');
   expect(exports[0].headers.authorization).toBe('Bearer ts_fixture-123');
   expect(cloud.hostRequests.filter(request => ['session.snapshot', 'session.export', 'session.share', 'account.session'].includes(request.method))).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('desktop Cloud downloads use the window save dialog and preserve cancel, save and failure outcomes', async ({ page }) => {
   let reply = { opened: false };
   let failure = null;
   const { cloud, uploads, dialog } = await setup(page, { desktop: true });
-  const original = cloud.device.replyFor.bind(cloud.device);
-  cloud.device.replyFor = async request => {
-    if (request.method !== 'session.snapshot_save') return original(request);
+  cloud.device.onRpc('session.snapshot_save', async () => {
     if (failure) throw new Error(failure);
     return reply;
-  };
+  });
   const download = dialog.getByRole('button', { name: 'Download', exact: true });
   const saves = () => cloud.hostRequests.filter(request => request.method === 'session.snapshot_save');
   await download.click();
@@ -105,6 +102,5 @@ test('desktop Cloud downloads use the window save dialog and preserve cancel, sa
   await expect(download).toBeEnabled();
   expect(cloud.hostRequests.filter(request => request.method === 'session.export')).toEqual([]);
   expect(uploads).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 

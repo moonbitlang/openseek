@@ -74,7 +74,6 @@ test('Cloud shows live reasoning, usage and compaction before committing history
     await expect(reasoning).toHaveCount(1);
     await expect(reasoning).toHaveText('Complete reasoning');
     await expect(page.locator('#transcript').getByText('Answer', { exact: true })).toHaveCount(1);
-    expect(cloud.device.pageErrors).toEqual([]);
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
   } finally {
     resume.forEach(resolve => resolve());

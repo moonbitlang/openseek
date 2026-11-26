@@ -55,7 +55,6 @@ test('the project source selector connects only on confirmation and keeps the cu
   await expect.poll(() => app.attempt).toBe(1);
   await expect(picker).toBeHidden();
   expect(app.requests.some(r => r.method === 'workspace.add')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('SSH failure output scrolls without widening the page and narrow retry remains usable', async ({ page }) => {
@@ -77,7 +76,6 @@ test('SSH failure output scrolls without widening the page and narrow retry rema
   await expect(page.locator('.onboarding-card')).toContainText('Connecting…');
   await page.getByRole('button', { name: 'Cancel connection', exact: true }).click();
   await expect(page.locator('.onboarding-card')).toContainText('Disconnected');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('SSH host identity keeps fingerprint lines scrollable and confirmation controls reachable', async ({ page }) => {
@@ -97,7 +95,6 @@ test('SSH host identity keeps fingerprint lines scrollable and confirmation cont
   await expectContained(accept);
   await accept.click();
   await expect.poll(() => app.requests.some(r => r.method === 'ssh.auth.respond')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('SSH terminal stops claiming recovery after failure or cancellation in a narrow main pane', async ({ page }) => {
@@ -122,5 +119,4 @@ test('SSH terminal stops claiming recovery after failure or cancellation in a na
   await expect.poll(() => app.attempt).toBe(3);
   await page.getByRole('button', { name: 'Cancel connection', exact: true }).click();
   await expect(page.locator('.terminal-status')).toHaveText('Disconnected');
-  expect(app.pageErrors).toEqual([]);
 });

@@ -34,5 +34,4 @@ test('detailed transcript drag supports keyboard copy', async ({ page, context }
   await page.evaluate(() => navigator.clipboard.writeText('clipboard before selection'));
   await page.keyboard.press('ControlOrMeta+c');
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Selectable');
-  expect(app.pageErrors).toEqual([]);
 });

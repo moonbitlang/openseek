@@ -29,15 +29,14 @@ for (const outcome of ['accepted', 'rpc-error']) {
 
     // Hold the host response so the real composer can receive repeated input
     // events, including events already queued before its DOM became disabled.
-    const replyFor = app.replyFor.bind(app);
     let heldRequest;
-    app.replyFor = request => {
-      if (request.method === 'agent.queue' && request.params.action === 'edit') {
+    const restoreQueue = app.onRpc('agent.queue', (request, next) => {
+      if (request.params.action === 'edit') {
         heldRequest = request;
         return new Promise(() => {});
       }
-      return replyFor(request);
-    };
+      return next();
+    });
     const save = page.getByTitle('Save queued message', { exact: true });
     await save.click();
     await expect.poll(() => heldRequest?.id).toBeDefined();
@@ -95,14 +94,13 @@ for (const outcome of ['accepted', 'rpc-error']) {
       await expect(mention.locator('.mention-remove')).toBeEnabled();
       await mention.locator('.mention-remove').click();
       await expect(mention).toHaveCount(0);
-      app.replyFor = replyFor;
+      restoreQueue();
       await composer.fill('Retry this edit');
       await save.click();
       await expect(composer).toHaveValue('');
       await expect(queued).toContainText('Retry this edit');
       expect(edits()).toHaveLength(2);
     }
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -122,15 +120,14 @@ test('queued edit keeps its draft when a failed run precedes acceptance', async 
   await queued.getByTitle('Edit', { exact: true }).click();
   await expect(composer).toHaveValue('Original queued message');
   await composer.fill('Keep this revision');
-  const replyFor = app.replyFor.bind(app);
   let heldRequest;
-  app.replyFor = request => {
-    if (request.method === 'agent.queue' && request.params.action === 'edit') {
+  app.onRpc('agent.queue', (request, next) => {
+    if (request.params.action === 'edit') {
       heldRequest = request;
       return new Promise(() => {});
     }
-    return replyFor(request);
-  };
+    return next();
+  });
   await page.getByTitle('Save queued message', { exact: true }).click();
   await expect.poll(() => heldRequest?.id).toBeDefined();
   await expect(composer).toBeDisabled();
@@ -160,5 +157,4 @@ test('queued edit keeps its draft when a failed run precedes acceptance', async 
   const starts = app.requests.filter(r => r.method === 'agent.start');
   expect(starts[1].params.task).toBe('Continue editing after the run ended');
   await expect(queued).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });

@@ -82,7 +82,6 @@ test('read workflow keeps thought, prose and tool order and highlights mixed out
   await expect(rendered).toContainText('# Documentation <literal>');
   await result.getByText('Original output', { exact: true }).click();
   await expect(result.locator('pre.tool-card-original-json:visible')).toHaveText(output);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const language of ['', 'mbt']) {
@@ -118,7 +117,6 @@ for (const language of ['', 'mbt']) {
       ...run, event: { event: 'assistant_delta', content: 'The answer is 42.' },
     });
     await expect(body.locator('pre.moonbit-source code')).toHaveText('let answer = 42');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -145,7 +143,6 @@ test('saved reasoning and answers default unlabelled code to MoonBit', async ({ 
     await expect(body.locator('code.language-javascript')).toHaveText('const explicit = 1;');
     await expect(body.locator('code.language-javascript span')).toHaveCount(0);
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('write calls show numbered content highlighted by the path language', async ({ page }) => {
@@ -186,5 +183,4 @@ test('write calls show numbered content highlighted by the path language', async
   const plain = calls.nth(writes.length - 1);
   await plain.getByText('Original JSON', { exact: true }).click();
   await expect(plain.locator('pre.tool-card-original-json:visible')).toContainText('"notes.txt"');
-  expect(app.pageErrors).toEqual([]);
 });

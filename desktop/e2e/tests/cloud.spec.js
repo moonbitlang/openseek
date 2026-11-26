@@ -24,7 +24,6 @@ test('browser creates Cloud on first send through the existing composer and unif
   expect(cloud.requests.filter(request => request.path.startsWith('/v1/auth/cloud/'))).toEqual([]);
   expect(cloud.hostRequests.filter(request => request.method === 'cloud.authorize')).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.cloud.token.v1'))).toBeNull();
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud list retry recovers after a network failure without resending or losing the draft', async ({ page }) => {

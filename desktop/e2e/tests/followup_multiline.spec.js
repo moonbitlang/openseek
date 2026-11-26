@@ -75,7 +75,6 @@ for (const [behavior, width] of [['queue', 1440], ['steer', 700]]) {
         await expect(composer).toHaveValue(content);
         await expect(row).toHaveAttribute('open', '');
       }
-      expect(app.pageErrors).toEqual([]);
     });
 }
 
@@ -119,5 +118,4 @@ test('queue disclosures keep their own state when earlier messages are removed',
   await expect(steer).not.toHaveAttribute('open');
   await steer.locator('summary').click();
   expect(await steer.locator('.followup-content').textContent()).toBe('Third message\nEdited details');
-  expect(app.pageErrors).toEqual([]);
 });

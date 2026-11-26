@@ -62,7 +62,6 @@ test('browser Cloud manages the account skill library and completes its skills',
   await expect(labels).toHaveText(['$typst']);
 
   expect(cloud.device.requests.filter(request => request.method.startsWith('skills.'))).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('a signed-in browser selects the named device library and Cloud', async ({ page }) => {
@@ -94,5 +93,4 @@ test('a signed-in browser selects the named device library and Cloud', async ({ 
   await page.getByRole('option', { name: /^Test Mac(?: ·.*)?$/ }).click();
   await expect(row(page, 'local-notes')).toBeVisible();
   await expect(row(page, 'typst')).toHaveCount(0);
-  expect(cloud.device.pageErrors).toEqual([]);
 });

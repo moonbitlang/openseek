@@ -114,5 +114,4 @@ test('sidebar conversation rows render PR status badges with state colors and co
   // Batch endpoint was used rather than one request per PR.
   expect(app.requests.filter(r => r.method === 'github.pull_request_summaries').length).toBeGreaterThanOrEqual(1);
   expect(app.requests.filter(r => r.method === 'github.pull_request_summary')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });

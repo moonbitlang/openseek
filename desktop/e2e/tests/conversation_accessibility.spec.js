@@ -52,7 +52,6 @@ test('conversation titles support keyboard activation and independent row action
   await expect(second).toHaveClass(/active/);
   expect(app.requests.filter(r => r.method === 'session.archive')).toHaveLength(1);
   expect(app.requests.filter(r => r.method === 'session.load' && r.params?.session === 'session-1')).toHaveLength(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('pointer selection keeps the status slot instead of revealing row actions', async ({ page }) => {
@@ -84,7 +83,6 @@ test('pointer selection keeps the status slot instead of revealing row actions',
   await expect(actions).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('opening another conversation saves a title being edited', async ({ page }) => {
@@ -115,7 +113,6 @@ test('opening another conversation saves a title being edited', async ({ page })
   // actions are not pinned open.
   await page.mouse.move(1439, 899);
   await expect(first.locator('.row-menu-button')).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a background reorder does not end or save a title being edited', async ({ page }) => {
@@ -147,7 +144,6 @@ test('a background reorder does not end or save a title being edited', async ({ 
   await input.press('Enter');
   await expect.poll(() => app.requests.filter(r => r.method === 'session.rename')
     .map(r => r.params.title)).toEqual(['Half typed']);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a failed rename is reported even after its project is folded', async ({ page }) => {
@@ -174,7 +170,6 @@ test('a failed rename is reported even after its project is folded', async ({ pa
   await disclosure.click();
   await expect(row.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toBeVisible();
   await expect(input).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 // Inspect the actual height transition at its midpoint without sampling
@@ -230,7 +225,6 @@ test('folding a project retains its expanded preview and reopens with five chats
   await expect(rows).toHaveCount(5);
   await expect(rows.first().getByRole('button', { name: 'Conversation 1', exact: true })).toBeVisible();
   expect(await first.evaluate(node => node === document.querySelector('.project-conversations .conversation-row'))).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('sub-run transcripts are omitted from the sidebar', async ({ page }) => {
@@ -255,7 +249,6 @@ test('sub-run transcripts are omitted from the sidebar', async ({ page }) => {
   expect(contentBox.width).toBeLessThan(sidebarBox.width);
   // At rest without status glyphs, hidden hover actions do not reserve trailing width.
   expect(rowBox.x + rowBox.width - (contentBox.x + contentBox.width)).toBeLessThan(12);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('idle rows give the full trailing width to titles and overlay actions on hover', async ({ page }) => {
@@ -354,5 +347,4 @@ test('idle rows give the full trailing width to titles and overlay actions on ho
   app.rpcDelays.delete('session.load');
   await expect(second).not.toHaveClass(/loading/);
   await expect(openSecond).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });

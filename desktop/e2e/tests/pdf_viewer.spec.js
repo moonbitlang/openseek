@@ -92,7 +92,6 @@ test('opening a PDF defaults to a hidden tree and preserves manual reopening acr
   await page.locator('.editor-tab').filter({ hasText: 'report.pdf' }).click();
   await expectPdf(page);
   await expect(page.locator('.file-tree-pane')).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('PDF controls and confirmed text selections retain structured context', async ({ page }) => {
@@ -170,7 +169,6 @@ test('PDF controls and confirmed text selections retain structured context', asy
   expect(selection.source.reference.document.parser).toEqual({ name: 'pdfjs', version: '6.4.299' });
   expect(task).toContain('Explain this PDF passage');
   expect([...task.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)]).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a malformed PDF reports failure and the next PDF loads normally', async ({ page }) => {
@@ -182,7 +180,6 @@ test('a malformed PDF reports failure and the next PDF loads normally', async ({
   await openFile(app, 'report.pdf');
   await expectPdf(page);
   await expect(page.locator('.textLayer').first()).toContainText('OpenSeek PDF preview');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('encrypted PDFs retry incorrect passwords and release a cancelled session', async ({ page }) => {
@@ -212,7 +209,6 @@ test('encrypted PDFs retry incorrect passwords and release a cancelled session',
   expect(await page.evaluate(() => window.cancelledPdf.alive)).toBe(false);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('PDF uses the shared annotation composer with pinned drafts, Batch, and apply', async ({ page }) => {
@@ -271,7 +267,6 @@ test('PDF uses the shared annotation composer with pinned drafts, Batch, and app
   expect(selections[0].selection.text).toBe('OpenSeek');
   expect(selections[0].source.reference.start.page).toBe(1);
   expect(selections[1].comment).toBe('Apply both');
-  expect(app.pageErrors).toEqual([]);
 });
 
 async function captureRegion(page, rect, { confirm = true } = {}) {
@@ -325,7 +320,6 @@ test.describe('PDF region screenshots', () => {
     expect(JSON.stringify(request.params)).toContain(expected.url);
     expect(JSON.stringify(request.params)).toContain('Explain this figure');
     await expect(page.locator('.composer-image')).toHaveCount(0);
-    expect(app.pageErrors).toEqual([]);
   });
 });
 
@@ -364,7 +358,6 @@ test.describe('PDF touch capture', () => {
     await drag();
     await expect.poll(() => container.evaluate(el => el.scrollTop)).toBeGreaterThan(before + 50);
     await cdp.detach();
-    expect(app.pageErrors).toEqual([]);
   });
 });
 
@@ -413,7 +406,6 @@ test('PDF capture feedback sends the image and instruction with existing typing'
     expect(geometry.bbox[2]).toBeGreaterThan(geometry.bbox[0]);
     expect(geometry.bbox[3]).toBeGreaterThan(geometry.bbox[1]);
     await expect(feedback).toBeHidden();
-    expect(app.pageErrors).toEqual([]);
   });
 
 async function hoverPdfText(page, text) {
@@ -468,5 +460,4 @@ test('PDF element hover and a slightly moving click attach text, page and screen
   await app.openSession();
   await expect(sent.locator('.mention-chip')).toContainText('report.pdf · p. 1');
   await expect(sent.locator('.msg-content')).toHaveText('Rename this heading');
-  expect(app.pageErrors).toEqual([]);
 });

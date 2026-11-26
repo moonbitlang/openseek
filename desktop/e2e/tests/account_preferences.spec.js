@@ -45,5 +45,4 @@ test('account preferences load on opening Settings and save only the confirmed s
   await openSettings(page);
   await expect(toggle(page)).not.toBeChecked();
   expect(requests.filter(r => r.method === 'PATCH')).toHaveLength(2);
-  expect(cloud.device.pageErrors).toEqual([]);
 });

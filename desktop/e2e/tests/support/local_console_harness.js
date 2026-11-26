@@ -57,7 +57,7 @@ export class LocalConsoleHarness extends CloudHarness {
         const request = JSON.parse(message.toString());
         this.device.requests.push(request);
         if (request.id === undefined) return;
-        socket.send(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: await this.device.replyFor(request) }));
+        socket.send(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: await this.device.dispatchRpc(request) }));
       });
       socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { protocol: this.device.hostProtocol } }));
     });

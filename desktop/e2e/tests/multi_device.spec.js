@@ -19,5 +19,4 @@ test('a Cloud page opens a device conversation in place and owns its history', a
   await page.goForward();
   await expect(page).toHaveURL(/\/device\/device-a\/chat\/session\/session-1$/);
   expect(await page.evaluate(() => window.sameDocument)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });

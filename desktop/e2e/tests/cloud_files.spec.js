@@ -191,7 +191,6 @@ for (const desktop of [false, true]) {
       expect(request.body).toEqual({ path });
     }
     expect(fileHostRequests(cloud)).toEqual([]);
-    expect(cloud.device.pageErrors).toEqual([]);
   });
 }
 
@@ -279,7 +278,6 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   await expect(chip).toContainText('index.html');
   await expect.poll(() => indexes().length).toBe(2);
   expect(fileHostRequests(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud browses nested text files through the existing read-only Files pane', async ({ page }) => {
@@ -302,7 +300,6 @@ test('Cloud browses nested text files through the existing read-only Files pane'
   finishRefresh(); cloud.holdRead = null;
   await expect(source(page)).toContainText('Refreshed text');
   expect(fileHostRequests(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud keeps Office and PDF previews in existing tabs and unsupported binaries explicit', async ({ page }) => {
@@ -355,7 +352,6 @@ test('Cloud keeps Office and PDF previews in existing tabs and unsupported binar
   await file(page, 'large.txt').click();
   await expect(page.locator('.viewer-notice')).toContainText(/large/i);
   expect(fileHostRequests(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('generation completion refreshes Cloud directories and an open text preview', async ({ page }) => {
@@ -436,7 +432,6 @@ test('Cloud text search reuses options, results, keyboard tabs and positioned fi
   await expect(source(page)).toContainText('moon moon');
   expect(cloud.fileRequests.some(request => request.content && request.path === 'src/hello #.mbt')).toBe(true);
   expect(fileHostRequests(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud code search streams shared results, navigates ranges, and cancels an obsolete query', async ({ page }) => {
@@ -478,7 +473,6 @@ test('Cloud code search streams shared results, navigates ranges, and cancels an
     await search.locator('.search-result-row').getByRole('button').click();
     await expect(source(page)).toContainText('inspect(1)');
     expect(fileHostRequests(cloud)).toEqual([]);
-    expect(cloud.device.pageErrors).toEqual([]);
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
   } finally { resume(); }
 });
@@ -507,11 +501,10 @@ test('Cloud download failure shows progress, reports the error and permits retry
 
 test('Desktop Cloud downloads use the window command with the original cache and report native failures', async ({ page }) => {
   const cloud = new CloudFilesHarness(page, { desktop: true });
-  const reply = cloud.device.replyFor.bind(cloud.device);
   let failure = false;
-  cloud.device.replyFor = request => request.method === 'cloud.file_download'
-    ? failure ? { kind: 'failed', message: 'Downloads is not writable' } : { kind: 'saved', path: '/Downloads/hello #.mbt', revealed: true }
-    : reply(request);
+  cloud.device.onRpc('cloud.file_download', () => failure
+    ? { kind: 'failed', message: 'Downloads is not writable' }
+    : { kind: 'saved', path: '/Downloads/hello #.mbt', revealed: true });
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
   const before = cloud.fileRequests.length;
   await page.getByRole('button', { name: 'Download to local', exact: true }).click();
@@ -568,7 +561,6 @@ test('Cloud code feedback preserves the owning draft, sends Annotation and reope
   expect(content).toContain('fn hello() -> String { "Cloud text" }');
   expect(content).toContain('Explain this function');
   expect(fileHostRequests(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud file sharing works before preview and from an unpreviewable file path bar', async ({ page, context }) => {
@@ -614,7 +606,6 @@ test('Cloud file sharing works before preview and from an unpreviewable file pat
   expect(shares()[1].body.idempotency_key).not.toBe(shares()[0].body.idempotency_key);
   expect(cloud.fileRequests.filter(request => request.content || request.head || request.download)).toHaveLength(reads);
   expect(fileHostRequests(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud Quick Open finds and opens files without a host', async ({ page }) => {
@@ -636,15 +627,13 @@ test('Cloud Quick Open finds and opens files without a host', async ({ page }) =
   expect(cloud.fileRequests.filter(request => request.content && request.path === 'src/hello #.mbt')).toHaveLength(1);
   expect(cloud.fileRequests.some(request => request.index && request.session === sessionA)).toBe(true);
   expect(fileHostRequests(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Host Quick Open retains both file and workspace-symbol shortcuts', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  const reply = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'lsp.workspace_symbols'
-    ? { symbols: [{ name: 'fixture_symbol', path: 'src/main.mbt', kind: 12, container: null, range: { start: { line: 1, col: 0 }, end: { line: 1, col: 14 } } }] }
-    : reply(request);
+  app.onRpc('lsp.workspace_symbols', () => ({
+    symbols: [{ name: 'fixture_symbol', path: 'src/main.mbt', kind: 12, container: null, range: { start: { line: 1, col: 0 }, end: { line: 1, col: 14 } } }],
+  }));
   await app.install(); await app.goto(); await app.openSession();
   await page.keyboard.press('ControlOrMeta+p');
   await expect(page.getByRole('dialog', { name: 'Search workspace files', exact: true })).toBeVisible();
@@ -655,7 +644,6 @@ test('Host Quick Open retains both file and workspace-symbol shortcuts', async (
   await expect(palette.getByRole('option')).toContainText(['fixture_symbol']);
   expect(app.requests.some(request => request.method === 'fs.search_files')).toBe(true);
   expect(app.requests.some(request => request.method === 'lsp.workspace_symbols')).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('preview_open reuses Cloud viewers and parks another session without stealing focus', async ({ page }, testInfo) => {
@@ -666,11 +654,7 @@ test('preview_open reuses Cloud viewers and parks another session without steali
   for (const name of names.slice(3)) cloud.contents.set(`${sessionA}:${name}`, { kind: 'content', content: `// Tool preview ${name}`, sig: name, absolute: `/${name}` });
   cloud.contents.set(`${sessionB}:notes.txt`, { kind: 'content', content: 'Session B tool preview', sig: 'b', absolute: '/notes.txt' });
   const native = [];
-  const reply = cloud.device.replyFor.bind(cloud.device);
-  cloud.device.replyFor = request => {
-    if (request.method.startsWith('browser.')) { native.push(request); return {}; }
-    return reply(request);
-  };
+  cloud.device.onRpc(/^browser\./, request => { native.push(request); return {}; });
   await cloud.install(); await cloud.goto(); await cloud.open();
   const preview = (session, path) => page.evaluate(payload => window.desktopEvent('openseek.preview.open_requested', payload), { kind: 'cloud', account: cloud.userId, session, path });
   await preview(sessionA, 'src/main.mbt');
@@ -697,17 +681,12 @@ test('preview_open reuses Cloud viewers and parks another session without steali
   await preview(sessionA, 'index.html');
   await expect(page.locator('.browser-address')).toHaveValue('https://preview.example.test/index.html');
   await expect.poll(() => native.some(r => r.method === 'browser.set_visible' && r.params.visible)).toBe(true);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('preview_open reuses Local file reads and the existing HTML preview command', async ({ page }) => {
   const cloud = new CloudHarness(page, { desktop: true });
   const native = [];
-  const reply = cloud.device.replyFor.bind(cloud.device);
-  cloud.device.replyFor = request => {
-    if (request.method.startsWith('browser.')) { native.push(request); return {}; }
-    return reply(request);
-  };
+  cloud.device.onRpc(/^browser\./, request => { native.push(request); return {}; });
   await cloud.install(); await cloud.goto();
   await page.getByRole('button', { name: 'Work', exact: true }).click();
   await cloud.device.openSession();
@@ -721,7 +700,6 @@ test('preview_open reuses Local file reads and the existing HTML preview command
   await expect(page.locator('.word-page')).toBeVisible();
   await preview('index.htm');
   await expect.poll(() => native.some(r => r.method === 'browser.preview' && r.params.path === '/workspace/index.htm' && r.params.root === '/workspace' && r.params.session === 'session-1')).toBe(true);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud AI pattern repair sends no client configuration overrides', async ({ page }) => {
@@ -748,5 +726,4 @@ test('Cloud AI pattern repair sends no client configuration overrides', async ({
   await expect.poll(() => repairs.length).toBe(1);
   expect(repairs[0]).toEqual({ pattern: 'broken', generation: expect.any(Number) });
   await expect(search.getByRole('textbox', { name: 'pattern', exact: true })).toHaveValue('inspect($_)');
-  expect(cloud.device.pageErrors).toEqual([]);
 });

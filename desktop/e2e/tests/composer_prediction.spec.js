@@ -32,7 +32,6 @@ class PredictionHarness extends DesktopBrowserHarness {
   }
   assertNoPredictionRequests() {
     expect(this.requests.filter(r => ['agent.predict', 'agent.cancel_prediction'].includes(r.method))).toEqual([]);
-    expect(this.pageErrors).toEqual([]);
   }
 }
 

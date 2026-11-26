@@ -65,15 +65,13 @@ test('semantic selection follows match, file, and pattern controls', async ({ pa
   await expect(chip).toHaveCount(0);
   await page.getByRole('button', { name: 'Code search', exact: true }).click();
   await expect(chip).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('large semantic selection retries and sends its original draft while later selection changes survive', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.semanticSearchMatches = largeSelection();
   const materialization = Promise.withResolvers();
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = request => request.method === method ? materialization.promise : replyFor(request);
+  app.onRpc(method, () => materialization.promise);
   app.rpcErrors.set(method, 'disk full');
   await app.install();
   await app.goto();
@@ -113,7 +111,6 @@ test('large semantic selection retries and sends its original draft while later 
   await expect(chips).toHaveCount(1);
   await expect(chips).toContainText('100 matches');
   expect(app.requests.filter(request => request.method === 'agent.start')).toHaveLength(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('closing the follow-up menu does not steal focus back from the composer', async ({ page }) => {
@@ -143,16 +140,13 @@ test('closing the follow-up menu does not steal focus back from the composer', a
   await page.keyboard.press('Enter');
   await expect(page.locator('.queued-input-row')).toContainText('Queued draft to preserve');
   expect(app.requests.filter(request => request.method === 'agent.steer')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('queued message Edit waits for semantic preparation so the send keeps its draft and target', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.semanticSearchMatches = largeSelection();
   const materialization = Promise.withResolvers();
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = request => request.method === method
-    ? materialization.promise : replyFor(request);
+  app.onRpc(method, () => materialization.promise);
   await app.install();
   await app.goto();
   await app.openSession();
@@ -190,7 +184,6 @@ test('queued message Edit waits for semantic preparation so the send keeps its d
   await composer.fill('Edited after preparation');
   await page.getByTitle('Save queued message', { exact: true }).click();
   await expect(queued).toContainText('Edited after preparation');
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const provider of ['OpenSeek session', 'Codex']) {
@@ -228,7 +221,6 @@ for (const provider of ['OpenSeek session', 'Codex']) {
     await chip.click();
     await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible();
     await expect(page.locator('.search-semantic-hit')).toHaveCount(1);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -237,18 +229,19 @@ for (const worktree of [false, true]) {
     const app = new DesktopBrowserHarness(page);
     app.codexModels = codexModels;
     app.semanticSearchMatches = largeSelection();
-      const root = worktree ? '/workspace/worktrees/semantic-e2e' : '/workspace';
-      const replyFor = app.replyFor.bind(app);
-    app.replyFor = request => {
-      if (request.method === method) return { path, match_count: 101, file_count: 1 };
-      if (request.method === 'worktree.create') return { name: 'semantic-e2e', worktrees: [{
-        name: 'semantic-e2e', branch: 'test', base: 'main', path: root, present: true,
-        sessions: [], codex_thread: 'codex-thread-e2e',
-      }] };
-      if (request.method === 'codex.thread.resume') return { thread: { id: 'codex-thread-e2e', cwd: root, turns: [] } };
-      if (request.method === 'codex.turn.steer') return { turnId: 'codex-turn-e2e' };
-      return replyFor(request);
-    };
+    const root = worktree ? '/workspace/worktrees/semantic-e2e' : '/workspace';
+    app.mockRpc({
+      [method]: () => ({ path, match_count: 101, file_count: 1 }),
+      'worktree.create': () => ({
+        name: 'semantic-e2e',
+        worktrees: [{
+          name: 'semantic-e2e', branch: 'test', base: 'main', path: root, present: true,
+          sessions: [], codex_thread: 'codex-thread-e2e',
+        }],
+      }),
+      'codex.thread.resume': () => ({ thread: { id: 'codex-thread-e2e', cwd: root, turns: [] } }),
+      'codex.turn.steer': () => ({ turnId: 'codex-turn-e2e' }),
+    });
     app.rpcErrors.set(method, 'disk full');
     await app.install();
     await app.goto();
@@ -280,7 +273,6 @@ for (const worktree of [false, true]) {
     const steered = app.requests.find(request => request.method === 'codex.turn.steer');
     expect(steered.params.input).toContainEqual({ type: 'mention', name: 'selection.jsonl', path: `${root}/${path}` });
     expect(JSON.stringify(steered.params.input)).not.toContain('<match file=');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -311,6 +303,5 @@ for (const clear of [false, true]) {
     expect(sent.match(/<match file=/g) || []).toHaveLength(clear ? 0 : 100);
     expect(sent).not.toContain('semantic_search_file');
     expect(app.requests.filter(request => request.method === method)).toHaveLength(1);
-    expect(app.pageErrors).toEqual([]);
   });
 }

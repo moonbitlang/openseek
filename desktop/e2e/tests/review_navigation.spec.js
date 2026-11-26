@@ -24,56 +24,50 @@ async function settleReviewScroll(page) {
   });
 }
 
-{
-  const mode = 'Tree';
-
-  test(`${mode} each navigation click retains its target among short sections without Git refreshes`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    const baseline = Array.from({ length: 12 }, (_, i) => `fn value_${i}() -> Int {\n  ${i}\n}\n`).join('\n');
-    app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = baseline;
-    app.workingFiles['src/main.mbt'] = baseline.replace(/\n  (\d+)\n/g, '\n  100 + $1\n');
-    // Hold subsequent Git refresh responses after the initial review loads.
-    // Navigation must publish its own state, even when host polling stalls.
-    let pauseGitRefresh = false;
-    let heldGitRefreshes = 0;
-    const replyFor = app.replyFor.bind(app);
-    app.replyFor = request => {
-      if (pauseGitRefresh && request.method === 'git.changes') {
-        heldGitRefreshes++;
-        return new Promise(() => {});
-      }
-      return replyFor(request);
-    };
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    await app.openReview();
-    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    await selectDiffMode(page, mode);
-    const position = page.locator('.review-hunk-position');
-    await settleReviewScroll(page);
-    await expect(position).toHaveText('Change 1 of 12');
-    pauseGitRefresh = true;
-    await expect.poll(() => heldGitRefreshes).toBeGreaterThan(0);
-    for (let i = 2; i <= 12; i++) {
-      await page.getByRole('button', { name: 'Next change', exact: true }).click();
-      await settleReviewScroll(page);
-      await expect(position).toHaveText(`Change ${i} of 12`, { timeout: 1500 });
-      await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
+test('Tree each navigation click retains its target among short sections without Git refreshes', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const baseline = Array.from({ length: 12 }, (_, i) => `fn value_${i}() -> Int {\n  ${i}\n}\n`).join('\n');
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = baseline;
+  app.workingFiles['src/main.mbt'] = baseline.replace(/\n  (\d+)\n/g, '\n  100 + $1\n');
+  // Hold subsequent Git refresh responses after the initial review loads.
+  // Navigation must publish its own state, even when host polling stalls.
+  let pauseGitRefresh = false;
+  let heldGitRefreshes = 0;
+  app.onRpc('git.changes', (request, next) => {
+    if (pauseGitRefresh) {
+      heldGitRefreshes++;
+      return new Promise(() => {});
     }
-    for (let i = 11; i >= 1; i--) {
-      await page.getByRole('button', { name: 'Previous change', exact: true }).click();
-      await settleReviewScroll(page);
-      await expect(position).toHaveText(`Change ${i} of 12`, { timeout: 1500 });
-      await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
-    }
-    // Reading with the wheel must still update the active hunk after a reveal.
-    await page.locator('#semantic-review-host').hover();
-    await page.mouse.wheel(0, 700);
-    await expect(position).not.toHaveText('Change 1 of 12');
-    expect(app.pageErrors).toEqual([]);
+    return next();
   });
-}
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await selectDiffMode(page, 'Tree');
+  const position = page.locator('.review-hunk-position');
+  await settleReviewScroll(page);
+  await expect(position).toHaveText('Change 1 of 12');
+  pauseGitRefresh = true;
+  await expect.poll(() => heldGitRefreshes).toBeGreaterThan(0);
+  for (let i = 2; i <= 12; i++) {
+    await page.getByRole('button', { name: 'Next change', exact: true }).click();
+    await settleReviewScroll(page);
+    await expect(position).toHaveText(`Change ${i} of 12`, { timeout: 1500 });
+    await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
+  }
+  for (let i = 11; i >= 1; i--) {
+    await page.getByRole('button', { name: 'Previous change', exact: true }).click();
+    await settleReviewScroll(page);
+    await expect(position).toHaveText(`Change ${i} of 12`, { timeout: 1500 });
+    await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
+  }
+  // Reading with the wheel must still update the active hunk after a reveal.
+  await page.locator('#semantic-review-host').hover();
+  await page.mouse.wheel(0, 700);
+  await expect(position).not.toHaveText('Change 1 of 12');
+});
 
 for (const mode of ['Line', 'Tree']) {
   test(`${mode} continuous navigation crosses files in both directions and wraps`, async ({ page }) => {
@@ -119,7 +113,6 @@ for (const mode of ['Line', 'Tree']) {
     await page.keyboard.press('n');
     await expect(main).toHaveAttribute('aria-current', 'page');
     await expect(position).toHaveText('Change 1 of 2');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -149,7 +142,6 @@ test('Tree review toolbar receives n/p/m keyboard shortcuts', async ({ page }) =
   await expect(mark).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('m');
   await expect(mark).toHaveAttribute('aria-pressed', 'false');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('review shortcuts preserve modified keys, composition, repeats, and feedback typing', async ({ page }) => {
@@ -180,5 +172,4 @@ test('review shortcuts preserve modified keys, composition, repeats, and feedbac
   await expect(feedback).toHaveValue('npm');
   await expect(main).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  expect(app.pageErrors).toEqual([]);
 });

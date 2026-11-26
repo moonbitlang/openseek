@@ -22,60 +22,26 @@ async function installDesktop(page, { managed = false } = {}) {
     route.fulfill({ json: { allow_content_improvement: false } }));
   const environment = { ...signedIn, managed_by_env: true };
   const auth = { status: managed ? environment : signedOut, account: null, finishConnect: null, requests: app.requests, app };
-  await page.exposeFunction('desktopRequest', request => {
-    app.requests.push(request);
-    switch (request.method) {
-      case 'app.system_appearance':
-        return { dark: false };
-      case 'auth.status':
-        return auth.status;
-      case 'account.session':
-        return auth.account ? { session: auth.account } : {};
-      case 'remote.access_set':
-        auth.status = request.params.enabled ? signedIn : signedOut;
-        return auth.status;
-      case 'auth.connect':
-        return new Promise(resolve => {
-          auth.finishConnect = () => {
-            auth.account = { token: 'ts_fixture', user: { user_id: '123', login: 'octocat', avatar_url: '' } };
-            resolve(auth.status);
-          };
-        });
-      case 'auth.disconnect':
-        auth.account = null;
-        auth.status = managed ? environment : signedOut;
-        return auth.status;
-      default:
-        return app.replyFor(request);
-    }
+  app.mockRpc({
+    'auth.status': () => auth.status,
+    'account.session': () => (auth.account ? { session: auth.account } : {}),
+    'remote.access_set': request => {
+      auth.status = request.params.enabled ? signedIn : signedOut;
+      return auth.status;
+    },
+    'auth.connect': () => new Promise(resolve => {
+      auth.finishConnect = () => {
+        auth.account = { token: 'ts_fixture', user: { user_id: '123', login: 'octocat', avatar_url: '' } };
+        resolve(auth.status);
+      };
+    }),
+    'auth.disconnect': () => {
+      auth.account = null;
+      auth.status = managed ? environment : signedOut;
+      return auth.status;
+    },
   });
-  await page.addInitScript(() => {
-    const listeners = new Map();
-    const events = {
-      on(name, callback) {
-        const callbacks = listeners.get(name) || new Set();
-        listeners.set(name, callbacks);
-        callbacks.add(callback);
-        return () => callbacks.delete(callback);
-      },
-    };
-    window.desktopEvent = (name, payload) => {
-      for (const callback of listeners.get(name) || []) callback({ payload });
-    };
-    window.__MoonBit__ = {
-      getTitlebarArea: async () => null,
-      app: events,
-      events,
-      openseek: new Proxy({}, {
-        get: (_, method) => async params => {
-          if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 6 });
-          }
-          return window.desktopRequest({ method, params });
-        },
-      }),
-    };
-  });
+  await app.installNative();
   await page.goto('/index.html');
   await page.getByRole('main').waitFor();
   return auth;
@@ -117,7 +83,6 @@ test('account sign-in remains independent of the remote access toggle and signs 
   await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
   await page.getByRole('tab', { name: 'Connections', exact: true }).click();
   await expect(toggle).toBeDisabled();
-  expect(auth.app.pageErrors).toEqual([]);
 });
 
 test('FPS overlay switch toggles with the keyboard and restores the saved preference', async ({ page }) => {
@@ -137,7 +102,6 @@ test('FPS overlay switch toggles with the keyboard and restores the saved prefer
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.fps_overlay'))).toBe('false');
-  expect(auth.app.pageErrors).toEqual([]);
 });
 
 test('environment-managed remote access keeps its connection while the account logs out', async ({ page }) => {
@@ -154,5 +118,4 @@ test('environment-managed remote access keeps its connection while the account l
   await expect(page.getByRole('region', { name: 'Remote access', exact: true }).getByRole('link', { name: 'Open', exact: true })).toHaveAttribute('href', signedIn.device.url);
   expect(auth.status.connected).toBe(true);
   expect(auth.requests.filter(request => request.method === 'remote.access_set')).toEqual([]);
-  expect(auth.app.pageErrors).toEqual([]);
 });

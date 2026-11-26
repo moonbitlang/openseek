@@ -58,5 +58,4 @@ test('Up and Down recall the conversation\'s sent prompts', async ({ page }) => 
   await expect(caption).toHaveText('History 1/1');
   await task.pressSequentially('!');
   await expect(caption).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });

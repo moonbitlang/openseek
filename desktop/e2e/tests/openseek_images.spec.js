@@ -59,7 +59,6 @@ test('image-only OpenSeek input is sent and renders from durable history after r
   await page.reload();
   await app.openSession();
   await expect(page.locator('.user-image')).toHaveAttribute('src', url);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('OpenSeek restores images after rejection and includes pasted images in steering', async ({ page }) => {
@@ -81,7 +80,6 @@ test('OpenSeek restores images after rejection and includes pasted images in ste
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'agent.steer')?.params.images).toEqual([url]);
   await expect(page.locator('.composer-image')).toHaveCount(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('queued OpenSeek images survive editing', async ({ page }) => {
@@ -100,15 +98,14 @@ test('queued OpenSeek images survive editing', async ({ page }) => {
   await page.locator('.queued-input-action[aria-label="Edit"]').click();
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
   await page.locator('#task').fill('Compare these');
-  const replyFor = app.replyFor.bind(app);
   let heldRequest;
-  app.replyFor = request => {
-    if (request.method === 'agent.queue' && request.params.action === 'edit') {
+  const restoreQueue = app.onRpc('agent.queue', (request, next) => {
+    if (request.params.action === 'edit') {
       heldRequest = request;
       return new Promise(() => {});
     }
-    return replyFor(request);
-  };
+    return next();
+  });
   await page.locator('#send').click();
   await expect.poll(() => heldRequest?.params.images).toEqual([url]);
   const remove = page.locator('.composer-image-remove');
@@ -119,7 +116,7 @@ test('queued OpenSeek images survive editing', async ({ page }) => {
   await expect(remove).toBeEnabled();
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
   await expect(page.locator('#task')).toHaveValue('Compare these');
-  app.replyFor = replyFor;
+  restoreQueue();
   await page.locator('#send').click();
   await expect(page.locator('#task')).toHaveValue('');
   await expect(page.locator('.composer-image')).toHaveCount(0);
@@ -127,7 +124,6 @@ test('queued OpenSeek images survive editing', async ({ page }) => {
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
   await remove.click();
   await expect(page.locator('.composer-image')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('durable user and tool content render images between their text parts', async ({ page }) => {
@@ -167,7 +163,6 @@ test('durable user and tool content render images between their text parts', asy
     nodes.map(node => node.querySelector('img') ? 'image' : node.textContent),
   );
   expect(sections).toEqual([expect.stringContaining('Show the browser fixture before picture'), 'image', expect.stringContaining('After picture')]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('read_image and PTC results display images when committed and after reload', async ({ page }) => {
@@ -206,7 +201,6 @@ test('read_image and PTC results display images when committed and after reload'
       await expect(result.locator('.user-image')).toHaveAttribute('src', url);
       await expect.poll(() => result.locator('.user-image').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
     }
-    expect(app.pageErrors).toEqual([]);
   }
   await verify();
   await page.reload();

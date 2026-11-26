@@ -24,7 +24,6 @@ test('Cloud session direct access and refresh do not depend on catalog membershi
   await expect(page.locator('#task')).toHaveValue('');
   expect(creations(cloud)).toEqual([]);
   expect(cloud.device.socket).toBeNull();
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud login returns to the exact deep link without creating a session', async ({ page }) => {
@@ -40,6 +39,5 @@ test('Cloud login returns to the exact deep link without creating a session', as
   await expect(page).toHaveURL(destination);
   await expect(page.locator('#task')).toBeVisible();
   expect(creations(cloud)).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 

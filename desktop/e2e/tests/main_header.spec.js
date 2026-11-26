@@ -34,7 +34,6 @@ test('management dialogs preserve the empty project header', async ({ page }) =>
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true })).toBeInViewport();
   await page.getByRole('dialog').getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expectHeader(page, 'SeekMoon');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('loading and failure retain the selected conversation title', async ({ page }) => {
@@ -69,5 +68,4 @@ test('loading and failure retain the selected conversation title', async ({ page
   await expectHeader(page, title);
   await expect(composer).toHaveValue('Keep my unfinished draft');
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });

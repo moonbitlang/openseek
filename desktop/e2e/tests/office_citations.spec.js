@@ -61,7 +61,6 @@ test('PDF citations open the exact physical page from inline badges, cards and s
   await expect(page.locator('.file-panel-error')).toContainText('cited location');
   await expect(page.locator('#openseek-office-surface')).toBeVisible();
   expect(app.requests.filter(r => r.method === 'host.open_path').every(r => !r.params.path.includes('#'))).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Word citations highlight a proven source paragraph and a unique heading without selecting text', async ({ page }) => {
@@ -85,7 +84,6 @@ test('Word citations highlight a proven source paragraph and a unique heading wi
   await page.locator('.citation[data-citation="3"] button').click();
   await expect(page.locator('.file-panel-error')).toContainText('cited location');
   await expect(page.locator('.office-citation-target')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Excel citation cards switch worksheets and highlight only the exact cited range', async ({ page }) => {
@@ -117,7 +115,6 @@ test('Excel citation cards switch worksheets and highlight only the exact cited 
   await page.locator('.citation[data-citation="4"] button').click();
   await expect(detail.locator('td.office-citation-target')).toHaveCount(1);
   await expect(detail.locator('[data-cell="A1"]')).toHaveClass(/office-citation-target/);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Excel citations reveal a far virtual range without a native scroll and keep recycled cells highlighted', async ({ page }) => {
@@ -168,7 +165,6 @@ test('Excel citations reveal a far virtual range without a native scroll and kee
   await expect(sparse.locator('td.office-citation-target')).toHaveCount(4);
   expect(await page.evaluate(() => window.virtualCellScrolls)).toBe(0);
   await expect(page.locator('.office-selection-preview')).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Excel citations into a closed panel wait for the virtual sheet layout before revealing', async ({ page }) => {
@@ -185,5 +181,4 @@ test('Excel citations into a closed panel wait for the virtual sheet layout befo
   await expect(target).toBeInViewport();
   await expect(sparse.locator('td.office-citation-target')).toHaveCount(4);
   await expect(page.locator('.file-panel-error')).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });

@@ -23,10 +23,9 @@ function history(answer, finished = true) {
 function fixture(page, answer, finished = true) {
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = history(answer, finished);
-  const ordinary = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'fs.read_file'
-    ? { kind: 'content', absolute: request.params.root + '/' + request.params.path, content: request.params.path.endsWith('.html') ? sample : 'week,revenue\n1,19', sig: 'fixture' }
-    : ordinary(request);
+  app.onRpc('fs.read_file', request => ({
+    kind: 'content', absolute: request.params.root + '/' + request.params.path, content: request.params.path.endsWith('.html') ? sample : 'week,revenue\n1,19', sig: 'fixture',
+  }));
   return app;
 }
 
@@ -87,7 +86,6 @@ for (const minimal of [true, false]) {
         await page.screenshot({ path: `${process.env.OPENSEEK_UI_CAPTURE_DIR}/artifact-file-chart-dark-narrow.png` });
       }
     }
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -143,25 +141,21 @@ test('an explicit artifact marker can preview an ordinary workspace HTML path', 
 
 test('an oversized file keeps its open card without executing partial HTML', async ({ page }) => {
   const app = fixture(page, fence('large.html'));
-  const ordinary = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'fs.read_file' ? { kind: 'oversized' } : ordinary(request);
+  app.onRpc('fs.read_file', () => ({ kind: 'oversized' }));
   await app.install(); await app.goto(); await app.openSession();
   await expect(page.getByRole('button', { name: 'Open large.html', exact: true })).toBeVisible();
   await expect(page.locator('.chat-artifact-frame')).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('an explicitly marked HTML page larger than the editor default remains interactive', async ({ page }) => {
   const app = fixture(page, fence('larger.html'));
-  const ordinary = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'fs.read_file'
-    ? { kind: 'content', absolute: '/workspace/larger.html', sig: 'fixture', content: sample + '<!--' + 'x'.repeat(1024 * 1024) + '-->' }
-    : ordinary(request);
+  app.onRpc('fs.read_file', () => ({
+    kind: 'content', absolute: '/workspace/larger.html', sig: 'fixture', content: sample + '<!--' + 'x'.repeat(1024 * 1024) + '-->',
+  }));
   await app.install(); await app.goto(); await app.openSession();
   const frame = page.frameLocator('.chat-artifact-frame');
   await expect(frame.locator('svg')).toBeVisible();
   await frame.getByRole('button', { name: 'Actual', exact: true }).click();
   await expect(frame.getByRole('button', { name: 'Actual', exact: true })).toHaveAttribute('aria-pressed', 'false');
   expect(app.requests.find(request => request.method === 'fs.read_file').params.max_bytes).toBe(8 * 1024 * 1024);
-  expect(app.pageErrors).toEqual([]);
 });

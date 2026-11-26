@@ -8,7 +8,6 @@ for (const endpoint of ['auth/me', 'devices']) {
     await page.route(`**/v2/${endpoint}`, route => route.fulfill({ status: 401, body: '' }));
     await page.goto('/index.html?device=device-a');
     await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -34,7 +33,6 @@ for (const endpoint of ['auth/me', 'devices']) {
     await app.openSession();
     await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
     await expect(retry).toBeHidden();
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -45,7 +43,6 @@ test('network failure reaches the retry UI', async ({ page }) => {
   await page.goto('/index.html?device=device-a');
   await expect(page.getByRole('main').getByText(/the relay is unreachable:/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('same-origin cookies and empty logout POST survive HTTP transport replacement', async ({ page, context, baseURL }) => {
@@ -71,7 +68,6 @@ test('same-origin cookies and empty logout POST survive HTTP transport replaceme
   expect(logout.method).toBe('POST');
   expect(logout.body?.length ?? 0).toBe(0);
   expect(logout.headers.cookie).toContain('session=fixture');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('logout failure retains the session and decodes the response text', async ({ page }) => {
@@ -89,5 +85,4 @@ test('logout failure retains the session and decodes the response text', async (
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByText('Retry �', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
 });

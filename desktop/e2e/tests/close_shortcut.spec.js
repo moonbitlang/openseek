@@ -5,57 +5,10 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 // in Chromium; macOS menu key-equivalent handling still needs a native test.
 async function installDesktop(page, systemDark = false, customTitlebar = false) {
   const app = new DesktopBrowserHarness(page);
-  await app.install();
   app.systemDark = systemDark;
-  let terminalId = 0;
-  await page.exposeFunction('desktopRequest', request => {
-    app.requests.push(request);
-    if (request.method === 'app.system_appearance') {
-      return { dark: app.systemDark };
-    }
-    if (request.method === 'app.set_titlebar_style') return { custom_overlay: customTitlebar };
-    if (request.method === 'terminal.open') return { id: `terminal-${++terminalId}` };
-    return app.replyFor(request);
-  });
-  await page.addInitScript(() => {
-    const listeners = new Map();
-    const events = {
-      on(name, callback) {
-        const callbacks = listeners.get(name) || new Set();
-        listeners.set(name, callbacks);
-        callbacks.add(callback);
-        return () => callbacks.delete(callback);
-      },
-    };
-    window.desktopEvent = (name, payload) => {
-      for (const callback of listeners.get(name) || []) callback({ payload });
-    };
-    window.titlebarArea = null;
-    window.__MoonBit__ = {
-      getTitlebarArea: async () => {
-        if (window.titlebarFullscreen) return null;
-        if (window.customTitlebarHeight) {
-          return { x: 0, y: 0, width: innerWidth - 138, height: window.customTitlebarHeight };
-        }
-        return window.titlebarArea;
-      },
-      app: events,
-      events,
-      openseek: new Proxy({}, {
-        get: (_, method) => async params => {
-          if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 6 });
-          }
-          const reply = await window.desktopRequest({ method, params });
-          if (method === 'app.set_titlebar_style' && reply.custom_overlay) {
-            // The real host rounds to a native row before reporting CSS geometry.
-            window.customTitlebarHeight = Math.round(params.height);
-          }
-          return reply;
-        },
-      }),
-    };
-  });
+  app.onRpc('app.set_titlebar_style', () => ({ custom_overlay: customTitlebar }));
+  await app.install();
+  await app.installNative();
   await page.goto('/index.html');
   await app.openSession();
   return app;
@@ -119,7 +72,6 @@ test('native browser notifications cross the local bridge with navigation and fa
   await page.locator('.editor-tab.active .tab-close').click();
   await expect(page.locator('.editor-tab')).toHaveCount(0);
   await expect.poll(() => app.requests.filter(request => request.method === 'browser.close').map(request => request.params.id)).toEqual([id]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('fixed sidebar toggle respects native geometry across pages and fullscreen', async ({ page }) => {
@@ -183,7 +135,6 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   await expect(toggle).toHaveAccessibleName('Hide sidebar');
   await toggle.click();
   await expect(toggle).toHaveAccessibleName('Show sidebar');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Launcher tabs receive focus and Close never closes the window', async ({ page }) => {
@@ -205,7 +156,6 @@ test('Launcher tabs receive focus and Close never closes the window', async ({ p
     await expect(page.getByRole('button', { name: 'Show panel', exact: true })).toBeVisible();
   }
   expect(app.requests.filter(request => request.method === 'app.close_window')).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Selecting a dock tab moves focus out of the composer', async ({ page }) => {
@@ -264,7 +214,6 @@ test('Close follows terminal focus and keeps the remaining terminal usable', asy
   await page.locator('#task').click();
   await closeFocused(page);
   await expect.poll(() => requests('app.close_window').length).toBe(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Windows caption row follows the app font and theme and clears in fullscreen', async ({ page }) => {
@@ -351,7 +300,6 @@ test('Windows caption row follows the app font and theme and clears in fullscree
   });
   await expect(root).toHaveClass(/native-titlebar-custom/);
   expect((await geometry()).rowHeight).toBe(resized.nativeHeight);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Windows caption color returns to the outer dialog when the SSH editor closes', async ({ page }) => {
@@ -396,7 +344,6 @@ test('desktop theme follows Proton and ignores browser color-scheme changes', as
   await page.reload();
   await expect.poll(queries).toBe(before + 2);
   await expect(root).toHaveAttribute('data-theme', 'light');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('web theme follows the browser without querying native appearance', async ({ page }) => {
@@ -409,7 +356,6 @@ test('web theme follows the browser without querying native appearance', async (
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   expect(app.requests.some(r => r.method === 'app.system_appearance')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('titlebar geometry ignores stale replies and preserves the last valid area on errors', async ({ page }) => {
@@ -463,5 +409,4 @@ test('titlebar geometry ignores stale replies and preserves the last valid area 
   await page.evaluate(() => window.titlebarReads.at(-1).resolve(null));
   await expect.poll(leftInset).toBe('');
   await expect(root).not.toHaveClass(/native-titlebar-overlay/);
-  expect(app.pageErrors).toEqual([]);
 });

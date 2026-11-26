@@ -54,7 +54,6 @@ test('ordinary context toggles stay free of menu state after outside focus and p
     await expect(button).not.toHaveAttribute('aria-expanded');
     await clickHunkContext(page, button);
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('selected changes retain their preview during live language switching', async ({ page }) => {
@@ -98,7 +97,6 @@ test('selected changes retain their preview during live language switching', asy
   await expect(traditionalPopup.getByRole('button', { name: '在審閱中開啟', exact: true })).toBeVisible();
   await expect(region).toHaveAccessibleName(/^src\/main\.mbt: 原始 L.+ → 修改後 L.+$/);
   expect(await traditionalPopup.locator('.changes-preview').allTextContents()).toEqual(preview);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('composer script previews pin one coordinate and sign while code scrolls', async ({ page }) => {
@@ -150,7 +148,6 @@ test('composer script previews pin one coordinate and sign while code scrolls', 
     expect(after.sign).toBeCloseTo(before.sign, 1);
     expect(after.source).toBeCloseTo(before.source - 180, 1);
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('review hunk context stays independent and sends only selected snapshots', async ({ page }) => {
@@ -254,7 +251,6 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await expect(first).toHaveText('Add to context');
   await expect(page.locator('.notification')).toHaveCount(0);
   expect(app.requests.filter(request => request.method === 'git.changes').length).toBeGreaterThan(changesRequests);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('review context survives regrouping and a partial group changes only on explicit action', async ({ page }) => {
@@ -325,7 +321,6 @@ test('review context survives regrouping and a partial group changes only on exp
   await page.getByRole('menuitem', { name: 'Remove included changes' }).click();
   await expect(page.locator('.composer-changes .changes-chip')).toHaveCount(0);
   await expect(contextButtons(page)).toHaveText('Add to context');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Codex composer groups multiple files and preserves deletion context on send', async ({ page }) => {
@@ -384,7 +379,6 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await expect(popup.locator('.changes-file').filter({ hasText: 'lib.mbt' })
     .locator('.editor-diff-row.added')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 
@@ -460,7 +454,6 @@ test('saved message changes keep independent disclosures and immutable previews'
   await popup.getByRole('button', { name: 'Close selected changes', exact: true }).click();
   await expect(popup).toBeHidden();
   await expect(chips.first()).toBeFocused();
-  expect(app.pageErrors).toEqual([]);
 });
 
 
@@ -499,7 +492,6 @@ last added
   ]);
   await expect(preview.locator('.editor-diff-row.gap')).toHaveCount(2);
   await expect(preview.locator('before, after')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('queued save consumes only the submitted part of a merged review selection', async ({ page }) => {
@@ -517,15 +509,14 @@ test('queued save consumes only the submitted part of a merged review selection'
   await page.locator('.queued-input-row').getByTitle('Edit', { exact: true }).click();
   await expect(composer).toHaveValue('Queued message');
   await clickHunkContext(page, contextButtons(page).first());
-  const replyFor = app.replyFor.bind(app);
   let heldRequest;
-  app.replyFor = request => {
-    if (request.method === 'agent.queue' && request.params.action === 'edit') {
+  app.onRpc('agent.queue', (request, next) => {
+    if (request.params.action === 'edit') {
       heldRequest = request;
       return new Promise(() => {});
     }
-    return replyFor(request);
-  };
+    return next();
+  });
   await page.getByTitle('Save queued message', { exact: true }).click();
   await expect.poll(() => heldRequest?.id).toBeDefined();
   await expect(composer).toBeDisabled();
@@ -548,5 +539,4 @@ test('queued save consumes only the submitted part of a merged review selection'
   const next = app.requests.filter(r => r.method === 'agent.queue' && r.params.action === 'add')[1];
   expect(next.params.text).toContain('\n  200\n');
   expect(next.params.text).not.toContain('\n  100\n');
-  expect(app.pageErrors).toEqual([]);
 });

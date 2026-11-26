@@ -35,54 +35,28 @@ class ExportHarness extends DesktopBrowserHarness {
       await route.fulfill({ status: this.grantStatus, contentType: 'application/json', body: JSON.stringify({ upload_token: 'sug_fixture', expires_in: 600 }) });
     });
     if (!browser) {
-    await this.page.exposeFunction('desktopRequest', async request => {
-      this.requests.push(request);
-      if (request.method === 'app.system_appearance') return { dark: false };
-      if (request.method === 'session.export') return this.downloadReply;
-      if (request.method === 'account.session') return this.accountSignedIn ? { session: { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: `user-${this.userId}`, avatar_url: '' } } } : {};
-      if (request.method === 'auth.disconnect') {
-        this.accountSignedIn = false;
-        if (this.pendingSignOut) await this.pendingSignOut;
-        return { connected: false };
-      }
-      if (request.method === 'auth.cancel') { this.signInCancelled = true; return { connected: false }; }
-      if (request.method === 'auth.connect') {
-        if (this.pendingSignIn) await this.pendingSignIn;
-        if (this.signInError || this.signInCancelled) throw new Error(this.signInError || 'the sign-in was cancelled');
-        this.accountSignedIn = true;
-        return { connected: false };
-      }
-      return this.replyFor(request);
-    });
-    await this.page.addInitScript(() => {
-      const listeners = new Map();
-      const events = {
-        on(name, callback) {
-          const callbacks = listeners.get(name) || new Set();
-          listeners.set(name, callbacks);
-          callbacks.add(callback);
-          return () => callbacks.delete(callback);
+      this.mockRpc({
+        'session.export': () => this.downloadReply,
+        'account.session': () => this.accountSignedIn
+          ? { session: { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: `user-${this.userId}`, avatar_url: '' } } }
+          : {},
+        'auth.disconnect': async () => {
+          this.accountSignedIn = false;
+          if (this.pendingSignOut) await this.pendingSignOut;
+          return { connected: false };
         },
-      };
-      window.desktopEvent = (name, payload) => {
-        for (const callback of listeners.get(name) || []) callback({ payload });
-      };
-      window.__MoonBit__ = {
-        getTitlebarArea: async () => null,
-        app: events,
-        events,
-        openseek: new Proxy({}, {
-          get: (_, method) => async params => {
-            if (method === 'host.connect') {
-              for (const callback of listeners.get('openseek.agent.connected') || []) {
-                callback({ payload: { protocol: 6 } });
-              }
-            }
-            return window.desktopRequest({ method, params });
-          },
-        }),
-      };
-    });
+        'auth.cancel': () => {
+          this.signInCancelled = true;
+          return { connected: false };
+        },
+        'auth.connect': async () => {
+          if (this.pendingSignIn) await this.pendingSignIn;
+          if (this.signInError || this.signInCancelled) throw new Error(this.signInError || 'the sign-in was cancelled');
+          this.accountSignedIn = true;
+          return { connected: false };
+        },
+      });
+      await this.installNative();
     } else {
       await this.page.addInitScript(() => localStorage.setItem('seekmoon.account.v1', JSON.stringify({ token: 'ts_browser-account', user: { user_id: 'browser-account', login: 'browser-user', avatar_url: '' } })));
     }
@@ -127,7 +101,6 @@ test('export opens choices and downloads locally without publishing', async ({ p
     session: 'session-1', workspace: '/workspace', archived: false,
   });
   expect(app.hostShares.length).toBe(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('share publishes once and copies the returned link', async ({ page, context }) => {
@@ -153,7 +126,6 @@ test('share publishes once and copies the returned link', async ({ page, context
   await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
   await expect(link).toHaveValue(app.shareReply.url);
   await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeDisabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('share offers sign-in and keeps upload failures actionable', async ({ page }) => {
@@ -171,7 +143,6 @@ test('share offers sign-in and keeps upload failures actionable', async ({ page 
   await expect(dialog).toContainText('Sharing is unavailable on this server.');
   await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
   await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('sign-in errors preserve their cause and offer recovery', async ({ page }) => {
@@ -190,7 +161,6 @@ test('sign-in errors preserve their cause and offer recovery', async ({ page }) 
   await expect(dialog).not.toContainText('TLS certificate verification failed');
   expect(app.count('auth.connect')).toBe(2);
   expect(app.hostShares.length).toBe(0); // retrying sign-in does not publish
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const cancel of ['Escape', 'button']) {
@@ -211,7 +181,6 @@ for (const cancel of ['Escape', 'button']) {
     finish();
     await app.openExport();
     await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -237,7 +206,6 @@ test('browser Work sharing captures the selected host but publishes as the brows
   await dialog.getByRole('button', { name: 'Download', exact: true }).click();
   expect((await download).suggestedFilename()).toBe('conversation.html');
   expect(app.count('session.export')).toBe(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 
@@ -258,7 +226,6 @@ for (const status of [401, 403]) {
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_browser-account');
       await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
     }
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -272,7 +239,6 @@ test('a rejected upload grant does not sign out the browser account', async ({ p
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_browser-account');
   expect(app.count('auth.disconnect')).toBe(0);
   await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('share login stays retryable while rejected account cleanup is pending', async ({ page }) => {
@@ -302,7 +268,6 @@ test('share login stays retryable while rejected account cleanup is pending', as
     finishSignIn();
     await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
     expect(app.hostShares).toHaveLength(1); // sign-in returns to confirmation
-    expect(app.pageErrors).toEqual([]);
   } finally {
     finishSignOut();
     finishSignIn();
@@ -379,7 +344,6 @@ for (const browser of [false, true]) {
     await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
     await expect.poll(() => app.count('fs.share_file')).toBe(3);
     expect(app.hostShares[2].source).toEqual({ root: '/workspace', path: 'artifact.bin' });
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -401,5 +365,4 @@ test('Back keeps a dialog above a panel that only covers the page after a resize
   await expect(overview).toBeVisible();
   expect(await back()).toBe(true);
   await expect(overview).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });

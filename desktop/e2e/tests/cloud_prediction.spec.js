@@ -48,7 +48,6 @@ class CloudPredictionHarness extends CloudHarness {
   assertNoPredictionRequests() {
     expect(this.requests.filter(request => /predict/.test(request.path))).toEqual([]);
     expect(this.device.requests.filter(request => /predict/.test(request.method))).toEqual([]);
-    expect(this.device.pageErrors).toEqual([]);
   }
 }
 

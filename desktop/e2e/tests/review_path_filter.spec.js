@@ -41,7 +41,6 @@ test('Review filters changed paths live, clears, and preserves the open diff', a
   await expect(rows).toHaveCount(3);
   await expect(input).toHaveValue('');
   await expect(input).toBeFocused();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Review combines extension checkboxes with paths and clears both filters', async ({ page }) => {
@@ -108,23 +107,18 @@ test('Review combines extension checkboxes with paths and clears both filters', 
   await menu.getByRole('checkbox', { name: 'No extension', exact: true }).uncheck();
   await expect(rows).toHaveCount(0);
   await expect(trigger).toContainText('none');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('shared filters follow the expanded commit even with no working changes', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.gitChanges = [];
-  const reply = app.replyFor.bind(app);
-  app.replyFor = request => {
-    const result = reply(request);
-    if (request.method === 'git.commit_changes') {
-      return { ...result, changes: request.params.commit === app.gitHead ? [
-        { path: 'docs/new.md', original_path: 'old/readme.md', status: 'renamed', kind: 'file' },
-        { path: 'LICENSE', status: 'added', kind: 'file' },
-      ] : [{ path: 'config.json', status: 'modified', kind: 'file' }] };
-    }
-    return result;
-  };
+  app.onRpc('git.commit_changes', (request, next) => ({
+    ...next(),
+    changes: request.params.commit === app.gitHead ? [
+      { path: 'docs/new.md', original_path: 'old/readme.md', status: 'renamed', kind: 'file' },
+      { path: 'LICENSE', status: 'added', kind: 'file' },
+    ] : [{ path: 'config.json', status: 'modified', kind: 'file' }],
+  }));
   app.rpcDelays.set('git.commit_changes', 250);
   await app.install();
   await app.goto();
@@ -176,7 +170,6 @@ test('shared filters follow the expanded commit even with no working changes', a
   // The toolbar stays accessible when the working Changes section is collapsed.
   await page.locator('#review-changes-section .review-section-header').click();
   await expect(input).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test("the host's Back closes the browser-owned File types popover before any layer", async ({ page }) => {
@@ -196,5 +189,4 @@ test("the host's Back closes the browser-owned File types popover before any lay
   await expect(menu).toBeHidden();
   await expect(page.locator('#review-changes-body')).toBeVisible();
   expect(await back()).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });

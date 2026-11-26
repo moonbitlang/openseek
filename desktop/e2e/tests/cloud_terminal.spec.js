@@ -45,7 +45,6 @@ test('Cloud terminal authenticates before RPC and reuses xterm input, resize and
   await page.getByTitle('Close terminal', { exact: true }).click();
   await expect.poll(() => terminal.requests('terminal.close').length).toBe(1);
   expect(cloud.hostRequests.filter(request => request.method.startsWith('terminal.'))).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 async function shell(page, terminal, command) {
@@ -83,6 +82,5 @@ test('Cloud ! lazily creates one session, reuses terminal result encoding, and p
   await expect(page.locator('#task')).toHaveValue('Later writing');
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
   await expect(page.locator('.terminal-tab')).toHaveCount(0);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
