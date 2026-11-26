@@ -469,10 +469,6 @@
   font-family: inherit;
   font-size: inherit;
 }
-.empty-project-search input::placeholder {
-  color: var(--color-text-muted);
-  opacity: 1;
-}
 .empty-project-options {
   display: grid;
   min-height: 0;

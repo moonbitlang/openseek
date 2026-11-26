@@ -1172,7 +1172,6 @@
   color: inherit;
   font: inherit;
 }
-.sidebar-search input::placeholder { color: inherit; opacity: 1; }
 .sidebar-search-clear { --icon-size: var(--icon-sm); width: 1.5rem; height: 1.5rem; }
 .conversation-row.search-selected {
   --row-bg: var(--color-bg-subtle);

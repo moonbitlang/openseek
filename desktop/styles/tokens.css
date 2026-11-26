@@ -90,6 +90,7 @@
     var(--dark-text-secondary)
   );
   --color-text-muted: light-dark(var(--light-text-muted), var(--dark-text-muted));
+  --color-text-placeholder: color-mix(in srgb, var(--color-text-muted) 50%, var(--color-bg-canvas));
   --color-text-inline-code: light-dark(
     var(--light-text-inline-code),
     var(--dark-text-inline-code)

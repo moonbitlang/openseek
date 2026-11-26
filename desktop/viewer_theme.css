@@ -162,7 +162,7 @@
   --vscode-input-background: var(--color-bg-surface);
   --vscode-input-foreground: var(--color-text-primary);
   --vscode-input-border: var(--color-border);
-  --vscode-input-placeholderForeground: var(--color-text-muted);
+  --vscode-input-placeholderForeground: var(--color-text-placeholder);
   --vscode-inputValidation-infoBorder: var(--color-accent);
   --vscode-button-background: var(--color-accent);
   --vscode-button-foreground: var(--color-on-accent);
