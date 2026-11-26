@@ -20,6 +20,17 @@ test "a bare list marker at end of input renders via the fallback" {
 }
 
 ///|
+/// Expected paths produced from `file://` destinations follow the host
+/// separator: `Uri::fs_path` returns backslashes on Windows, slashes elsewhere.
+fn native_file_path(path : String) -> String {
+  if @common.platform_is_win32() {
+    path.replace_all(old="/", new="\\")
+  } else {
+    path
+  }
+}
+
+///|
 test "markdown file actions decode URI destinations exactly once" {
   let paths : Array[String] = []
   let open = path => {
@@ -58,7 +69,7 @@ test "markdown file actions decode URI destinations exactly once" {
     "./docs/a%20b.md:12:3",
     "./docs/a+b.md",
     "./docs/100%zz.md",
-    "/tmp/Application Support/guide.md",
+    native_file_path("/tmp/Application Support/guide.md"),
   ])
 }
 
@@ -188,8 +199,10 @@ test "Office citation fragments preserve encoded sheet and heading values" {
     ),
   )
   assert_eq(paths, [
-    "/docs/My Budget.xlsx#sheet=Q1%20%26%20Q2&range=B2:D8", "/docs/report.docx#heading=Revenue%2520growth",
-    "/docs/report.pdf#page=2", "/docs/book.xlsx#sheet=Q1%26Q2&range=A1",
+    "/docs/My Budget.xlsx#sheet=Q1%20%26%20Q2&range=B2:D8",
+    "/docs/report.docx#heading=Revenue%2520growth",
+    native_file_path("/docs/report.pdf#page=2"),
+    native_file_path("/docs/book.xlsx#sheet=Q1%26Q2&range=A1"),
   ])
   ignore(
     @markdown.markdown_nodes(
