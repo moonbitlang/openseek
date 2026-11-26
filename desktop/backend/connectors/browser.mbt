@@ -94,7 +94,7 @@ async fn respond(
       "Referrer-Policy": "no-referrer",
       "Connection": "close",
     })
-    conn.write_string(message)
+    conn.text.write(message)
     conn.end_response()
   } catch {
     _ => ()

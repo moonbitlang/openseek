@@ -41,8 +41,8 @@ async fn scripted_provider(group : @async.TaskGroup, delta : Json) -> String? {
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        conn.write_string("data: \{chunk.stringify()}\n\n")
-        conn.write_string("data: [DONE]\n\n")
+        conn.text.write("data: \{chunk.stringify()}\n\n")
+        conn.text.write("data: [DONE]\n\n")
       },
       max_connections=8,
     )

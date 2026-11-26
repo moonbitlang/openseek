@@ -286,7 +286,7 @@ pub async fn Schedules::action(
       Stop =>
         for run in state.runs {
           if run.schedule_id == entry.id && run.status is Running {
-            self.stopped.add(run.id)
+            self.stopped.insert(run.id)
             if self.processes.get(run.id) is Some(process) {
               process.cancel()
             }

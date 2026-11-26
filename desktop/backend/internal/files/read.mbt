@@ -29,7 +29,7 @@ pub async fn materialize_semantic_selection(
   let files : Set[String] = Set([])
   for match_ in payload.matches {
     source_units += match_.matched_source.length() + match_.file.length()
-    files.add(match_.file)
+    files.insert(match_.file)
   }
   guard source_units <= MaxSemanticSelectionArtifactUnits else {
     raise InvalidRequest("semantic selection is too large to materialize")
@@ -528,7 +528,7 @@ fn file_stamp(
   ctime : @fs.Timestamp,
   size : Int64,
 ) -> String {
-  "\{mtime.sec()}:\{mtime.nsec()}:\{ctime.sec()}:\{ctime.nsec()}:\{size}"
+  "\{mtime.sec()}:\{mtime.subsec_nanos()}:\{ctime.sec()}:\{ctime.subsec_nanos()}:\{size}"
 }
 
 ///|

@@ -71,7 +71,7 @@ async fn run_app_server(
             guard body.length() + read <= 65536 else {
               raise @host.HostError("Initialize too large")
             }
-            body.write_bytes(Bytes::from_array(chunk[:read]))
+            body.write_bytesview(Bytes::from_array(chunk[:read]))
           }
           let request : AppServerInitializeRequest = @json.from_json(
             @json.parse(@utf8.decode(body.to_bytes())),

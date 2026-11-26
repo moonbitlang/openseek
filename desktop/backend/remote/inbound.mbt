@@ -15,7 +15,7 @@ async fn Inbound::read(reader : &@io.BinaryReader) -> Inbound {
     if read > InboundFrameMaxBytes - buffer.length() {
       return Oversized
     }
-    buffer.write_bytes(Bytes::from_array(chunk[:read]))
+    buffer.write_bytesview(Bytes::from_array(chunk[:read]))
   }
   classify(@utf8.decode(buffer.to_bytes()))
 }

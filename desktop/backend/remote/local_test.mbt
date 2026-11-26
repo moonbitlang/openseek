@@ -181,7 +181,7 @@ async test "local browser sign-in and logout are independent of Desktop and keep
   defer issuer.close()
   let console = @remote.LocalConsole::bind(
     port=0,
-    account_origin="http://127.0.0.1:\{issuer.addr.port}",
+    account_origin="http://127.0.0.1:\{issuer.local_addr().port}",
   )
   let exchanges : Array[String] = []
   let logouts : Array[String?] = []
@@ -216,7 +216,7 @@ async test "local browser sign-in and logout are independent of Desktop and keep
           "Content-Length": body.length().to_string(),
           "Connection": "close",
         })
-        conn.write_string(body)
+        conn.text.write(body)
         conn.end_response()
       }
     })

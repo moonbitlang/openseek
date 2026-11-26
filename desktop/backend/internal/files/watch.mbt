@@ -83,7 +83,7 @@ fn WatchInterest::WatchInterest(
   for path in payload.directories {
     let path = @pathx.Relative(path).normalize()
     if !interest.recursive || @file_search_policy.excludes_directory(path.0) {
-      interest.directories.add(path)
+      interest.directories.insert(path)
       interest.remember(path)
     }
   }
@@ -104,7 +104,7 @@ fn WatchInterest::remember(
       } else {
         "\{prefix}/\{segment}"
       }
-      self.paths.add(Relative(prefix))
+      self.paths.insert(Relative(prefix))
     }
   }
 }

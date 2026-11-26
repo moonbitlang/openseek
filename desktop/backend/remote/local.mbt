@@ -304,7 +304,7 @@ async fn respond_json(conn : @http.ServerConnection, body : Json) -> Unit {
     "Cache-Control": "no-store",
     "Connection": "close",
   })
-  conn.write_string(text)
+  conn.text.write(text)
   conn.end_response()
 }
 
@@ -507,6 +507,6 @@ async fn respond_account_page(
     "Cache-Control": "no-store",
     "Connection": "close",
   })
-  conn.write_string(body)
+  conn.text.write(body)
   conn.end_response()
 }

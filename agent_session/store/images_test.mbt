@@ -49,7 +49,7 @@ async test "resumed inline images are sent directly in user and tool content" {
         assert_eq(request.path, "/chat/completions")
         chats.push(@json.parse(data))
         connection.send_response(200, "OK")
-        connection.write_string(
+        connection.text.write(
           (
             {
               "choices": [

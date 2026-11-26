@@ -77,7 +77,7 @@ async test "prediction preserves the main request prefix and leaves the session 
             },
           }
           conn.send_response(200, "OK")
-          conn.write_string(reply.stringify())
+          conn.text.write(reply.stringify())
           conn.end_response()
         },
         max_connections=1,
@@ -150,7 +150,7 @@ async test "uncertain predictions are absent and malformed model output stays an
             },
           }
           conn.send_response(200, "OK")
-          conn.write_string(reply.stringify())
+          conn.text.write(reply.stringify())
           conn.end_response()
         },
         max_connections=1,

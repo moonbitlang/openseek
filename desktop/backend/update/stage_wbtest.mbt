@@ -16,7 +16,7 @@ async test "package download streams to disk and reports byte progress" {
         (_request, conn) => {
           let _ = conn.read_all()
           conn.send_response(200, "OK", extra_headers={ "Content-Length": "6" })
-          conn.write_string("abcdef")
+          conn.text.write("abcdef")
           conn.end_response()
         },
         max_connections=1,
@@ -75,13 +75,13 @@ async test "package download follows HTTP 302 redirects" {
               "Location": location,
               "Content-Length": "5",
             })
-            conn.write_string("moved")
+            conn.text.write("moved")
             conn.end_response()
             return
           }
           assert_eq(request.path, "/asset.zip")
           conn.send_response(200, "OK", extra_headers={ "Content-Length": "6" })
-          conn.write_string("abcdef")
+          conn.text.write("abcdef")
           conn.end_response()
         },
         max_connections=1,

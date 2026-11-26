@@ -125,7 +125,7 @@ async test "share refusal retires the captured login and preserves a newer one" 
           assert_true(store.desired_connector() is None)
         }
         connection.send_response(401, "Unauthorized")
-        connection.write_string("{}")
+        connection.text.write("{}")
         connection.end_response()
       })
       let reply = share.upload(
@@ -208,7 +208,7 @@ async test "remote grants never retire the host account even when the upload is 
         assert_eq(request.headers.get("Idempotency-Key"), Some("b".repeat(64)))
         connection.skip_request_body()
         connection.send_response(code, "Rejected")
-        connection.write_string("{\"error\":\"invalid_upload_grant\"}")
+        connection.text.write("{\"error\":\"invalid_upload_grant\"}")
         connection.end_response()
       })
       let reply = share.upload(

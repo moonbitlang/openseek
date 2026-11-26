@@ -153,10 +153,7 @@ pub async fn Service::start(
     image_directory,
   }
   let worker = group.spawn(no_wait=true, () => {
-    server.run_forever(max_connections=MaxConnections, allow_failure=true, (
-      socket,
-      _,
-    ) => {
+    server.run_forever(max_connections=MaxConnections, allow_failure=true, socket => {
       let conn = @http.ServerConnection(socket)
       defer conn.close()
       let reader = @loopback_http.RequestReader(socket)
@@ -715,7 +712,7 @@ async fn send(conn : @http.ServerConnection, result : Json) -> Unit {
     conn.send_response(200, "OK", extra_headers={
       "Content-Type": "application/json",
     })
-    conn.write_string(result.stringify())
+    conn.text.write(result.stringify())
     conn.end_response()
   })
 }

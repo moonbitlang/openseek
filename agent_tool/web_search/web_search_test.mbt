@@ -70,7 +70,7 @@ async test "web_search executes end-to-end against a mock messages endpoint" {
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write_string(sample_response_body())
+          conn.text.write(sample_response_body())
         },
         max_connections=4,
       )
@@ -112,7 +112,7 @@ async test "web_search surfaces a provider error as a recoverable tool error" {
           conn.send_response(401, "Unauthorized", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write_string(
+          conn.text.write(
             "{\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}",
           )
         },

@@ -316,7 +316,7 @@ async fn respond_json(
   conn.send_response(200, "OK", extra_headers={
     "Content-Type": "application/json",
   })
-  conn.write_string(reply.stringify())
+  conn.text.write(reply.stringify())
 }
 
 ///|
@@ -794,7 +794,7 @@ async test "a script that stops mid-call cancels the call on its server" {
                 })
                 try {
                   for ;; {
-                    conn.write_string(": waiting\n\n")
+                    conn.text.write(": waiting\n\n")
                     @async.sleep(20)
                   }
                 } catch {

@@ -84,7 +84,7 @@ pub fn ActionsMonitor::set_artifacts(
       @github.canonical_pull_request_url(artifact.url) is Some(url) else {
       continue
     }
-    urls.add(url)
+    urls.insert(url)
   }
   for url in self.watches.keys().collect() {
     if !urls.contains(url) &&

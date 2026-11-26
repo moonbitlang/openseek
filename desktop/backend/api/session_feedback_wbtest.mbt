@@ -138,7 +138,7 @@ async test "feedback uploads metadata and both complete files from one conversat
         }
       }
       connection.send_response(201, "Created")
-      connection.write_string("{\"id\":\"fb_test\"}")
+      connection.text.write("{\"id\":\"fb_test\"}")
       connection.end_response()
     })
     let reply = state.publish_feedback(payload, account, server_url=origin)
@@ -179,7 +179,7 @@ async test "feedback uploads metadata and both complete files from one conversat
         ignore(connection.read_request())
         connection.skip_request_body()
         connection.send_response(code, "Fixture")
-        connection.write_string(body)
+        connection.text.write(body)
         connection.end_response()
       })
       assert_eq(

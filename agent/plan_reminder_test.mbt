@@ -36,21 +36,21 @@ async fn plan_test_server(
         "Content-Type": "text/event-stream",
       })
       if record_first && bodies.length() == 1 {
-        conn.write_string(
+        conn.text.write(
           (
             #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_plan","function":{"name":"plan","arguments":"{\"steps\":[{\"title\":\"fix the parser\",\"status\":\"in_progress\"}]}"}}]}}]}
           ),
         )
-        conn.write_string("\n\n")
+        conn.text.write("\n\n")
       } else if bodies.length() <= plan_calls {
-        conn.write_string(
+        conn.text.write(
           (
             #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_plan","function":{"name":"plan","arguments":"{\"steps\":[{\"title\":\"step\",\"status\":\"doing\"}]}"}}]}}]}
           ),
         )
-        conn.write_string("\n\n")
+        conn.text.write("\n\n")
       } else {
-        conn.write_string(
+        conn.text.write(
           (
             #|data: {"choices":[{"delta":{"content":"done"}}]}
             #|
@@ -58,7 +58,7 @@ async fn plan_test_server(
           ),
         )
       }
-      conn.write_string("data: [DONE]\n\n")
+      conn.text.write("data: [DONE]\n\n")
     },
   )
 }

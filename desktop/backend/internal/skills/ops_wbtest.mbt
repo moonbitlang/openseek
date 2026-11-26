@@ -25,7 +25,7 @@ async test "manual installation clears its startup failure before notifying clie
           "/api/v0/skills" => conn.send_response(503, "Service Unavailable")
           "/api/v0/skills/moonbitlang/office-cli%401.0.0" => {
             conn.send_response(200, "OK")
-            conn.write_string(
+            conn.text.write(
               (
                 {
                   "owner": "moonbitlang",

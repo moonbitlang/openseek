@@ -128,7 +128,7 @@ async fn session_group(
 ///|
 /// A file time as `(seconds, nanoseconds)`, which compares and orders.
 fn file_stamp(time : @fs.Timestamp) -> (Int64, Int32) {
-  (time.sec(), time.nsec())
+  (time.sec(), time.subsec_nanos())
 }
 
 ///|

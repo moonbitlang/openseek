@@ -17,7 +17,7 @@ async test "initial and image-only steering input survive replay and reach the p
         connection.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        connection.write_string(
+        connection.text.write(
           "data: {\"choices\":[{\"delta\":{\"content\":\"seen\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
         )
       })

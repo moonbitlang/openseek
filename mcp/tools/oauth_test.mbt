@@ -18,7 +18,7 @@ async test "a corrupt OAuth credential is isolated and a repaired credential ret
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write_string(reply.stringify())
+          conn.text.write(reply.stringify())
         } else {
           conn.send_response(400, "Bad Request")
         }

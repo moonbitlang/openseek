@@ -31,8 +31,8 @@ async fn worker_test_server(
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        conn.write_string("data: \{payload}\n\n")
-        conn.write_string("data: [DONE]\n\n")
+        conn.text.write("data: \{payload}\n\n")
+        conn.text.write("data: [DONE]\n\n")
       },
       max_connections=8,
     )
