@@ -114,6 +114,7 @@ for (const mode of ['Cloud', 'Local']) {
     await expect(status.locator('.composer-feedback-message')).toHaveJSProperty('textContent', message);
     gates[4].finish();
     await expect(status).toHaveText('Feedback submitted');
+    await expect(status).toBeHidden();
     await expect(task).toHaveValue('my next question, edited');
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('original clipboard');
     expect(app.hostRequests.filter(r => r.method === 'session.share')).toHaveLength(0);

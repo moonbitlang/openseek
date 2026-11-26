@@ -413,7 +413,7 @@ fn Entry::view(
     let (label, command) = match status {
       Sending(_, command) =>
         (Some(ui(locale, SubmittingFeedback)), Some(command))
-      Submitted => (Some(ui(locale, FeedbackSubmittedLabel)), None)
+      Submitted(_) => (Some(ui(locale, FeedbackSubmittedLabel)), None)
       Failed(SignInRequired, held~) =>
         (Some(ui(locale, FeedbackNeedsSignIn)), held)
       Failed(Diagnostic(reason), held~) => (Some(reason), held)

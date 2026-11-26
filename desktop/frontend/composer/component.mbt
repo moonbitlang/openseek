@@ -524,6 +524,7 @@ priv enum Msg {
   GoalCancelled
   SubmitRequested
   RetryFeedback
+  FeedbackConfirmationExpired(String)
   QuoteReplied(QuoteReply)
   CommandResultReceived(CommandResult)
   FollowupMenuToggled
@@ -852,7 +853,17 @@ fn Model::update(
   let entry = self.active(input)
   let self = self.with_entry(entry)
   match msg {
-    CommandResultReceived(result) => self.command_result(result, action_emit)
+    CommandResultReceived(result) =>
+      self.command_result(result, emit, action_emit)
+    FeedbackConfirmationExpired(request) => {
+      guard self.entries
+        .iter()
+        .find_first(entry => entry.feedback == Some(Submitted(request)))
+        is Some(target) else {
+        return (self, @cmd.none)
+      }
+      (self.with_entry({ ..target, feedback: None, }), @cmd.none)
+    }
     PredictionAccepted => {
       guard entry.prediction_text(input) is Some(text) else {
         return (self, @cmd.none)
@@ -1095,7 +1106,7 @@ fn Model::update(
     }
     TextChanged(value) => {
       let (next, command) = entry.edited(input, value, action_emit)
-      let next = if entry.feedback is Some(Submitted | Failed(_, held=None)) {
+      let next = if entry.feedback is Some(Submitted(_) | Failed(_, held=None)) {
         { ..next, feedback: None, }
       } else {
         next
