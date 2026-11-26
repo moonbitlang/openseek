@@ -111,30 +111,33 @@ async test "the first stop cause is kept" {
 }
 
 ///|
-/// Teardown cancels the process without requesting a stop; the handler
-/// wrapper records it as the first cause, so trouble while the child winds
-/// down does not replace it.
+/// Teardown cancels the execution without an explicit stop request; the
+/// teardown path records it as the first cause, so trouble afterwards does not
+/// replace it.
 async test "teardown is recorded as the first stop cause" {
-  @async.with_task_group(group => {
-    let exec = ShellExecution::start(
-      AgentTaskScope(group),
-      program="moonx",
-      args=[CLI_SLEEP, "10"],
-      cancel_handler=CancellationHandler(_ => @async.sleep(10_000)),
-    )
-    // What the group's cancellation does to the process task.
-    exec.process.cancel()
-    for _ in 0..<100 {
-      if exec.stop_cause() is Some(_) {
-        break
-      }
-      @async.sleep(10)
+  let exec_ref : Ref[ShellExecution?] = Ref(None)
+  @async.with_task_group(outer => {
+    let session = outer.spawn(allow_failure=true, () => {
+      @async.with_task_group(group => {
+        let exec = ShellExecution::start(
+          AgentTaskScope(group),
+          program="moonx",
+          args=[CLI_SLEEP, "10"],
+        )
+        exec_ref.val = Some(exec)
+        @async.sleep(50)
+        fail("session shutdown")
+      })
+    })
+    session.wait() catch {
+      _ => ()
     }
-    assert_true(exec.stop_cause() is Some(Requested))
-    exec.sink.failure = Some("disk full")
-    exec.request_stop()
-    assert_true(exec.stop_cause() is Some(Requested))
   })
+  guard exec_ref.val is Some(exec) else { fail("missing execution") }
+  assert_true(exec.stop_cause() is Some(Requested))
+  exec.sink.failure = Some("disk full")
+  exec.request_stop()
+  assert_true(exec.stop_cause() is Some(Requested))
 }
 
 ///|

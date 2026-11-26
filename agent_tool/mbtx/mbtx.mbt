@@ -982,7 +982,10 @@ async fn execute(
   @fs.write_text(log, "", create_mode=CreateOrTruncate)
   let result = @async.with_timeout_opt(foreground_timeout_ms, () => {
     defer (if program is Some(program) { program.stop() })
-    let exit_code = @process.run(
+    let mut exit_code = 0
+    @async.with_task_group(group => {
+      let process = @process.spawn(
+        group,
         prog,
         argv,
         cwd=run_cwd.unwrap_or("."),
@@ -991,16 +994,13 @@ async fn execute(
         stdout=AppendFile(log),
         stderr=AppendFile(log),
         no_console_window=true,
-        cancel_handler?=program.map(program => {
-          let CancellationHandler(cancel) = @process.graceful_cancel(
-            timeout=5000,
-          )
-          CancellationHandler(pid => {
-            program.stop()
-            cancel(pid)
-          })
-        }),
-      ).exit_code
+        no_wait=true,
+      )
+      // Revoke PTC admission as soon as cancellation begins, before the child
+      // spends its graceful-cancel grace window winding down.
+      errdefer (if program is Some(program) { program.stop() })
+      exit_code = process.wait()
+    })
     // Revoke the moment the child is gone, before the log read suspends: an
     // accepted call must be marked interrupted, not allowed to finish under
     // a capability whose process has exited. The defer above covers the

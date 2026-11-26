@@ -1581,7 +1581,6 @@ async fn start_serve_engine(
     env~,
     host_mcp=manager.mcp.server is Some(_),
   )
-  let graceful_cancel = @process.graceful_cancel(timeout=1000)
   @xlog.debug() <?
     {
       "event": "desktop_engine_spawn",
@@ -1608,15 +1607,7 @@ async fn start_serve_engine(
     // The GUI-subsystem host has no console, so a console-subsystem child
     // would otherwise open its own visible conhost window on Windows.
     no_console_window=true,
-    cancel_handler=CancellationHandler(pid => {
-      @xlog.warn() <?
-        {
-          "event": "desktop_engine_process_task_cancelled",
-          "session_key": config.session,
-          "pid": pid,
-        }
-      graceful_cancel(pid)
-    }),
+    cancel_handler=@process.graceful_cancel(timeout=1000),
     no_wait=true,
   )
   let writer = process.stdin

@@ -56,7 +56,6 @@ async fn tool_and_runtime(
     args=["-c", script.unwrap_or(child), "sh"],
     result_dir="\{root}/results",
     max_live?,
-    grace_ms=100,
   )
   (@subagent.definition(launcher, kinds()), runtime)
 }
@@ -222,7 +221,6 @@ async test "subagent_send refuses a kind that takes no instructions" {
       program="sh",
       args=["-c", "read line; cat >/dev/null", "sh"],
       result_dir="\{root}/results",
-      grace_ms=100,
     )
     let kinds : Array[@subagent.Kind] = [
       {

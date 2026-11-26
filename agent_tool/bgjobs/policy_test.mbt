@@ -61,34 +61,6 @@ async test "the end hook learns a requested stop" {
 }
 
 ///|
-/// A custom cancel handler is how the process is ended on a stop: here it
-/// closes the child's stdin, which the child takes as its cue to finish, and
-/// the child's last words are captured before the job settles.
-#cfg(not(platform="windows"))
-async test "a stop goes through the job's cancel handler" {
-  @async.with_task_group(group => {
-    let rt = @bgjobs.BgJobRuntime(AgentTaskScope(group))
-    let (input, writer) = @process.write_to_process()
-    defer input.close()
-    defer writer.close()
-    let handler = @process.CancellationHandler(_ => {
-      writer.close()
-      @async.sleep(2000)
-    })
-    let id = rt.start(
-      program="sh",
-      args=["-c", "cat >/dev/null; echo flushed"],
-      command="graceful child",
-      stdin=Shared(input),
-      cancel_handler=handler,
-    )
-    assert_true(rt.stop(id))
-    guard rt.read_output(id) is Some(output) else { fail("job vanished") }
-    assert_true(output.contains("flushed"))
-  })
-}
-
-///|
 /// A job started with `reaped=false` outlives the runtime's wall-clock cap;
 /// an ordinary one beside it is reaped.
 #cfg(not(platform="windows"))
