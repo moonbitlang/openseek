@@ -1703,7 +1703,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
 /// MoonBit is the system prompt's to teach — it is how a snippet does its
 /// work, not advice handed out after a refusal — so the refusal text below
 /// names no table. The default system prompt owns the
-/// `moonbitlang/core/async/shell` tutorial and worked examples; those teach one
+/// `moonbitlang/async/shell` tutorial and worked examples; those teach one
 /// role's workflow rather than describing what the tool enforces.
 ///
 /// The spawn list is RENDERED from `spawnable_commands` by

@@ -37,7 +37,7 @@ Principles:
 
 There is no shell tool. Every command — `moon`, `git`, anything else — is
 spawned from a `mbtx` snippet through the shell-free
-`moonbitlang/core/async/shell` API; the tool's description lists the programs a
+`moonbitlang/async/shell` API; the tool's description lists the programs a
 snippet may start and its isolation rules. The `source` argument is a whole
 `.mbtx` program:
 
@@ -55,7 +55,7 @@ prompt. -->
 ```mbtx
 ---
 import {
-  "moonbitlang/core/async/shell",
+  "moonbitlang/async@0.22.10/shell",
 }
 ---
 

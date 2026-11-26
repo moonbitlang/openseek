@@ -32,7 +32,7 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async/shell",
+    #|  "moonbitlang/async@0.22.10/shell",
     #|  "moonbitlang/core/env",
     #|}
     #|---
@@ -98,7 +98,7 @@ fn moonbit_syntax_and_api() -> String {
     #|
     #|For a nonzero exit, import `"moonbitlang/core/env"` and call `@env.exit(1)`.
     #|
-    #|## Shell EDSL with moonbitlang/core/async/shell
+    #|## Shell EDSL with moonbitlang/async/shell
     #|
     #|Use `@shell.Cmd` to run an external program and capture its output. Pass
     #|`stdin=Text(s)`, `stdin=FromFile(path)`, or `stdin=Binary(bytes)` as labeled
@@ -133,7 +133,7 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async/shell",
+    #|  "moonbitlang/async@0.22.10/shell",
     #|}
     #|---
     #|
@@ -165,11 +165,11 @@ fn moonbit_syntax_and_api() -> String {
     #|}
     #|```
     #|
-    #|Use `@builtin/ide.mbtx` with `args=["doc", "@moonbitlang/core/async/shell"]`
+    #|Use `@builtin/ide.mbtx` with `args=["doc", "@moonbitlang/async/shell"]`
     #|for a package API overview, or
-    #|`args=["doc", "@moonbitlang/core/async/shell.<Type>"]` for a specific type's
+    #|`args=["doc", "@moonbitlang/async/shell.<Type>"]` for a specific type's
     #|definition and documentation, as in
-    #|`args=["doc", "@moonbitlang/core/async/shell.Stdin"]`.
+    #|`args=["doc", "@moonbitlang/async/shell.Stdin"]`.
     #|
     #|For compiler feedback, stream the line-delimited JSON from one `moon check`
     #|rather than collecting it and parsing it afterward:
@@ -177,7 +177,7 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async/shell",
+    #|  "moonbitlang/async@0.22.10/shell",
     #|  "moonbitlang/core/json",
     #|}
     #|---
@@ -378,7 +378,7 @@ fn moonbit_syntax_and_api() -> String {
     #|---
     #|import {
     #|  "moonbitlang/core/async",
-    #|  "moonbitlang/core/async/shell",
+    #|  "moonbitlang/async@0.22.10/shell",
     #|}
     #|---
     #|
