@@ -192,6 +192,8 @@ fn ArtifactFileCache::settle(
 fn ArtifactFileCache::apply_after_render(
   self : ArtifactFileCache,
   owner : ArtifactOwner,
+  theme~ : String,
+  locale~ : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
@@ -202,6 +204,8 @@ fn ArtifactFileCache::apply_after_render(
           state,
           key,
           followup_enabled=owner.followup_enabled,
+          theme~,
+          locale~,
         )
       }
     },

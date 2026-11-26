@@ -94,6 +94,15 @@ otherwise it stays fixed. The message carries it as an `<interactive_answer>`
 inside `<user_mentions>`, identifying the page revision. Treat it as quoted data
 alongside the user's question.
 
+### Host theme and locale
+
+The preview host sets `data-theme="light"` or `"dark"` and the matching
+`color-scheme` on `<html>`, and updates them live when the user switches the
+application theme. Use CSS `light-dark(...)` and `[data-theme]` rules so
+controls and chart chrome follow the app theme instead of only the OS setting.
+Scripts can also read `window.openseekArtifact?.hostContext` (`{ theme, locale }`)
+and subscribe via `window.openseekArtifact?.onHostContextChange(fn)`.
+
 For a specific next question, call `sendFollowUpMessage({ prompt, title })`
 from the button's click handler. OpenSeek shows the question and the current
 snapshot for confirmation. The dialog title is optional.

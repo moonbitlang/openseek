@@ -256,6 +256,8 @@ fn Model::update(
   // the previous root's data URLs into a render for the new one.
   let image_owner = input.image_owner()
   let artifact_owner = input.artifact_owner()
+  let current_artifact_theme = artifact_theme(input.dark_mode)
+  let current_artifact_locale = input.locale.tag()
   let self = if self.artifact_owner == artifact_owner {
     self
   } else {
@@ -292,7 +294,13 @@ fn Model::update(
       )
       commands.push(self.images.apply_after_render())
       commands.push(discover_artifact_files(emit))
-      commands.push(self.artifact_files.apply_after_render(artifact_owner))
+      commands.push(
+        self.artifact_files.apply_after_render(
+          artifact_owner,
+          theme=current_artifact_theme,
+          locale=current_artifact_locale,
+        ),
+      )
       (self, @cmd.batch(commands))
     }
     ImageRequested(path) => {
@@ -310,7 +318,14 @@ fn Model::update(
       )
       (
         { ..self, artifact_files, },
-        @cmd.batch([command, artifact_files.apply_after_render(artifact_owner)]),
+        @cmd.batch([
+          command,
+          artifact_files.apply_after_render(
+            artifact_owner,
+            theme=current_artifact_theme,
+            locale=current_artifact_locale,
+          ),
+        ]),
       )
     }
     ArtifactResolved(owner, reference, result) => {
@@ -318,7 +333,11 @@ fn Model::update(
       let artifact_files = self.artifact_files.settle(reference, result)
       (
         { ..self, artifact_files, },
-        artifact_files.apply_after_render(artifact_owner),
+        artifact_files.apply_after_render(
+          artifact_owner,
+          theme=current_artifact_theme,
+          locale=current_artifact_locale,
+        ),
       )
     }
     Overview(msg) => {
@@ -390,6 +409,8 @@ pub fn component(
         emit,
         actions.departed,
         actions.artifact_context,
+        artifact_theme(input.dark_mode),
+        input.locale.tag(),
         if input.older_history {
           Some(actions.load_older)
         } else {
@@ -770,6 +791,8 @@ priv suberror TranscriptSubscription {
     departed~ : @cmd.Emit[ScrollPosition],
     artifact_owner~ : String,
     artifact_context~ : @cmd.Emit[ArtifactInteraction],
+    artifact_theme~ : String,
+    artifact_locale~ : String,
     load_older~ : @cmd.Cmd?,
     localization~ : @localization.Localization,
     // The Model's current reading, refreshed after every message. The scroll
@@ -789,6 +812,8 @@ fn transcript_subscription(
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
   artifact_context : @cmd.Emit[ArtifactInteraction],
+  artifact_theme : String,
+  artifact_locale : String,
   load_older : @cmd.Cmd?,
   localization : @localization.Localization,
 ) -> @sub.Sub {
@@ -800,6 +825,8 @@ fn transcript_subscription(
       departed~,
       artifact_owner=model.artifact_owner.key(),
       artifact_context~,
+      artifact_theme~,
+      artifact_locale~,
       load_older~,
       localization~,
       pinned=model.pinned,
@@ -820,6 +847,8 @@ fn transcript_sub_loader(
       departed~,
       artifact_owner~,
       artifact_context~,
+      artifact_theme~,
+      artifact_locale~,
       load_older~,
       localization~,
       pinned~,
@@ -829,6 +858,8 @@ fn transcript_sub_loader(
       let mut departed = departed
       let mut artifact_owner = artifact_owner
       let mut artifact_context = artifact_context
+      let mut artifact_theme = artifact_theme
+      let mut artifact_locale = artifact_locale
       let mut load_older = load_older
       let mut pinned = pinned
       let mut active = active
@@ -964,6 +995,8 @@ fn transcript_sub_loader(
               departed=left,
               artifact_owner=next_artifact_owner,
               artifact_context=next_artifact_context,
+              artifact_theme=next_artifact_theme,
+              artifact_locale=next_artifact_locale,
               load_older=next_load_older,
               localization=_,
               pinned=next_pinned,
@@ -975,6 +1008,12 @@ fn transcript_sub_loader(
           departed = left
           artifact_owner = next_artifact_owner
           artifact_context = next_artifact_context
+          if next_artifact_theme != artifact_theme ||
+            next_artifact_locale != artifact_locale {
+            artifact_theme = next_artifact_theme
+            artifact_locale = next_artifact_locale
+            sync_artifact_frames_context(artifact_theme, artifact_locale)
+          }
           load_older = next_load_older
           pinned = next_pinned
           active = next_active

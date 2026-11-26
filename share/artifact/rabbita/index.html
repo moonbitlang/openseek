@@ -6,6 +6,8 @@
   <title>Parallel speedup</title>
   <style>
     :root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif; }
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] { color-scheme: dark; }
     * { box-sizing: border-box; }
     body { margin: 0; color: light-dark(#1f2937, #e5e7eb); background: transparent; }
     .answer { max-width: 48rem; padding: 1rem; }
@@ -24,15 +26,18 @@
    https://github.com/moonbit-community/moonplot */
 /* Optional component styles. All rules are scoped to MoonPlot nodes. */
 .moonplot {
-  --moonplot-text: #263443;
-  --moonplot-muted: #64748b;
-  --moonplot-border: #e5e9ed;
-  --moonplot-accent: #286b73;
-  --moonplot-tooltip-background: #fff;
+  --moonplot-text: light-dark(#263443, #e5e7eb);
+  --moonplot-muted: light-dark(#64748b, #94a3b8);
+  --moonplot-border: light-dark(#e5e9ed, #334155);
+  --moonplot-accent: light-dark(#286b73, #5eead4);
+  --moonplot-tooltip-background: light-dark(#ffffff, #1e293b);
+  --moonplot-tooltip-shadow: light-dark(rgba(38, 52, 67, 0.05), rgba(0, 0, 0, 0.45));
+  --moonplot-series-hover: light-dark(#f4f6f8, rgba(255, 255, 255, 0.08));
   color: var(--moonplot-text);
   font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .moonplot .moonplot-viewport { position: relative; }
+.moonplot .moonplot-viewport svg { display: block; max-width: 100%; height: auto; border-radius: 8px; }
 .moonplot .moonplot-tooltip {
   position: absolute;
   top: 12px;
@@ -47,7 +52,7 @@
   box-sizing: border-box;
   overflow-wrap: anywhere;
   background: var(--moonplot-tooltip-background);
-  box-shadow: 0 3px 12px #2634430d;
+  box-shadow: 0 3px 12px var(--moonplot-tooltip-shadow);
   pointer-events: none;
   font-variant-numeric: tabular-nums;
 }
@@ -73,7 +78,7 @@
   cursor: pointer;
   transition: background-color 120ms, border-color 120ms;
 }
-.moonplot .moonplot-series:hover { background: #f4f6f8; border-color: var(--moonplot-border); }
+.moonplot .moonplot-series:hover { background: var(--moonplot-series-hover); border-color: var(--moonplot-border); }
 .moonplot .moonplot-series:focus-visible { outline: 2px solid var(--moonplot-accent); outline-offset: 2px; }
 .moonplot .moonplot-series[aria-pressed="false"] { color: var(--moonplot-muted); }
 .moonplot .moonplot-series[aria-pressed="false"] .moonplot-swatch { opacity: .4; filter: grayscale(1); }
