@@ -1776,6 +1776,9 @@ fn description(
     #|Missing parent directories are created. A saved script is never overwritten
     #|with different content; change it with the edit tool. Scripts compile to
     #|wasm and run under moonrun.
+    #|
+    #|For network lookups you expect to finish quickly, set a timeout to avoid
+    #|waiting indefinitely. A good default is 10 seconds.
   // Rendered from `spawnable_commands`, the table that also builds the
   // moonrun policy: the list the model reads and the list moonrun enforces
   // cannot disagree, because there is only one.
