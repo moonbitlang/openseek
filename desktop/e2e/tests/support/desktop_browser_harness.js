@@ -518,13 +518,22 @@ export class DesktopBrowserHarness {
   }
 
   sessionGroups(sessions) {
+    const withPullRequests = sessions.map(session => {
+      if (Array.isArray(session.pull_requests)) return session;
+      const pullRequests = (this.sessionArtifacts[session.id] ?? [])
+        .filter(item => item.type === 'pull_request' && item.url)
+        .map(item => item.url);
+      return pullRequests.length > 0
+        ? { ...session, pull_requests: pullRequests }
+        : session;
+    });
     return {
       groups: [
         {
           workspace: '/workspace',
           name: 'Fixture',
           session_root: '/workspace/.openseek',
-          sessions,
+          sessions: withPullRequests,
           error: '',
         },
       ],
@@ -925,6 +934,14 @@ export class DesktopBrowserHarness {
       case 'github.pull_request_summary': {
         const pullRequest = this.githubPullRequestSummaries[request.params?.url];
         return pullRequest ? { pull_request: pullRequest } : {};
+      }
+      case 'github.pull_request_summaries': {
+        const pullRequests = {};
+        for (const url of request.params?.urls ?? []) {
+          const pullRequest = this.githubPullRequestSummaries[url];
+          if (pullRequest) pullRequests[url] = pullRequest;
+        }
+        return { pull_requests: pullRequests };
       }
       case 'session.artifacts_list':
         return { artifacts: [...(this.sessionArtifacts[request.params?.session] ?? [])] };

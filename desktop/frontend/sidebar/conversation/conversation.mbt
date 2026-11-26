@@ -149,6 +149,28 @@ pub(all) enum RenameEdit {
 }
 
 ///|
+/// Aggregate state of the pull requests attached to a sidebar conversation.
+#derive(Debug, Eq)
+pub(all) enum PullRequestTone {
+  Open
+  Draft
+  Merged
+  Closed
+  Unknown
+}
+
+///|
+/// Compact PR status badge rendered beside a sidebar conversation's title.
+/// `count` is the total number of attached PRs (at least 1); the numeric count
+/// is shown beside the icon when `count > 1`.
+#derive(Debug, Eq)
+pub(all) struct PullRequestBadge {
+  tone : PullRequestTone
+  count : Int32
+  title : String
+}
+
+///|
 /// Plain, comparable input to one conversation component.
 #derive(Debug, Eq)
 pub(all) struct Input {
@@ -163,6 +185,7 @@ pub(all) struct Input {
   openable : Bool
   rename : Rename?
   run_mark : RunMark
+  pull_request : PullRequestBadge?
   trailing : Array[TrailingAction]
 }
 
@@ -477,6 +500,51 @@ fn Input::status_icon(self : Input, locale : @i18n.Locale) -> @html.Html? {
 }
 
 ///|
+fn Input::pull_request_badge(
+  self : Input,
+  locale : @i18n.Locale,
+) -> @html.Html? {
+  guard self.pull_request is Some(pr) && pr.count > 0 else { return None }
+  let (tone_class, image, state_label) = match pr.tone {
+    Open => ("open", @icons.icon_git_pull_request, ui(locale, PullRequestOpen))
+    Draft =>
+      (
+        "draft",
+        @icons.icon_git_pull_request_draft,
+        ui(locale, PullRequestDraft),
+      )
+    Merged => ("merged", @icons.icon_git_merge, ui(locale, PullRequestMerged))
+    Closed =>
+      (
+        "closed",
+        @icons.icon_git_pull_request_closed,
+        ui(locale, PullRequestClosed),
+      )
+    Unknown =>
+      ("unknown", @icons.icon_git_pull_request, ui(locale, PullRequestAttached))
+  }
+  let badge_children : Array[@html.Html] = [
+    @html.span(class="row-pr-icon \{tone_class}", @icons.icon(image)),
+  ]
+  if pr.count > 1 {
+    badge_children.push(@html.span(class="row-pr-count", pr.count.to_string()))
+  }
+  let aria_label = if pr.count > 1 {
+    ui(locale, PullRequestSummaryMulti(pr.count, state_label))
+  } else {
+    state_label
+  }
+  Some(
+    @html.span(
+      class="row-pr-status",
+      title=pr.title,
+      attrs=@html.Attrs::build().aria_label(aria_label),
+      badge_children,
+    ),
+  )
+}
+
+///|
 /// A real Rabbita component: it is constructed once for an `assoc_by` key,
 /// consumes incremental input, and returns an incremental DOM value.
 pub fn component(
@@ -567,7 +635,13 @@ pub fn component(
         @html.span(class="sidebar-label", input.label)
       },
     ]
-    let status = input.status_icon(locale)
+    let status : Array[@html.Html] = []
+    if input.pull_request_badge(locale) is Some(badge) {
+      status.push(badge)
+    }
+    if input.status_icon(locale) is Some(icon) {
+      status.push(icon)
+    }
     let menu_kind = input.menu_kind()
     // A live row folds its actions behind one overflow trigger, so Rename
     // sits beside Archive and Delete in the menu the row's context click
@@ -585,12 +659,16 @@ pub fn component(
     let trailing_slot : Array[@html.Html] = []
     // The title field takes the whole row while it is edited.
     if !renaming &&
-      (status is Some(_) || !buttons.is_empty() || !trailing_actions.is_empty()) {
+      (
+        !status.is_empty() ||
+        !buttons.is_empty() ||
+        !trailing_actions.is_empty()
+      ) {
       // The status group stays in the slot even when empty: a glyph coming or
       // going must not shift the action group
       // to another child position, which would re-create a focused button.
       let trailing : Array[@html.Html] = [
-        @html.span(class="row-status", status.iter().to_array()),
+        @html.span(class="row-status", status),
       ]
       for action in trailing_actions {
         let (title, button_class, image, id_suffix) = match action {
@@ -715,6 +793,18 @@ pub extend TrailingAction with Eq::{equal, not_equal}
 
 ///|
 pub extend RunOutcome with Eq::{equal, not_equal}
+
+///|
+pub extend PullRequestTone with Debug::{to_repr}
+
+///|
+pub extend PullRequestTone with Eq::{equal, not_equal}
+
+///|
+pub extend PullRequestBadge with Debug::{to_repr}
+
+///|
+pub extend PullRequestBadge with Eq::{equal, not_equal}
 
 ///|
 pub extend Search with Eq::{equal, not_equal}

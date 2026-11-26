@@ -351,6 +351,9 @@ pub fn endpoints(
     Endpoint(@commands.github_pull_request_summary, payload => {
       @github.pull_request_summary(payload)
     }),
+    Endpoint(@commands.github_pull_request_summaries, payload => {
+      @github.pull_request_summaries(payload)
+    }),
     Endpoint(@commands.github_checkout, payload => @github.checkout(payload)),
     Endpoint(@commands.github_checkout_status, payload => {
       @github.checkout_status(payload)

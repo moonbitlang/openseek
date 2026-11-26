@@ -77,6 +77,7 @@ pub(all) struct Input {
   openable : Bool
   rename : Rename?
   run_mark : RunMark
+  pull_request : PullRequestBadge?
   trailing : Array[TrailingAction]
 }
 pub fn Input::equal(Self, Self) -> Bool
@@ -84,6 +85,28 @@ pub fn Input::id(Self) -> Id
 pub fn Input::menu_entries(locale? : @i18n.Locale, Self, Actions) -> Array[@action_menu.Entry]?
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) struct PullRequestBadge {
+  tone : PullRequestTone
+  count : Int32
+  title : String
+}
+pub fn PullRequestBadge::equal(Self, Self) -> Bool
+pub fn PullRequestBadge::not_equal(Self, Self) -> Bool
+pub fn PullRequestBadge::to_repr(Self) -> @debug.Repr
+
+#derive(Eq, @debug.Debug)
+pub(all) enum PullRequestTone {
+  Open
+  Draft
+  Merged
+  Closed
+  Unknown
+}
+pub fn PullRequestTone::equal(Self, Self) -> Bool
+pub fn PullRequestTone::not_equal(Self, Self) -> Bool
+pub fn PullRequestTone::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
 pub(all) struct Rename {

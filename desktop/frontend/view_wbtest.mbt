@@ -120,6 +120,7 @@ test "subrun transcripts are omitted from the sidebar before and after inventory
               workspace_name: "work",
               updated_at_ms: Some(1.0),
               model_settings: None,
+              pull_requests: [],
             },
           ]
         } else {
@@ -141,6 +142,7 @@ test "subrun transcripts are omitted from the sidebar before and after inventory
           workspace_name: "work",
           updated_at_ms: Some(1.0),
           model_settings: None,
+          pull_requests: [],
         },
         {
           id: "desktop-test-sr-1",
@@ -149,6 +151,7 @@ test "subrun transcripts are omitted from the sidebar before and after inventory
           workspace_name: "work",
           updated_at_ms: Some(2.0),
           model_settings: None,
+          pull_requests: [],
         },
       ],
     })

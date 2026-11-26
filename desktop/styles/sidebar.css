@@ -367,6 +367,45 @@
 .sidebar-run-status.completed { color: var(--color-text-secondary); }
 .sidebar-run-status.failed { color: var(--color-danger); }
 
+/* Compact PR status indicator placed inside `.row-status` so it stays in flow
+   at rest without overlapping titles and cleanly yields to the hover-overlaid
+   `.row-actions` menu. */
+.row-pr-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  line-height: var(--line-height-tight);
+}
+.row-pr-icon {
+  --icon-size: var(--icon-md);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--color-text-muted);
+}
+.row-pr-icon.open {
+  color: var(--color-success);
+}
+.row-pr-icon.draft {
+  color: var(--color-warning);
+}
+.row-pr-icon.merged {
+  color: var(--color-pr-merged);
+}
+.row-pr-icon.closed {
+  color: var(--color-danger);
+}
+.row-pr-icon.unknown {
+  color: var(--color-text-muted);
+}
+.row-pr-count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-height-tight);
+}
+
 .row-status,
 .row-actions {
   display: flex;

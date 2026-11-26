@@ -16,6 +16,7 @@ fn live_row(
     openable: true,
     rename: None,
     run_mark: NoRunMark,
+    pull_request: None,
     trailing,
   }
 }

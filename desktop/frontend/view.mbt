@@ -161,6 +161,7 @@ fn session_component_input(
     // Keep the capability in the row input while a run is active: Proton
     // presents Archive disabled, while the browser fallback hides it.
     run_mark,
+    pull_request: model.sidebar_pull_request_badge(channel, session_id),
     trailing: if archivable {
       [
         @conversation.Archive(title=shell_text(model.locale, ArchiveHint)),
@@ -241,6 +242,7 @@ fn Model::push_group_component_inputs(
       workspace_name: workspace.path,
       updated_at_ms: None,
       model_settings: None,
+      pull_requests: [],
     })
   }
   // Sub-run transcripts are omitted from the left sidebar; they remain
@@ -2827,6 +2829,7 @@ test "project component receives the complete conversation list" {
       workspace_name: "alpha",
       updated_at_ms: None,
       model_settings: None,
+      pull_requests: [],
     })
   }
   let model = test_model().with_dev(dev => {
@@ -2869,6 +2872,7 @@ test "same-id records in two project stores keep distinct row keys" {
         workspace_name: "alpha",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
       {
         id: "desktop-shared",
@@ -2877,6 +2881,7 @@ test "same-id records in two project stores keep distinct row keys" {
         workspace_name: "beta",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
