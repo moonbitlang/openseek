@@ -2,11 +2,14 @@
 package "openseek_desktop/backend/internal/processx"
 
 import {
+  "moonbitlang/core/async",
   "moonbitlang/core/async/process",
 }
 
 // Values
 pub async fn collect_output_no_stdin(StringView, ArrayView[String], extra_env? : Map[String, String], inherit_env? : Bool, cwd? : StringView) -> @process.ProcessResult
+
+pub fn contain_process_tree(@async.TaskGroup, @process.Process) -> Unit
 
 // Errors
 

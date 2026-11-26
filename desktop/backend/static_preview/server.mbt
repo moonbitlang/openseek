@@ -145,21 +145,11 @@ async fn serve(
       inherit_env=false,
       extra_env=provider.environment,
       no_console_window=true,
-      cancel_handler=if @async.platform is Windows {
-        // moonx delegates to a child moonrun on Windows rather than exec.
-        CancellationHandler(pid => {
-          @processx.collect_output_no_stdin("taskkill", [
-            "/PID",
-            pid.to_string(),
-            "/T",
-            "/F",
-          ])
-          |> ignore
-        })
-      } else {
-        @process.hard_cancel()
-      },
+      cancel_handler=@process.hard_cancel(),
     )
+    // moonx delegates to a child moonrun on Windows rather than exec; keep the
+    // whole tree contained so teardown reaps the preview listener too.
+    @processx.contain_process_tree(group, child)
     let port = @async.with_timeout(120000, () => {
       // moonx may report a first-run download before serve starts listening.
       for ;; {
