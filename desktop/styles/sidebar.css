@@ -1065,7 +1065,7 @@
 }
 
 .sidebar-footer :is([data-slot="dropdown-menu-trigger"], .sidebar-settings) {
-  --rui-control-radius: var(--radius-surface);
+  --rui-control-radius: var(--radius-control-lg);
 }
 
 .sidebar-account-control {
