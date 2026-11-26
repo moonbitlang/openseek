@@ -23,10 +23,7 @@ test "a bare list marker at end of input renders via the fallback" {
 /// Expected paths produced from `file://` destinations follow the host
 /// separator: `Uri::fs_path` returns backslashes on Windows, slashes elsewhere.
 fn native_file_path(path : String) -> String {
-  let uri = @common.Uri::parse("file:///tmp/guide.md") catch {
-    _ => return path
-  }
-  if uri.fs_path().contains("\\") {
+  if @common.platform_is_win32() {
     path.replace_all(old="/", new="\\")
   } else {
     path
