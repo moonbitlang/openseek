@@ -58,36 +58,68 @@ pub async fn apply_login_shell_env(executable : String) -> Unit {
   } else {
     ["-i", "-l", "-c", command]
   }
-  @xlog.info() <? { "message": "shell env probe", "shell": shell }
+  if @xlog.info() is Some(w) {
+    w
+    ..write_object_begin()
+    ..write_object_field("message", "shell env probe")
+    ..write_object_field("shell", shell)
+    .write_object_end()
+  }
   let probe_env : Map[String, String] = Map([])
   probe_env[ResolvingGuardVar] = "1"
   let result = @async.with_timeout_opt(ProbeTimeoutMs, () => {
     @processx.collect_output_no_stdin(shell, args, extra_env=probe_env)
   }) catch {
     error => {
-      @xlog.warn() <?
-        { "message": "shell env probe failed", "error": "\{error}" }
+      if @xlog.warn() is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("message", "shell env probe failed")
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       return
     }
   }
   guard result is Some(output) else {
-    @xlog.warn() <? { "message": "shell env probe timed out" }
+    if @xlog.warn() is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field("message", "shell env probe timed out")
+      .write_object_end()
+    }
     return
   }
   let code = output.exit_code
   guard code == 0 else {
-    @xlog.warn() <? { "message": "shell env probe exit", "code": code }
+    if @xlog.warn() is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field("message", "shell env probe exit")
+      ..write_object_field("code", code)
+      .write_object_end()
+    }
     return
   }
   let text = output.stdout_text() catch {
     error => {
-      @xlog.warn() <?
-        { "message": "shell env probe output", "error": "\{error}" }
+      if @xlog.warn() is Some(w) {
+        w
+        ..write_object_begin()
+        ..write_object_field("message", "shell env probe output")
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       return
     }
   }
   guard parse_probe_output(text, mark) is Some(env) else {
-    @xlog.warn() <? { "message": "shell env probe output unrecognized" }
+    if @xlog.warn() is Some(w) {
+      w
+      ..write_object_begin()
+      ..write_object_field("message", "shell env probe output unrecognized")
+      .write_object_end()
+    }
     return
   }
   let mut applied = 0
@@ -98,7 +130,13 @@ pub async fn apply_login_shell_env(executable : String) -> Unit {
     @sys.set_env_var(key, value)
     applied += 1
   }
-  @xlog.info() <? { "message": "shell env applied", "count": applied }
+  if @xlog.info() is Some(w) {
+    w
+    ..write_object_begin()
+    ..write_object_field("message", "shell env applied")
+    ..write_object_field("count", applied)
+    .write_object_end()
+  }
 }
 
 ///|
