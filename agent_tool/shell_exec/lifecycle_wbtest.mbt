@@ -115,7 +115,7 @@ async test "the first stop cause is kept" {
 /// teardown path records it as the first cause, so trouble afterwards does not
 /// replace it.
 async test "teardown is recorded as the first stop cause" {
-  let exec_ref : Ref[ShellExecution?] = Ref(None)
+  let mut exec_ref : ShellExecution? = None
   @async.with_task_group(outer => {
     let session = outer.spawn(allow_failure=true, () => {
       @async.with_task_group(group => {
@@ -124,7 +124,7 @@ async test "teardown is recorded as the first stop cause" {
           program="moonx",
           args=[CLI_SLEEP, "10"],
         )
-        exec_ref.val = Some(exec)
+        exec_ref = Some(exec)
         @async.sleep(50)
         fail("session shutdown")
       })
@@ -133,7 +133,7 @@ async test "teardown is recorded as the first stop cause" {
       _ => ()
     }
   })
-  guard exec_ref.val is Some(exec) else { fail("missing execution") }
+  guard exec_ref is Some(exec) else { fail("missing execution") }
   assert_true(exec.stop_cause() is Some(Requested))
   exec.sink.failure = Some("disk full")
   exec.request_stop()

@@ -354,10 +354,10 @@ pub async fn Launcher::start(
       return Unavailable("could not prepare child \{session}: \{error}")
     }
   }
-  let writer_closed = Ref(false)
+  let mut writer_closed = false
   let close_writer = () => {
-    if !writer_closed.val {
-      writer_closed.val = true
+    if !writer_closed {
+      writer_closed = true
       writer.close()
     }
   }
@@ -433,7 +433,7 @@ pub async fn Launcher::start(
   let line = request.to_json().stringify() + "\n"
   (self.spawn)(() => {
     @async.with_timeout(self.delivery_timeout_ms, () => {
-      guard !writer_closed.val else { return }
+      guard !writer_closed else { return }
       writer.text.write(line)
     }) catch {
       _ =>
