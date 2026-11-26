@@ -175,13 +175,13 @@ threshold greater than the observed delta; do not raise it merely to bypass the 
   created by this session and empty directories are deleted automatically;
   other regular files and nonempty directories request
   approval through the session's permission channel. The tool presents the path
-  and your reason, plus file and subdirectory counts for recursive deletion. A grant applies only to this deletion; if the file or directory contents change
-  while waiting, reconsider before requesting approval again. Respect rejection
+  and your reason. Directory approval covers all contents present when deletion
+  runs, including entries added while waiting. Respect rejection
   or cancellation; do not retry a rejected deletion without new user instructions
   or bypass it with a command. If approval is unavailable, report the limitation.
   Valid paths outside a tool's write scope require approval for the specific
-  operation. Workspace-root protection and symlink restrictions (including
-  symlinks inside a directory) remain enforced. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
+  operation. Workspace roots and their ancestors are protected. Removing a
+  symlink unlinks the entry and preserves its target. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
   Change existing source with `edit`, not by removing and rewriting.
 
 - If a run reports that source file writes are blocked, retry compiler feedback fixes

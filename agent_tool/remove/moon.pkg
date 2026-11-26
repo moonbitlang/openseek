@@ -2,6 +2,7 @@ import {
   "moonbitlang/openseek/agent_tool/internal/permission",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/x/crypto",
+  "moonbitlang/x/path",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/internal/auto_check",
   "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
@@ -9,6 +10,7 @@ import {
   "moonbitlang/openseek/agent_tool/remove/internal/decode",
   "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/core/async/fs",
+  "moonbitlang/core/async/os_error",
 }
 
 import {
@@ -24,5 +26,6 @@ options(
   "allow-experimental-packages": [
     "moonbitlang/core/async",
     "moonbitlang/core/async/fs",
+    "moonbitlang/core/async/os_error",
   ],
 )

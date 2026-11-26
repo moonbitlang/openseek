@@ -215,6 +215,30 @@ pub fn FileStateMap::forget(self : FileStateMap, path : String) -> Unit {
 }
 
 ///|
+/// Drop provenance for one recursively removed directory and its descendants.
+pub fn FileStateMap::forget_tree(self : FileStateMap, path : String) -> Unit {
+  fn spelling(path : String) -> String {
+    if @async.platform is Windows {
+      path.replace_all(old="\\", new="/")
+    } else {
+      path
+    }
+  }
+  let root = spelling(path)
+  let prefix = root + "/"
+  fn removed(key : String) -> Bool {
+    let key = spelling(key)
+    key == root || key.has_prefix(prefix)
+  }
+  for key in self.entries.keys().filter(removed).collect() {
+    self.entries.remove(key)
+  }
+  for key in self.created_directories.iter().filter(removed).collect() {
+    self.created_directories.remove(key)
+  }
+}
+
+///|
 test "record_created marks a path and survives a later overwrite" {
   let a = content_digest("fn a\n")
   let b = content_digest("fn b\n")

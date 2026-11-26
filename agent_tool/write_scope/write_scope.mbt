@@ -130,6 +130,30 @@ pub async fn WriteScope::check(
       }
     None => resolved
   }
+  self.check_locations(requested, requested_form, resolved)
+}
+
+///|
+/// Check removal of an existing directory entry at its captured location.
+/// The caller resolves intermediate components and leaves the leaf intact.
+pub fn WriteScope::check_entry(
+  self : WriteScope,
+  path : String,
+  location : String,
+) -> String? raise WriteScopeError {
+  if backslash_is_hostile(path) || backslash_is_hostile(location) {
+    raise InvalidPath("confined writes refuse a backslash in a filename")
+  }
+  self.check_locations(self.absolutize(path), location, location)
+}
+
+///|
+fn WriteScope::check_locations(
+  self : WriteScope,
+  requested : String,
+  requested_form : String,
+  resolved : String,
+) -> String? {
   if self.grants.get(requested) is Some(approved) && approved == resolved {
     return None
   }

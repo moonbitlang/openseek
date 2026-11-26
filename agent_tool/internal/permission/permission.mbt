@@ -33,14 +33,17 @@ async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
 }
 
 ///|
-/// Authorize one validated operation, never a session or a subtree. Called
-/// under the file gate; only the human wait releases it. All affected targets,
-/// including descendants of a removed directory, are revalidated before resuming.
-/// `target_path` names the operation's root for the approval summary.
+/// A removal is authorized at the captured location of its root entry.
+pub(all) enum Target {
+  Write(String)
+  RemoveEntry(String, location~ : String)
+}
+
+///|
+/// Authorize one operation. Only the human wait releases the file gate.
 /// `reason` adds an operation-specific permission requirement (e.g. deletion).
 pub async fn authorize(
-  paths : Array[String],
-  target_path~ : String,
+  target : Target,
   tool_name~ : String,
   arguments~ : Json,
   file_state~ : @agent_tool.FileStateMap,
@@ -52,14 +55,20 @@ pub async fn authorize(
   if reason is Some(reason) {
     reasons.push(reason)
   }
+  let path = match target {
+    Write(path) | RemoveEntry(path, ..) => path
+  }
   if write_scope is Some(scope) {
-    for path in paths {
-      let verdict = scope.check(path) catch {
-        error => fail("invalid write target: \{error}")
+    let verdict = try {
+      match target {
+        Write(_) => scope.check(path)
+        RemoveEntry(_, location~) => scope.check_entry(path, location)
       }
-      if verdict is Some(message) {
-        reasons.push("write blocked: \{path}: \{message}")
-      }
+    } catch {
+      error => fail("invalid write target: \{error}")
+    }
+    if verdict is Some(message) {
+      reasons.push("write blocked: \{path}: \{message}")
     }
   }
   if reasons.is_empty() {
@@ -70,14 +79,14 @@ pub async fn authorize(
       "\{reasons.join("; ")}; operation requires approval, but this session has no approval channel",
     )
   }
-  let before : Array[Snapshot] = []
-  for path in paths {
-    before.push(snapshot(path, write_scope))
+  let before = match target {
+    Write(_) => Some(snapshot(path, write_scope))
+    RemoveEntry(_, ..) => None
   }
   let outcome = file_state.without_access(() => {
     channel.ask({
       tool_name,
-      detail: "\{target_path} (\{reasons.join("; ")})",
+      detail: "\{path} (\{reasons.join("; ")})",
       body: Some(arguments.stringify(indent=2)),
     })
   })
@@ -90,14 +99,15 @@ pub async fn authorize(
     Cancelled => fail("operation approval cancelled; no changes made")
     Unavailable => fail("operation approval unavailable; no changes made")
   }
-  for i, path in paths {
-    guard snapshot(path, write_scope) == before[i] else {
+  if before is Some(version) {
+    guard snapshot(path, write_scope) == version else {
       fail(
         "target changed while awaiting approval; reconsider and request approval again",
       )
     }
+    return write_scope.map(scope => {
+      scope.with_grants([(path, version.destination)])
+    })
   }
-  write_scope.map(scope => {
-    scope.with_grants([ for i, path in paths => (path, before[i].destination) ])
-  })
+  write_scope
 }

@@ -155,28 +155,78 @@ async test "approval rechecks file kind and worker scope" {
 }
 
 ///|
-async test "symlinks never request approval" {
+async test "unlink checks the entry location and resolves intermediate links" {
   @vfs.with_tmpdir(dir => {
-    @fs.mkdir("\{dir}/allowed")
-    @fs.mkdir("\{dir}/allowed/directory")
-    @fs.write_text("\{dir}/outside", "keep", create_mode=CreateNew)
-    @fs.symlink("\{dir}/allowed/link", target="\{dir}/outside")
+    @vfs.FileSystem({ "outside/file": "keep", "allowed/file": "local" }).write_to(
+      dir,
+    )
+    @fs.mkdir("\{dir}/outside/sub")
     let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=[
       "allowed",
     ])
+    let asks = []
     let definition = @remove.definition(
       workspace_root=dir,
       write_scope=scope,
-      approval=ApprovalChannel(_ => fail("must not ask")),
+      approval=ApprovalChannel(ask => {
+        asks.push(ask.detail)
+        AllowedOnce
+      }),
     )
     guard definition.execute is Async(run) else { fail("expected async") }
-    for path in ["allowed/link"] {
+    for
+      (target, path) in [
+        ("outside/file", "allowed/link"),
+        ("outside", "allowed/link/"),
+        ("missing", "allowed/link"),
+      ] {
+      @fs.symlink("\{dir}/allowed/link", target="\{dir}/\{target}")
       guard run({ "path": path, "reason": "cleanup" }) is Respond(out) else {
         fail("expected response")
       }
-      assert_true(out.is_error)
+      assert_false(out.is_error, msg=out.content)
+      assert_eq(@fs.readdir("\{dir}/allowed"), ["file"])
     }
-    assert_eq(@fs.read_text("\{dir}/outside"), "keep")
+    assert_eq(asks.length(), 3)
+    assert_true(
+      asks.all(detail => {
+        detail.contains("symbolic link") && !detail.contains("write blocked")
+      }),
+    )
+    assert_eq(@fs.read_text("\{dir}/outside/file"), "keep")
+    @fs.symlink("\{dir}/allowed/link", target="\{dir}/outside/sub")
+    guard run({ "path": "allowed/link/../file", "reason": "cleanup" })
+      is Respond(out) else {
+      fail("expected response")
+    }
+    assert_false(out.is_error, msg=out.content)
+    assert_eq(asks.length(), 4)
+    assert_true(asks[3].contains("write blocked"))
+    assert_false(@fs.exists("\{dir}/outside/file"))
+    assert_eq(@fs.read_text("\{dir}/allowed/file"), "local")
+  })
+}
+
+///|
+async test "approval unlinks the same entry after its target changes" {
+  @vfs.with_tmpdir(dir => {
+    @vfs.FileSystem({ "first": "one", "second": "two" }).write_to(dir)
+    let link = "\{dir}/link"
+    @fs.symlink(link, target="first")
+    let result = run_remove(
+      FileStateMap(),
+      { "path": link, "reason": "cleanup" },
+      approval=ApprovalChannel(_ => {
+        @fs.remove(link)
+        @fs.symlink(link, target="second")
+        AllowedOnce
+      }),
+    )
+    guard result is Respond(out) else { fail("expected response") }
+    assert_false(out.is_error, msg=out.content)
+    assert_eq(@fs.readdir(dir, sort=true), ["first", "second"])
+    assert_eq(@fs.read_text("\{dir}/first"), "one")
+    assert_eq(@fs.read_text("\{dir}/second"), "two")
   })
 }
 
@@ -228,20 +278,31 @@ async test "approval is invalidated when a parent symlink redirects to identical
     @vfs.FileSystem({ "first/file": "same", "second/file": "same" }).write_to(
       dir,
     )
-    @fs.symlink("\{dir}/alias", target="\{dir}/first")
-    let path = "\{dir}/alias/file"
-    let result = run_remove(
-      FileStateMap(),
-      { "path": path, "reason": "cleanup" },
-      approval=ApprovalChannel(_ => {
-        @fs.remove("\{dir}/alias")
-        @fs.symlink("\{dir}/alias", target="\{dir}/second")
-        AllowedOnce
-      }),
-    )
-    guard result is Respond(out) else { fail("expected response") }
-    assert_true(out.is_error)
-    assert_true(out.content.contains("changed while awaiting approval"))
+    for parent in ["first", "second"] {
+      @fs.symlink("\{dir}/\{parent}/dangling", target="missing")
+    }
+    for name in ["file", "dangling"] {
+      @fs.symlink("\{dir}/alias", target="\{dir}/first")
+      let path = "\{dir}/alias/\{name}"
+      let result = run_remove(
+        FileStateMap(),
+        { "path": path, "reason": "cleanup" },
+        approval=ApprovalChannel(_ => {
+          @fs.remove("\{dir}/alias")
+          @fs.symlink("\{dir}/alias", target="\{dir}/second")
+          AllowedOnce
+        }),
+      )
+      guard result is Respond(out) else { fail("expected response") }
+      assert_true(out.is_error)
+      assert_true(out.content.contains("changed while awaiting approval"))
+      @fs.remove("\{dir}/alias")
+    }
+    for parent in ["first", "second"] {
+      assert_true(
+        @fs.kind("\{dir}/\{parent}/dangling", follow_symlink=false) is SymLink,
+      )
+    }
     assert_eq(@fs.read_text("\{dir}/first/file"), "same")
     assert_eq(@fs.read_text("\{dir}/second/file"), "same")
   })

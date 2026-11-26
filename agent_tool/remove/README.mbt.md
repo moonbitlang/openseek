@@ -1,7 +1,7 @@
 # Remove Tool
 
-`remove(path, reason)` deletes a regular file or recursively deletes a directory. The arguments are unchanged;
-the agent does not supply a hash or an approval flag.
+`remove(path, reason)` deletes a regular file, unlinks a symbolic link, or
+recursively deletes a directory.
 
 - Files recorded as created by this session whose contents still match the
   recorded digest are deleted automatically.
@@ -13,13 +13,16 @@ the agent does not supply a hash or an approval flag.
   The question shows the path, the agent's reason, and why approval is needed.
 - Empty directories are deleted automatically using non-recursive `rmdir`;
   if an entry appears before removal, it fails without deleting that entry.
-- Other nonempty directories require approval, showing the recursive file and
-  subdirectory counts. Hidden files and empty subdirectories are included.
-- Missing files, workspace roots and their ancestors, symlinks (including inside
-  a directory), and special files are rejected without requesting approval.
+- Other nonempty directories require approval for the named directory and all
+  its contents, including hidden files and empty subdirectories.
+- Symbolic links, including dangling links, require approval. A link inside a
+  directory is a leaf in the approved tree. Unlinking it preserves its target.
+  A trailing slash on the link still unlinks the entry. Intermediate links
+  resolve normally when addressing an entry below them.
+- Missing entries, workspace roots and their ancestors, and standalone special files are
+  rejected without requesting approval.
 - Valid targets outside a configured write scope require one-shot approval.
-  The grant names only the captured entries; it never authorizes an entire
-  subtree or changes the scope for later calls.
+  Each grant applies to the requested operation only.
 
 ## Approval and concurrency
 
@@ -29,19 +32,16 @@ Rejection, cancellation, or an absent/unavailable channel leaves the target inta
 Workers currently have no approval channel; they report the blocked deletion
 to their parent instead of bypassing confinement.
 
-A grant is used only by this call for the file's captured canonical path and
-raw-byte SHA-256. After approval, the tool rechecks the scope, kind, location,
-and contents. A changed version is refused; a later request needs fresh
-approval. Matching bytes identify a content version, not a filesystem object.
-For directories, the captured version includes every entry's path, kind,
-canonical location, and each regular file's raw-byte digest. Added, removed,
-renamed, or changed entries invalidate the grant before deletion starts.
+Approving a directory authorizes recursive removal of the named directory and
+its contents at execution time. Files
+added, edited, or renamed while the prompt is open are included. The tool
+checks that the path still names a directory at the approved location, then
+calls the filesystem's recursive removal operation. A filesystem failure can
+leave a partially removed tree.
 
-There is no atomic compare-and-unlink against external writers. After validating
-all entries, directory deletion proceeds in postorder, checking each entry again
-and using non-recursive directory removal. A concurrent change or filesystem
-failure during deletion can leave a partially removed tree; it never expands
-the approved list to include newly added files.
+A standalone file approval covers its location and raw-byte SHA-256. A
+standalone symlink approval covers its name in the resolved parent directory
+and requires that the entry still be a symlink when approval returns.
 
 The definition owns its locking through `FileStateMap::with_access`: the initial
 check and automatic deletion share one locked phase; approval waits outside
