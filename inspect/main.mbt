@@ -732,7 +732,7 @@ async fn file_mtime(path : String) -> (Int64, Int32)? {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return None }
   defer file.close()
   let stamp = file.mtime() catch { _ => return None }
-  Some((stamp.sec(), stamp.nsec()))
+  Some((stamp.sec(), stamp.subsec_nanos()))
 }
 
 ///|
@@ -1147,7 +1147,7 @@ fn session_id_from_file_name(name : String) -> String? {
 ///|
 async fn session_file_stamp(path : String) -> (Int64?, Int32) {
   let stamp = @fs.mtime(path) catch { _ => return (None, 0) }
-  (Some(stamp.sec()), stamp.nsec())
+  (Some(stamp.sec()), stamp.subsec_nanos())
 }
 
 ///|

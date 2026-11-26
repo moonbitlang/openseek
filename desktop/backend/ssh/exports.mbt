@@ -321,7 +321,7 @@ pub async fn Connection::run(
             self.rejected = true
             // Preserve diagnostics, but consume the rejection marker once.
             stderr = Buffer()
-            stderr.write_bytes(b"Authentication was rejected.\n")
+            stderr.write_bytesview(b"Authentication was rejected.\n")
           }
         }
       })
@@ -368,7 +368,7 @@ pub async fn Connection::run(
               if byte == b"\n" {
                 break
               }
-              line.write_bytes(byte)
+              line.write_bytesview(byte)
             }
             match bootstrap_record(@utf8.decode_lossy(line.to_bytes())) {
               Some(Progress(stage)) => emit({ "stage": stage })

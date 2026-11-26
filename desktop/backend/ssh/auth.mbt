@@ -16,7 +16,7 @@ async fn auth_frame(socket : @socket.Tcp) -> Json {
     if byte == b"\n" {
       break
     }
-    bytes.write_bytes(byte)
+    bytes.write_bytesview(byte)
   }
   @json.parse(@utf8.decode(bytes.to_bytes()))
 }
