@@ -24,7 +24,7 @@ async test "remote registration uses the account, and disabling preserves it" {
             Some("Bearer ts_secret"),
           )
           conn.send_response(201, "Created")
-          conn.write_string(
+          conn.text.write(
             "{\"device_token\":\"odt_new\",\"device\":{\"id\":\"d_new\",\"name\":\"Test\"}}",
           )
         } else {
@@ -70,7 +70,7 @@ async test "cancelled registration reads its device credential and revokes it" {
       conn.skip_request_body()
       operation.cancel()
       conn.send_response(201, "Created")
-      conn.write_string(
+      conn.text.write(
         "{\"device_token\":\"odt_cancelled\",\"device\":{\"id\":\"d_cancelled\",\"name\":\"Test\"}}",
       )
       conn.end_response()

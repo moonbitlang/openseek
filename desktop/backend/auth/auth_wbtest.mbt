@@ -364,7 +364,7 @@ async test "account code exchange uses v2 without registering a device" {
         "code_verifier": "verifier",
       })
       connection.send_response(200, "OK")
-      connection.write_string(
+      connection.text.write(
         "{\"token\":\"ts_fixture\",\"user\":{\"user_id\":\"123\",\"login\":\"octocat\",\"avatar_url\":\"\"}}",
       )
       connection.end_response()

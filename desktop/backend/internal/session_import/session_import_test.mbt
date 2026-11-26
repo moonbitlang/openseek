@@ -121,7 +121,7 @@ async test "share download is anonymous and expiry leaves no imported record" {
         assert_true(request.headers.get("Authorization") is None)
         assert_true(request.headers.get("Cookie") is None)
         connection.send_response(code, "Test")
-        connection.write_string(
+        connection.text.write(
           if code == 200 {
             dataset()
           } else {
