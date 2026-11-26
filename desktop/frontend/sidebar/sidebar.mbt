@@ -323,16 +323,22 @@ fn Actions::account_menu(
   }
   entries.push(account_menu_item(scope, label, icon, command, disabled~))
   @html.fragment([
-    @rui.dropdown_menu_trigger(scope, variant=Ghost, [
-      @html.span(class="sidebar-label", menu.login.unwrap_or(account_title)),
-      @icons.icon(@icons.icon_chevron_down),
-    ]),
+    @rui.dropdown_menu_trigger(
+      scope,
+      variant=Ghost,
+      style=["font-size:var(--font-size-md)"],
+      [
+        @html.span(class="sidebar-label", menu.login.unwrap_or(account_title)),
+        @icons.icon(@icons.icon_chevron_down),
+      ],
+    ),
     @rui.dropdown_menu_content(
       scope,
       side=Top,
       side_offset=6,
       aria_label=account_title,
       class="sidebar-account-menu",
+      style=["font-size:var(--font-size-md)"],
       entries,
     ),
   ])

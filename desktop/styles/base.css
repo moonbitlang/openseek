@@ -416,7 +416,7 @@ html[data-resizing] :is(.viewer-stack, .viewer-stack *) {
 }
 
 :root {
-  --app-header-height: calc(var(--font-size-base) * 46 / 14);
+  --app-header-height: calc(var(--font-size-base) * 39 / 14);
 }
 
 .app {
