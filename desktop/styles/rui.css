@@ -46,6 +46,13 @@
   --rui-sidebar-ring: var(--color-focus-ring) !important;
 }
 
+/* Popover menus stay in their trigger's DOM subtree, so isolate their text
+   weight from bold or emphasized ancestors. */
+[data-slot="dropdown-menu-content"],
+[data-slot="context-menu-content"] {
+  font-weight: var(--font-weight-regular);
+}
+
 /* These RUI slots calculate their radius inline from a single scale. Map
    their painted edges here so native, custom and RUI controls agree. */
 [data-slot="select-trigger"],

@@ -40,10 +40,12 @@ test('project host yields its right-aligned slot to pointer and keyboard actions
   await expect(newChat).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('menuitem', { name: 'Workspace settings' })).toBeVisible();
+  const settingsItem = page.getByRole('menuitem', { name: 'Workspace settings' });
+  await expect(settingsItem).toBeVisible();
+  expect(await settingsItem.evaluate(el => getComputedStyle(el).fontWeight)).toBe('400');
   await expect(host).toBeHidden();
   await expect(menu).toBeVisible();
-  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
+  await settingsItem.click();
   await expect(page.getByRole('dialog', { name: 'Workspace settings' })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
