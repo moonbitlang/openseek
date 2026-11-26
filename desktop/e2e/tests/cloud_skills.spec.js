@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { selectAccountMenuItem } from './support/account_menu.js';
 import { CloudHarness, authOrigin } from './support/cloud_harness.js';
 
 const library = page => page.getByRole('dialog', { name: 'Skills', exact: true });
@@ -24,7 +25,7 @@ test('browser Cloud manages the account skill library and completes its skills',
   await page.goto(`${authOrigin}/cloud`);
   await expect(page.locator('#task')).toBeEnabled();
   await showSidebar(page);
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await selectAccountMenuItem(page, 'Skills');
 
   // The selector identifies Cloud even when no device page is open.
   await expect(library(page).getByRole('combobox', { name: 'Library', exact: true })).toContainText('Cloud');
@@ -49,7 +50,7 @@ test('browser Cloud manages the account skill library and completes its skills',
   await expect(labels).toHaveText(['$typst', '$alpha']);
 
   await showSidebar(page);
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await selectAccountMenuItem(page, 'Skills');
   await library(page).getByRole('tab', { name: /^Installed/ }).click();
   await row(page, 'alpha').getByRole('switch').click();
   await expect(row(page, 'alpha').getByRole('switch')).not.toBeChecked();
@@ -74,7 +75,7 @@ test('a signed-in browser selects the named device library and Cloud', async ({ 
   await cloud.goto();
   await expect.poll(() => cloud.device.requests.length).toBeGreaterThan(0);
   await showSidebar(page);
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await selectAccountMenuItem(page, 'Skills');
 
   const libraries = library(page).getByRole('combobox', { name: 'Library', exact: true });
   await expect(libraries).toContainText('Test Mac');

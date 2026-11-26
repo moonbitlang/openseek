@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { selectAccountMenuItem } from './support/account_menu.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const path = suffix => `/device/device-a/${suffix}`;
@@ -18,7 +19,11 @@ test('management dialogs preserve the work surface, draft and browser entry', as
     ['Skills', 'Skills'],
     ['Scheduled', 'Scheduled tasks'],
   ]) {
-    await page.getByRole('button', { name: entry, exact: true }).click();
+    if (entry === 'Settings') {
+      await page.getByRole('button', { name: entry, exact: true }).click();
+    } else {
+      await selectAccountMenuItem(page, entry);
+    }
     await expect(dialog(page)).toHaveAccessibleName(title);
     await expect(dialog(page)).toBeVisible();
     await expect(page).toHaveURL(url);
@@ -186,7 +191,7 @@ test("Back closes the management dialog before it reaches the page", async ({ pa
   // when a layer took it.
   const hostBack = () => page.evaluate(() => !document.dispatchEvent(new Event('openseek-back', { cancelable: true })));
   expect(await hostBack()).toBe(false);
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await selectAccountMenuItem(page, 'Skills');
   await expect(dialog(page)).toHaveAccessibleName('Skills');
   expect(await hostBack()).toBe(true);
   await expect(dialog(page)).not.toBeVisible();

@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { selectAccountMenuItem } from './support/account_menu.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 class ScheduleHarness extends DesktopBrowserHarness {
@@ -40,7 +41,7 @@ test('schedule form, running controls, and completed session navigation', async 
   const app = new ScheduleHarness(page);
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await selectAccountMenuItem(page, 'Scheduled');
   await expect(page.getByRole('heading', { name: 'Scheduled tasks' })).toBeVisible();
   await page.getByRole('button', { name: 'New schedule', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Inspect project');
@@ -59,7 +60,7 @@ test('schedule form, running controls, and completed session navigation', async 
   await expect(page.getByRole('button', { name: 'Open session', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open session', exact: true }).click();
   await expect.poll(() => app.requests.some(r => r.method === 'session.load')).toBe(true);
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await selectAccountMenuItem(page, 'Scheduled');
   await page.getByRole('button', { name: 'Stop run', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Open session', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open session', exact: true }).click();
@@ -70,7 +71,7 @@ test('failed save retains the draft and editing preserves its fields', async ({ 
   const app = new ScheduleHarness(page);
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await selectAccountMenuItem(page, 'Scheduled');
   await page.getByRole('button', { name: 'New schedule', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Daily work');
   await page.getByLabel('Task', { exact: true }).fill('Inspect changes');
@@ -93,7 +94,7 @@ test('automatic directory and save-and-run-now work without choosing a project',
   const app = new ScheduleHarness(page);
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await selectAccountMenuItem(page, 'Scheduled');
   await page.getByRole('button', { name: 'New schedule', exact: true }).click();
   await expect(page.getByLabel('Working directory', { exact: true })).toHaveValue('auto');
   await page.getByLabel('Name', { exact: true }).fill('Community updates');
@@ -116,7 +117,7 @@ test('old setup failure remains readable when no log file was created', async ({
   app.rpcErrors.set('fs.read_file', 'No such file');
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await selectAccountMenuItem(page, 'Scheduled');
   await page.getByRole('button', { name: 'View log', exact: true }).click();
   await expect(page.locator('.schedule-log-content')).toContainText('Could not prepare working directory');
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -127,7 +128,7 @@ for (const broadcastDirectory of [true, false]) {
     const app = new ScheduleHarness(page);
     await app.install();
     await app.goto();
-    await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+    await selectAccountMenuItem(page, 'Scheduled');
     await expect(page.getByText('No schedules yet.', { exact: false })).toBeVisible();
     const workspace = '/Users/test/OpenSeek/Scheduled/new-task';
     app.workspaces.push(workspace);
@@ -162,7 +163,7 @@ for (const broadcastDirectory of [true, false]) {
     await expect(page.locator('textarea#task')).toBeVisible();
     await expect(page.getByText('Scheduled task · Read only while running', { exact: true })).toHaveCount(0);
     app.schedules.runs[0].status = { kind: 'running' };
-    await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+    await selectAccountMenuItem(page, 'Scheduled');
     await expect(page.getByRole('region', { name: 'Running', exact: true }).getByRole('button', { name: 'Open session' })).toBeVisible();
     app.schedules.runs[0].status = { kind: 'succeeded' };
     app.schedules.runs[0].finished_at = Date.now();
@@ -182,7 +183,7 @@ test('skip reasons and declined actions are shown in the page language', async (
   app.refusals.set('run', 'already_queued');
   await app.install();
   await app.goto();
-  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await selectAccountMenuItem(page, 'Scheduled');
   await expect(page.getByText('Skipped: all execution slots were busy', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Run now', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('This schedule is already queued to run');

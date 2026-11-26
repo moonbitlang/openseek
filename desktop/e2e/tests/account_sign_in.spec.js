@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { accountMenuTrigger, openAccountMenu, selectAccountMenuItem } from './support/account_menu.js';
 import { CloudHarness } from './support/cloud_harness.js';
 
 for (const entry of ['sidebar', 'Settings']) {
@@ -9,39 +10,55 @@ for (const entry of ['sidebar', 'Settings']) {
     cloud.pauseAuthorizationCancel = cancellation.promise;
     await cloud.install();
     await cloud.goto();
-    const sidebar = page.locator('.console-account');
+    const sidebar = entry === 'sidebar';
     const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
     const account = page.getByRole('region', { name: 'Account', exact: true });
-    if (entry === 'Settings') {
+    if (!sidebar) {
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
       await page.getByRole('tab', { name: 'Account', exact: true }).click();
     }
-    const signIn = entry === 'sidebar'
-      ? sidebar.and(page.getByRole('button', { name: 'Sign in', exact: true }))
-      : account.getByRole('button', { name: 'Sign in', exact: true });
-    const cancel = entry === 'sidebar'
-      ? sidebar.and(page.getByRole('button', { name: 'Cancel sign-in', exact: true }))
-      : account.getByRole('button', { name: 'Cancel', exact: true });
+    const surface = sidebar ? await openAccountMenu(page) : account;
+    const role = sidebar ? 'menuitem' : 'button';
+    const signIn = surface.getByRole(role, { name: 'Sign in', exact: true });
+    const cancel = surface.getByRole(role, { name: sidebar ? 'Cancel sign-in' : 'Cancel', exact: true });
 
+    const cancelSidebar = page.getByRole('complementary').getByRole('button', { name: 'Cancel', exact: true });
+    // Reopen only after the sidebar has rendered the new sign-in state.
     await signIn.click();
+    if (sidebar) {
+      await expect(cancelSidebar).toBeEnabled();
+      await openAccountMenu(page);
+      await expect(settings).not.toBeVisible();
+    }
     await expect(cancel).toBeEnabled();
-    if (entry === 'sidebar') await expect(settings).not.toBeVisible();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
 
     await cancel.click();
+    if (sidebar) {
+      await expect(cancelSidebar).toBeDisabled();
+      await openAccountMenu(page);
+    }
     await expect(cancel).toBeDisabled();
     await expect.poll(() => cloud.hostRequests.filter(request => request.method === 'auth.cancel').length).toBe(1);
     cancellation.resolve();
+    if (sidebar) {
+      await expect(cancelSidebar).toBeHidden();
+      await openAccountMenu(page);
+    }
     await expect(signIn).toBeEnabled();
     await expect(page.getByText('the sign-in was cancelled', { exact: true })).toHaveCount(0);
 
     cloud.authorization = Promise.withResolvers();
     await signIn.click();
+    if (sidebar) {
+      await expect(cancelSidebar).toBeEnabled();
+      await openAccountMenu(page);
+    }
     await expect(cancel).toBeEnabled();
     expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(2);
     cloud.authorization.resolve();
-    await expect(sidebar).toHaveText('octocat');
-    if (entry === 'sidebar') await sidebar.click();
+    await expect(accountMenuTrigger(page)).toHaveAccessibleName('octocat');
+    if (sidebar) await selectAccountMenuItem(page, 'Account');
     await expect(account.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
   });

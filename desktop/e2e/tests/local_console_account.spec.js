@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { accountMenuTrigger, selectAccountMenuItem } from './support/account_menu.js';
 import { LocalConsoleHarness, browserAccount } from './support/local_console_harness.js';
 import { sessionA } from './support/cloud_harness.js';
 
@@ -43,7 +44,7 @@ test('local Console signs in independently and keeps its account across reload a
   await expect(page.locator('.cloud-home').getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await openLocalWork(page, local);
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
-  await page.locator('.console-account').click();
+  await selectAccountMenuItem(page, 'Sign in');
   await expect(local.row(sessionA)).toBeVisible();
   expect(local.localRequests.some(request => request.path === '/v2/auth/login')).toBe(true);
   expect(await storedAccount(page)).toEqual(browserAccount);
@@ -75,7 +76,7 @@ test('local Console logout clears only Cloud account state and preserves local w
   await openLocalWork(page, local);
   await page.locator('#task').fill('Keep this local draft');
   const sockets = local.localSockets.length;
-  await page.locator('.console-account').click();
+  await selectAccountMenuItem(page, 'Account');
   local.logoutStatus = 503;
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByText('the relay answered HTTP 503', { exact: true })).toBeVisible();
@@ -83,7 +84,7 @@ test('local Console logout clears only Cloud account state and preserves local w
   local.logoutStatus = 204;
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.console-account')).toHaveText('Sign in');
+  await expect(accountMenuTrigger(page)).toHaveAccessibleName('Account');
   expect(await storedAccount(page)).toBeNull();
   await expect(page.locator('#task')).toHaveValue('Keep this local draft');
   expect(local.localSockets).toHaveLength(sockets);
@@ -91,7 +92,7 @@ test('local Console logout clears only Cloud account state and preserves local w
     request.headers.authorization === `Bearer ${browserAccount.token}`)).toBe(true);
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await expect(local.row(sessionA)).toHaveCount(0);
-  await expect(page.locator('.console-account')).toHaveText('Sign in');
+  await expect(accountMenuTrigger(page)).toHaveAccessibleName('Account');
 });
 
 test('a fresh browser opens the local host directly without a Cloud account or cookie', async ({ page, baseURL }) => {

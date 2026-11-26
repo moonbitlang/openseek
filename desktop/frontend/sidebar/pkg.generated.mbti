@@ -66,8 +66,6 @@ pub(all) struct Input {
   work_sections : Array[@section.Input]
   update_label : String?
   update_enabled : Bool
-  schedules_active : Bool
-  skills_active : Bool
   settings_active : Bool
   downloads : Bool
   account : Account?
