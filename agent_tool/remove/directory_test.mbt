@@ -19,7 +19,7 @@ async test "directory approval describes and removes a complete tree including h
         asked.val = true
         assert_eq(
           ask.detail,
-          "\{dir}/tree (recursive directory deletion: 4 files and 2 subdirectories; all contents present at deletion will be removed)",
+          "\{dir}/tree (recursive directory deletion: all contents present at deletion will be removed)",
         )
         assert_true(ask.body is Some(body) && body.contains("cleanup"))
         AllowedOnce
@@ -61,6 +61,25 @@ async test "nonempty directory requires approval and all denial outcomes preserv
     guard result is Respond(out) else { fail("expected response") }
     assert_false(out.is_error, msg=out.content)
     assert_false(@fs.exists(path))
+  })
+}
+
+///|
+#cfg(all(target="native", not(platform="windows")))
+async test "requesting directory approval does not require reading its subdirectories" {
+  @vfs.with_tmpdir(dir => {
+    let tree = "\{dir}/tree"
+    let nested = "\{tree}/nested"
+    @fs.mkdir(nested, recursive=true)
+    @fs.chmod(nested, 0)
+    defer @async.protect_from_cancel(() => @fs.chmod(nested, 0o700))
+    let result = run_remove(
+      FileStateMap(),
+      { "path": tree, "reason": "cleanup" },
+      approval=ApprovalChannel(_ => Rejected),
+    )
+    guard result is Respond(out) else { fail("expected response") }
+    assert_true(out.content.contains("approval rejected"), msg=out.content)
   })
 }
 

@@ -20,7 +20,7 @@ pub fn definition(
       #|If approval is unavailable, rejected, or cancelled, the target is kept.
       #|Directory approval covers all contents present when deletion runs, including new entries.
       #|Unlink symbolic links themselves, including dangling links and links inside a tree.
-      #|Workspace roots, their ancestors, and special files are refused.
+      #|Workspace roots, their ancestors, and standalone special files are refused.
       #|Valid paths outside the write scope require approval for this deletion only.
       #|Do not bypass a refusal with mbtx.
       #|Deleting .mbt/.mbt.md also runs moon check and reports its feedback.
@@ -55,7 +55,7 @@ pub fn definition(
 #derive(Eq)
 priv struct FileVersion {
   canonical : String
-  digest : String?
+  digest : String
 }
 
 ///|
@@ -133,20 +133,21 @@ async fn execute_with_workspace(
       return removal_error(input.path, @tool_error.failure_message("\{error}"))
   }
   file_state.with_access(() => {
-    let version = inspect_target(path, workspace_root, file_state)
-    let (_, target) = version.entries[version.entries.length() - 1]
+    let target = inspect_node(path)
     let directory = target is Directory(_)
     let reason = match target {
-      Directory(_) => {
-        let automatic = version.entries.length() == 1 ||
-          created_directory_tree(version, file_state)
-        if automatic &&
-          !(write_scope is Some(scope) &&
-          version.entries.any(entry => {
-            scope.check_entry(entry.0, entry.1.location()) is Some(_)
-          })) {
-          guard inspect_target(path, workspace_root, file_state, write_scope?) ==
-            version else {
+      Directory(location) => {
+        if @workspace_path.is_under_workspace_root(
+            location,
+            @fs.realpath(workspace_root),
+          ) {
+          return removal_error(
+            path, "cannot remove the workspace root or its ancestors",
+          )
+        }
+        if automatic_directory(path, file_state, write_scope?) is Some(version) {
+          guard automatic_directory(path, file_state, write_scope?) ==
+            Some(version) else {
             return removal_error(path, "directory changed before deletion")
           }
           return delete_directory(
@@ -157,9 +158,8 @@ async fn execute_with_workspace(
             write_scope?,
           )
         }
-        let files = version.entries.count_if(entry => !(entry.1 is Directory(_)))
         Some(
-          "recursive directory deletion: \{files} files and \{version.entries.length() - files - 1} subdirectories; all contents present at deletion will be removed",
+          "recursive directory deletion: all contents present at deletion will be removed",
         )
       }
       Symlink(_) => Some("unlink symbolic link")
@@ -168,8 +168,7 @@ async fn execute_with_workspace(
           input.path.has_suffix(@path.sep.to_string()) {
           return removal_error(path, "not a directory")
         }
-        if file.digest is Some(digest) &&
-          file_state.created_and_unchanged(path, digest) {
+        if file_state.created_and_unchanged(path, file.digest) {
           None
         } else if file_state.get(path) is Some(Created) {
           Some("the file's content has changed since the agent last wrote it")
@@ -209,30 +208,16 @@ async fn execute_with_workspace(
 }
 
 ///|
-/// A non-empty tree can bypass approval only when every entry was created by
-/// this session and every regular file still has the content recorded for it.
-/// Directory provenance matters separately: a pre-existing empty directory
-/// that happens to contain only agent-created files is still user-owned.
-fn created_directory_tree(
-  version : RemovalVersion,
-  file_state : @agent_tool.FileStateMap,
-) -> Bool {
-  version.entries.all(entry => {
-    match entry {
-      (path, File(file)) =>
-        file.digest is Some(digest) &&
-        file_state.created_and_unchanged(path, digest)
-      (_, Symlink(_)) => false
-      (path, Directory(_)) => file_state.created_directory(path)
-    }
-  })
+async fn inspect_file(path : String) -> FileVersion {
+  {
+    canonical: @fs.realpath(path),
+    digest: @crypto.bytes_to_hex_string(@crypto.sha256(@fs.read_binary(path))),
+  }
 }
 
 ///|
-/// Inspect the entry itself. A file digest, when requested, covers its raw bytes.
 async fn inspect_node(
   path : String,
-  hash_file~ : Bool = true,
   write_scope? : @write_scope.WriteScope,
 ) -> NodeVersion {
   let kind = @fs.kind(path, follow_symlink=false) catch {
@@ -248,15 +233,7 @@ async fn inspect_node(
       )
     }
     Directory => Directory(@fs.realpath(path))
-    Regular => {
-      let canonical = @fs.realpath(path)
-      let digest = if hash_file {
-        Some(@crypto.bytes_to_hex_string(@crypto.sha256(@fs.read_binary(path))))
-      } else {
-        None
-      }
-      File({ canonical, digest, })
-    }
+    Regular => File(inspect_file(path))
     _ => fail("cannot remove special files")
   }
   if write_scope is Some(scope) &&
@@ -267,43 +244,54 @@ async fn inspect_node(
 }
 
 ///|
-async fn inspect_target(
+async fn automatic_directory(
   target_path : String,
-  workspace_root : String,
   file_state : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
-) -> RemovalVersion {
+) -> RemovalVersion? {
   let entries = []
-  let root = @fs.realpath(workspace_root)
-  let may_own_tree = file_state.created_directory(target_path)
-  async fn visit(path : String) -> Unit {
-    // The preview needs only entry kinds. Hash contents for direct files and
-    // for files eligible for automatic deletion.
-    let node = inspect_node(
-      path,
-      hash_file=path == target_path ||
-        (may_own_tree && file_state.get(path) is Some(Created)),
-      write_scope?,
-    )
-    if node is Directory(canonical) {
-      // This also protects filesystem roots and aliases of workspace ancestors.
-      if @workspace_path.is_under_workspace_root(canonical, root) {
-        fail("cannot remove the workspace root or its ancestors")
+  async fn visit(path : String) -> Bool {
+    let node = match @fs.kind(path, follow_symlink=false) {
+      Directory => Directory(@fs.realpath(path))
+      Regular if file_state.get(path) is Some(Created) => {
+        let file = inspect_file(path)
+        guard file_state.created_and_unchanged(path, file.digest) else {
+          return false
+        }
+        File(file)
+      }
+      _ => return false
+    }
+    if write_scope is Some(scope) &&
+      scope.check_entry(path, node.location()) is Some(_) {
+      return false
+    }
+    if node is Directory(location) {
+      if !file_state.created_directory(path) {
+        guard path == target_path else { return false }
+        let dir = @fs.opendir(location)
+        defer dir.close()
+        guard dir.next(include_hidden=true) is None else { return false }
+        entries.push((path, node))
+        return true
       }
       for name in @fs.readdir(path, include_hidden=true, sort=true) {
-        visit(
-          if @path.sep == '/' {
-            @workspace_path.join_child(path, name)
-          } else {
-            @workspace_path.join_child_preserving_separator(path, name)
-          },
-        )
+        let child = if @path.sep == '/' {
+          @workspace_path.join_child(path, name)
+        } else {
+          @workspace_path.join_child_preserving_separator(path, name)
+        }
+        guard visit(child) else { return false }
       }
     }
     entries.push((path, node))
+    true
   }
-  visit(target_path)
-  { entries, }
+  if visit(target_path) {
+    Some({ entries, })
+  } else {
+    None
+  }
 }
 
 ///|

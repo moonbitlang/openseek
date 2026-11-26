@@ -13,14 +13,13 @@ recursively deletes a directory.
   The question shows the path, the agent's reason, and why approval is needed.
 - Empty directories are deleted automatically using non-recursive `rmdir`;
   if an entry appears before removal, it fails without deleting that entry.
-- Other nonempty directories require approval, showing the recursive file and
-  subdirectory counts. Links count as files. Hidden files and empty
-  subdirectories are included.
+- Other nonempty directories require approval for the named directory and all
+  its contents, including hidden files and empty subdirectories.
 - Symbolic links, including dangling links, require approval. A link inside a
   directory is a leaf in the approved tree. Unlinking it preserves its target.
   A trailing slash on the link still unlinks the entry. Intermediate links
   resolve normally when addressing an entry below them.
-- Missing entries, workspace roots and their ancestors, and special files are
+- Missing entries, workspace roots and their ancestors, and standalone special files are
   rejected without requesting approval.
 - Valid targets outside a configured write scope require one-shot approval.
   Each grant applies to the requested operation only.
@@ -34,7 +33,7 @@ Workers currently have no approval channel; they report the blocked deletion
 to their parent instead of bypassing confinement.
 
 Approving a directory authorizes recursive removal of the named directory and
-its contents at execution time. The counts in the prompt are a preview. Files
+its contents at execution time. Files
 added, edited, or renamed while the prompt is open are included. The tool
 checks that the path still names a directory at the approved location, then
 calls the filesystem's recursive removal operation. A filesystem failure can
