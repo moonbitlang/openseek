@@ -229,7 +229,9 @@ pub fn editor_classes(state : State, ctx : Ctx) -> String {
 /// stable.
 pub fn resize_handle_view() -> @html.Html {
   @html.div(
-    attrs=@html.Attrs::build().id(ResizeHandleId).class("editor-resize-handle"),
+    attrs=@html.Attrs::build()
+      .id(ResizeHandleId)
+      .class("resize-handle editor-resize-handle"),
     ([] : Array[@html.Html]),
   )
 }
@@ -719,7 +721,7 @@ fn tree_pane(
       @html.div(
         attrs=@html.Attrs::build()
           .id(TreeResizeHandleId)
-          .class("tree-resize-handle"),
+          .class("resize-handle tree-resize-handle"),
         ([] : Array[@html.Html]),
       ),
       @html.div(
@@ -856,9 +858,9 @@ fn review_git_sections(
       ),
       @html.div(
         class=if split_hidden {
-          "review-split-handle hidden"
+          "resize-handle review-split-handle hidden"
         } else {
-          "review-split-handle"
+          "resize-handle review-split-handle"
         },
         title=ui(locale, ResizeGraph),
         attrs=@html.Attrs::build()

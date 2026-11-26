@@ -352,12 +352,6 @@ button.panel-toggle:not(:disabled):hover {
   transform: translateX(-50%);
   cursor: col-resize;
 }
-html.is-resizing-row {
-  cursor: row-resize;
-}
-html.is-resizing-col {
-  cursor: col-resize;
-}
 .file-panel-error.empty {
   display: none;
 }
@@ -378,24 +372,6 @@ html.is-resizing-col {
 }
 .content.panel-expanded .editor-resize-handle {
   display: none;
-}
-/* Resize handlers prevent selection at mousedown. Global user-select changes
-   make long transcripts expensive to resize even with offscreen rows skipped. */
-html.is-resizing {
-  cursor: col-resize;
-}
-
-/* Suppress viewer mouse hit testing during divider drags to avoid geometry
-   reads after size writes. Include descendants that re-enable pointer events,
-   but leave Desktop's divider handles interactive. */
-html:is(
-  .is-resizing,
-  .is-resizing-row,
-  .is-resizing-col,
-  .is-resizing-terminal,
-  .is-resizing-review
-) :is(.viewer-stack, .viewer-stack *) {
-  pointer-events: none !important;
 }
 
 /* ---------- dock: browser tabs, launcher, file picker ---------- */
@@ -1380,11 +1356,6 @@ button.review-section-header:hover,
 
 .review-split-handle.hidden {
   display: none;
-}
-
-html.is-resizing-review,
-html.is-resizing-review * {
-  cursor: row-resize;
 }
 
 .git-graph-header {

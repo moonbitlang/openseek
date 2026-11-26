@@ -110,3 +110,45 @@ for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('dragging a vertical resize handle highlights only that handle', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openQuickOpen();
+  await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
+
+  const root = page.locator('html');
+  const sidebarHandle = page.locator('.sidebar-resize-handle');
+  const editorHandle = page.locator('.editor-resize-handle');
+  await expect(sidebarHandle).toBeVisible();
+  await expect(editorHandle).toBeVisible();
+
+  for (const [active, sibling] of [
+    [sidebarHandle, editorHandle],
+    [editorHandle, sidebarHandle],
+  ]) {
+    const box = await active.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    try {
+      await expect(root).toHaveAttribute('data-resizing', 'col');
+      await expect(active).toHaveAttribute('data-resizing', '');
+      await expect(sibling).not.toHaveAttribute('data-resizing');
+      // Move past the clamp so the cursor is off both handles and the highlight
+      // relies on [data-resizing], not :hover.
+      await page.mouse.move(2, box.y + box.height / 2, { steps: 3 });
+      await expect(active).not.toHaveCSS('background-image', 'none');
+      await expect(sibling).toHaveCSS('background-image', 'none');
+    } finally {
+      await page.mouse.up();
+    }
+    await expect(root).not.toHaveAttribute('data-resizing');
+    await expect(active).not.toHaveAttribute('data-resizing');
+    await expect(sibling).not.toHaveAttribute('data-resizing');
+    await expect(active).toHaveCSS('background-image', 'none');
+    await expect(sibling).toHaveCSS('background-image', 'none');
+  }
+  expect(app.pageErrors).toEqual([]);
+});

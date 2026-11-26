@@ -7,9 +7,9 @@
 // resize (fileeditor/editor_resize.mbt).
 
 ///|
-/// The drag class shared with the editor resizer for its cursor and viewer
-/// mouse-event isolation.
-const ResizingClass = "is-resizing"
+/// The attribute toggled on the active handle (for its highlight) and on the
+/// document element (with the drag axis, for cursor and viewer mouse isolation).
+const ResizingAttr = "data-resizing"
 
 ///|
 /// Width bounds at the default 15px font size; keep aligned with base.css.
@@ -30,10 +30,10 @@ const MinContentWidth = 360
 let sidebar_resize_installed : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether a sidebar drag is in progress. The document-level move/up
-/// listeners are permanent and simply gate on this, so there is nothing to
-/// add and remove per drag.
-let sidebar_resizing : Ref[Bool] = Ref(false)
+/// The handle being dragged, when a sidebar drag is in progress. The
+/// document-level move/up listeners are permanent and simply gate on this, so
+/// there is nothing to add and remove per drag.
+let sidebar_resizing : Ref[@dom.Element?] = Ref(None)
 
 ///|
 /// Install the resize listeners once the handle is in the DOM: a `mousedown`
@@ -52,11 +52,9 @@ fn request_sidebar_resize_mount() -> @cmd.Cmd {
         is Some(handle) else {
         return
       }
-      @interop.add_capture_listener(
-        @js.Value::cast_from(handle),
-        "mousedown",
-        start_sidebar_resize,
-      )
+      @interop.add_capture_listener(@js.Value::cast_from(handle), "mousedown", event => {
+        start_sidebar_resize(handle, event)
+      })
       let document : @js.Value = @js.globalThis.get_with_string("document")
       @interop.add_capture_listener(
         document, "mousemove", on_sidebar_resize_move,
@@ -72,14 +70,17 @@ fn request_sidebar_resize_mount() -> @cmd.Cmd {
 
 ///|
 /// Begin a drag on a left-button press over the handle.
-fn start_sidebar_resize(event : @dom.Event) -> Unit {
+fn start_sidebar_resize(handle : @dom.Element, event : @dom.Event) -> Unit {
   guard event.to_mouse_event() is Some(mouse) && mouse.get_button() == 0 else {
     return
   }
   // Stop the press from starting a text selection in the sidebar underneath.
   event.prevent_default()
-  sidebar_resizing.val = true
-  set_root_class(ResizingClass)
+  sidebar_resizing.val = Some(handle)
+  handle.set_attribute(ResizingAttr, "")
+  if @dom.document().get_document_element() is Some(root) {
+    root.set_attribute(ResizingAttr, "col")
+  }
 }
 
 ///|
@@ -88,7 +89,7 @@ fn start_sidebar_resize(event : @dom.Event) -> Unit {
 /// keeps at least `MinContentWidth` for the content column; on a very
 /// narrow window the floor wins, even past the ceiling.
 fn on_sidebar_resize_move(event : @dom.Event) -> Unit {
-  guard sidebar_resizing.val &&
+  guard sidebar_resizing.val is Some(_) &&
     event.to_mouse_event() is Some(mouse) &&
     @dom.document().query_selector(".app").to_option() is Some(app) else {
     return
@@ -115,20 +116,15 @@ fn drag_width(raw : Double, ceiling~ : Double) -> Double {
 ///|
 /// End a drag.
 fn end_sidebar_resize() -> Unit {
-  guard sidebar_resizing.val else { return }
-  sidebar_resizing.val = false
-  set_root_class("")
+  guard sidebar_resizing.val is Some(handle) else { return }
+  sidebar_resizing.val = None
+  handle.remove_attribute(ResizingAttr)
+  if @dom.document().get_document_element() is Some(root) {
+    root.remove_attribute(ResizingAttr)
+  }
 }
 
 ///|
 fn set_sidebar_width(width : Double) -> Unit {
   set_root_custom_property("--sidebar-width", "\{width}rem")
-}
-
-///|
-/// Toggle a class on the document element (empty string clears it).
-fn set_root_class(class_name : String) -> Unit {
-  if @dom.document().get_document_element() is Some(root) {
-    root.set_attribute("class", class_name)
-  }
 }
