@@ -858,7 +858,7 @@ fn main {
         {
           open: emit.map(path => TranscriptLinkOpened(slot~, path~)),
           jump: emit.map(target => TranscriptLocationOpened(slot~, target)),
-          open_session: emit.map(session => OpenSessionHere(session)),
+          open_session: emit.map(child => OpenTranscriptChild(slot~, child)),
           fork: emit.map(through => ForkRequested(slot~, through~)),
           edit_user: emit.map(request => {
             let (sequence, draft) = request
@@ -1243,8 +1243,14 @@ fn main {
         preview_file: path => emit(PreviewFile(path)),
       },
     )
-    shell.map2(context_menu, (shell, menu) => {
-      @rui.theme(style=["display:contents"], @html.fragment([shell, menu]))
+    let subagents = state
+      .map(model => (model.locale, model.cloud_subagents))
+      .map(input => cloud_subagents_dialog(emit, input.0, input.1))
+    @rabbita.Val::map3(shell, context_menu, subagents, (shell, menu, dialog) => {
+      @rui.theme(
+        style=["display:contents"],
+        @html.fragment([shell, menu, dialog]),
+      )
     })
   })
   app.mount("app")

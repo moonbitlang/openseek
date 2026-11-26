@@ -21,6 +21,9 @@ priv enum ShellMessage {
   RestoreBeforeContinue
   RestoreLabel
   ExportConversation
+  SubagentTranscripts
+  NoSavedSubagents
+  EmptySubagentTranscript
   HideTerminal
   ShowTerminal
   ShowPanel
@@ -99,6 +102,25 @@ priv enum ShellMessage {
 ///|
 fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
   match (locale, message) {
+    (English, SubagentTranscripts) => "Subagent transcripts"
+    (SimplifiedChinese, SubagentTranscripts) => "子智能体对话记录"
+    (TraditionalChinese, SubagentTranscripts) => "子代理對話記錄"
+    (Japanese, SubagentTranscripts) => "サブエージェントの会話履歴"
+    (Spanish, SubagentTranscripts) => "Conversaciones de subagentes"
+    (English, NoSavedSubagents) => "No saved subagents."
+    (SimplifiedChinese, NoSavedSubagents) =>
+      "没有已保存的子智能体记录。"
+    (TraditionalChinese, NoSavedSubagents) =>
+      "沒有已儲存的子代理記錄。"
+    (Japanese, NoSavedSubagents) =>
+      "保存されたサブエージェントはありません。"
+    (Spanish, NoSavedSubagents) => "No hay subagentes guardados."
+    (English, EmptySubagentTranscript) => "No messages yet."
+    (SimplifiedChinese, EmptySubagentTranscript) => "暂无消息。"
+    (TraditionalChinese, EmptySubagentTranscript) => "尚無訊息。"
+    (Japanese, EmptySubagentTranscript) =>
+      "メッセージはまだありません。"
+    (Spanish, EmptySubagentTranscript) => "Todavía no hay mensajes."
     (English, NavigationLoading) => "Loading destination…"
     (Spanish, NavigationLoading) => "Cargando destino…"
     (SimplifiedChinese, NavigationLoading) => "正在加载目标…"

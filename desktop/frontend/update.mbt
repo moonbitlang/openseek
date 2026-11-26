@@ -1570,6 +1570,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.project_picker is Some(_) ||
   model.ssh_ui.editor_open ||
   model.ssh_ui.details is Some(_) ||
+  model.cloud_subagents is Some(_) ||
   model.export_dialog.is_open() ||
   model.file_share_dialog.is_open() ||
   model.session_import_dialog.is_open() ||
@@ -1786,6 +1787,20 @@ fn update(
     model
   }
   let (cmd, model) = update_msg(dispatch, msg, model)
+  let (cmd, model) = if model.cloud_subagents is Some(page) &&
+    (
+      model.screen != Chat ||
+      model.cloud_identity() != Some(page.owner) ||
+      previous.account.map(a => a.token) != model.account.map(a => a.token) ||
+      model.cloud.epoch != page.epoch
+    ) {
+    (
+      @cmd.batch([cmd, @dialog.close(CloudSubagentsDialog)]),
+      { ..model, cloud_subagents: None, },
+    )
+  } else {
+    (cmd, model)
+  }
   let view : @protocol.CloudHistoryView = if model.minimal_transcript_effective() {
     Minimal
   } else {
@@ -7689,6 +7704,48 @@ fn update_msg(
       }
       (@cmd.batch([cmd, command]), { ..model, session_search, })
     }
+    OpenTranscriptChild(slot~, child) => {
+      guard model.transcript_slot() is Some(current) && current.key() == slot else {
+        return (@cmd.none, model)
+      }
+      match current {
+        CloudTranscriptSlot(_) =>
+          open_cloud_subagents(dispatch, model, Some(child))
+        HostTranscript(..) =>
+          update_msg(dispatch, OpenSessionHere(child), model)
+      }
+    }
+    OpenCloudSubagents(child) => open_cloud_subagents(dispatch, model, child)
+    CloudSubagentsLoaded(generation, result) => {
+      guard model.cloud_subagents_generation == generation &&
+        model.cloud_subagents is Some(page) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        { ..model, cloud_subagents: Some({ ..page, content: Some(result), }), },
+      )
+    }
+    CloudSubagentMarkdown(index) => {
+      guard model.cloud_subagents is Some(page) else {
+        return (@cmd.none, model)
+      }
+      let preview = if page.preview == Some(index) { None } else { Some(index) }
+      (@cmd.none, { ..model, cloud_subagents: Some({ ..page, preview, }), })
+    }
+    CloudSubagentLink(path) => {
+      guard model.cloud_subagents is Some(page) &&
+        model.cloud_identity() == Some(page.owner) else {
+        return (@cmd.none, model)
+      }
+      let (open, model) = update_msg(dispatch, OpenFile(path), {
+        ..model,
+        cloud_subagents: None,
+      })
+      (@cmd.batch([@dialog.close(CloudSubagentsDialog), open]), model)
+    }
+    CloseCloudSubagents =>
+      (@dialog.close(CloudSubagentsDialog), { ..model, cloud_subagents: None, })
     OpenCloudExport => {
       guard model.cloud_identity() is Some(identity) else {
         return (@cmd.none, model)
