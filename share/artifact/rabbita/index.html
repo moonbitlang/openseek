@@ -26,18 +26,53 @@
    https://github.com/moonbit-community/moonplot */
 /* Optional component styles. All rules are scoped to MoonPlot nodes. */
 .moonplot {
+  --moonplot-canvas-background: light-dark(#ffffff, #111827);
+  --moonplot-legend-background: light-dark(#ffffff, #1e293b);
   --moonplot-text: light-dark(#263443, #e5e7eb);
   --moonplot-muted: light-dark(#64748b, #94a3b8);
+  --moonplot-axis: light-dark(#374151, #94a3b8);
+  --moonplot-grid: light-dark(#e5e7eb, #334155);
   --moonplot-border: light-dark(#e5e9ed, #334155);
   --moonplot-accent: light-dark(#286b73, #5eead4);
   --moonplot-tooltip-background: light-dark(#ffffff, #1e293b);
-  --moonplot-tooltip-shadow: light-dark(rgba(38, 52, 67, 0.05), rgba(0, 0, 0, 0.45));
-  --moonplot-series-hover: light-dark(#f4f6f8, rgba(255, 255, 255, 0.08));
+  --moonplot-tooltip-shadow: light-dark(#2634430d, #00000073);
+  --moonplot-series-hover: light-dark(#f4f6f8, #ffffff14);
   color: var(--moonplot-text);
   font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+[data-theme="light"] .moonplot,
+.moonplot[data-theme="light"] {
+  color-scheme: light;
+}
+[data-theme="dark"] .moonplot,
+.moonplot[data-theme="dark"] {
+  color-scheme: dark;
+}
 .moonplot .moonplot-viewport { position: relative; }
 .moonplot .moonplot-viewport svg { display: block; max-width: 100%; height: auto; border-radius: 8px; }
+.moonplot svg > rect[width="100%"][height="100%"][fill="white"] { fill: var(--moonplot-canvas-background); }
+.moonplot svg rect[fill="white"][fill-opacity="0.85"] {
+  fill: var(--moonplot-legend-background);
+  stroke: var(--moonplot-border);
+}
+.moonplot svg path[stroke="white"],
+.moonplot svg circle[stroke="white"] { stroke: var(--moonplot-canvas-background); }
+.moonplot svg line[stroke="#374151"],
+.moonplot svg path[stroke="#374151"],
+.moonplot svg rect[stroke="#374151"],
+.moonplot svg circle[stroke="#6b7280"] { stroke: var(--moonplot-axis); }
+.moonplot svg line[stroke="#e5e7eb"],
+.moonplot svg line[stroke="#d1d5db"],
+.moonplot svg circle[stroke="#d1d5db"] { stroke: var(--moonplot-grid); }
+.moonplot svg text:not([fill]) { fill: var(--moonplot-text); }
+.moonplot svg circle[data-moonplot-hover] {
+  fill: var(--moonplot-canvas-background);
+  stroke: var(--moonplot-muted);
+}
+.moonplot svg circle[data-moonplot-selected] {
+  fill: var(--moonplot-canvas-background);
+  stroke: var(--moonplot-accent);
+}
 .moonplot .moonplot-tooltip {
   position: absolute;
   top: 12px;
