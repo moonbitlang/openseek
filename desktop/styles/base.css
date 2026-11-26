@@ -71,6 +71,11 @@ textarea {
   background-color: transparent;
 }
 
+::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
+}
+
 .input-surface,
 .field-surface {
   background-color: var(--color-bg-canvas);
@@ -115,11 +120,6 @@ textarea {
   padding: 0.75em 0.75em;
   border-radius: var(--radius-control);
   font-size: var(--font-size-md);
-
-  &::placeholder {
-    color: var(--color-text-muted);
-    opacity: 1;
-  }
 
   &:disabled {
     cursor: default;

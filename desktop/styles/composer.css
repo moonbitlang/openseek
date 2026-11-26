@@ -521,10 +521,6 @@
   min-height: var(--composer-control-size);
   padding: var(--space-2) var(--space-3);
   font-size: var(--composer-input-font-size);
-
-  &::placeholder {
-    color: color-mix(in srgb, var(--color-text-muted) 50%, var(--color-bg-canvas));
-  }
 }
 
 /* Menus measure against the toolbar's width, not their trigger's width. */
