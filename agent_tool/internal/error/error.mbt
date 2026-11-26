@@ -7,7 +7,11 @@ pub fn failure_message(error_text : String) -> String {
     // Greedy across lines to the LAST ` FAILED: ` marker — the same piece
     // rev_find chose.
     (re"^(.|\n)* FAILED: ", after=message) =>
-      message.strip_suffix(")").unwrap_or(message).to_owned()
+      if error_text.has_prefix("Failure(") {
+        message.strip_suffix(")").unwrap_or(message).to_owned()
+      } else {
+        message.to_owned()
+      }
     _ => error_text
   }
 }
