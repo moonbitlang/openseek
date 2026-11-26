@@ -422,7 +422,7 @@ pub fn component(
       @html.div(
         attrs=@html.Attrs::build()
           .id(ResizeHandleId)
-          .class("sidebar-resize-handle"),
+          .class("resize-handle sidebar-resize-handle"),
         ([] : Array[@html.Html]),
       ),
     ])

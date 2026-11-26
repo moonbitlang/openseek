@@ -18,7 +18,7 @@ const MinReviewSectionHeight = 96
 let git_graph_resize_installed : Ref[Bool] = Ref(false)
 
 ///|
-let git_graph_resizing : Ref[Bool] = Ref(false)
+let git_graph_resizing : Ref[@dom.Element?] = Ref(None)
 
 ///|
 fn set_git_graph_split(height : Int32) -> Unit {
@@ -44,15 +44,14 @@ fn request_git_graph_resize_mount() -> @cmd.Cmd {
         guard event.to_mouse_event() is Some(mouse) &&
           mouse.get_button() == 0 &&
           event.target().to_element() is Some(element) &&
-          element.closest("#\{GitGraphResizeHandleId}") is Some(_) else {
+          element.closest("#\{GitGraphResizeHandleId}") is Some(handle) else {
           return
         }
         event.prevent_default()
-        git_graph_resizing.val = true
-        set_root_class("is-resizing-review")
+        begin_drag(git_graph_resizing, handle, "row")
       })
       @interop.add_capture_listener(document, "mousemove", event => {
-        guard git_graph_resizing.val &&
+        guard git_graph_resizing.val is Some(_) &&
           event.to_mouse_event() is Some(mouse) &&
           @dom.document().get_element_by_id(GitGraphLayoutId).to_option()
           is Some(layout) else {

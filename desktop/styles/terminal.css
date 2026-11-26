@@ -63,9 +63,6 @@
 .content.terminal-maximized .terminal-resize-handle {
   display: none;
 }
-html.is-resizing-terminal {
-  cursor: row-resize;
-}
 
 .terminal-titlebar {
   display: flex;

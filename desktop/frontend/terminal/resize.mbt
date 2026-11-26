@@ -8,8 +8,9 @@
 const TerminalResizeHandleId = "terminal-resize-handle"
 
 ///|
-/// The drag class shared by the row-resize cursor and viewer mouse-event isolation.
-const TerminalResizingClass = "is-resizing-terminal"
+/// The attribute toggled on the active handle (for its highlight) and on the
+/// document element (with the drag axis, for cursor and viewer mouse isolation).
+const TerminalResizingAttr = "data-resizing"
 
 ///|
 /// The terminal and conversation each keep at least this many pixels. These
@@ -25,13 +26,13 @@ const MinConversationHeight = 180
 /// remain gated by `active` between drags.
 priv struct TerminalResizer {
   installed : Ref[Bool]
-  active : Ref[Bool]
+  active : Ref[@dom.Element?]
 }
 
 ///|
 let terminal_resizer : TerminalResizer = {
   installed: Ref(false),
-  active: Ref(false),
+  active: Ref(None),
 }
 
 ///|
@@ -51,7 +52,7 @@ fn TerminalResizer::mount(self : TerminalResizer) -> @cmd.Cmd {
         return
       }
       @interop.add_capture_listener(@js.Value::cast_from(handle), "mousedown", event => {
-        self.start(event)
+        self.start(handle, event)
       })
       let document : @js.Value = @js.globalThis.get_with_string("document")
       @interop.add_capture_listener(document, "mousemove", event => {
@@ -66,19 +67,20 @@ fn TerminalResizer::mount(self : TerminalResizer) -> @cmd.Cmd {
 
 ///|
 /// Begin a drag only for the primary mouse button.
-fn TerminalResizer::start(self : TerminalResizer, event : @dom.Event) -> Unit {
+fn TerminalResizer::start(
+  self : TerminalResizer,
+  handle : @dom.Element,
+  event : @dom.Event,
+) -> Unit {
   guard event.to_mouse_event() is Some(mouse) && mouse.get_button() == 0 else {
     return
   }
   event.prevent_default()
-  self.active.val = true
-  guard @dom.document().get_document_element() is Some(root) else { return }
-  let classes : @js.Value = @js.Value::cast_from(root).get_with_string(
-    "classList",
-  )
-  let _ : @js.Value = classes.apply_with_string("add", [
-    @js.Value::cast_from(TerminalResizingClass),
-  ])
+  self.active.val = Some(handle)
+  handle.set_attribute(TerminalResizingAttr, "")
+  if @dom.document().get_document_element() is Some(root) {
+    root.set_attribute(TerminalResizingAttr, "row")
+  }
 }
 
 ///|
@@ -86,7 +88,7 @@ fn TerminalResizer::start(self : TerminalResizer, event : @dom.Event) -> Unit {
 /// bottom edge. The floor wins if a short window cannot satisfy both bounds,
 /// matching the CSS `clamp`.
 fn TerminalResizer::track(self : TerminalResizer, event : @dom.Event) -> Unit {
-  guard self.active.val &&
+  guard self.active.val is Some(_) &&
     event.to_mouse_event() is Some(mouse) &&
     @dom.document().query_selector(".content").to_option() is Some(content) else {
     return
@@ -107,13 +109,10 @@ fn TerminalResizer::track(self : TerminalResizer, event : @dom.Event) -> Unit {
 ///|
 /// End the active drag and restore the cursor and viewer mouse events.
 fn TerminalResizer::finish(self : TerminalResizer) -> Unit {
-  guard self.active.val else { return }
-  self.active.val = false
-  guard @dom.document().get_document_element() is Some(root) else { return }
-  let classes : @js.Value = @js.Value::cast_from(root).get_with_string(
-    "classList",
-  )
-  let _ : @js.Value = classes.apply_with_string("remove", [
-    @js.Value::cast_from(TerminalResizingClass),
-  ])
+  guard self.active.val is Some(handle) else { return }
+  self.active.val = None
+  handle.remove_attribute(TerminalResizingAttr)
+  if @dom.document().get_document_element() is Some(root) {
+    root.remove_attribute(TerminalResizingAttr)
+  }
 }
