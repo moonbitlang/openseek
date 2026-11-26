@@ -66,6 +66,15 @@ jobs:
         run: |
           moon version --all
 
+      - name: Cache MoonBit package archives
+        # Registry archives can be reused across build targets.
+        uses: actions/cache@v4
+        with:
+          path: ~/.moon/registry/cache
+          key: moon-registry-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version', '**/moon.work', '**/moon.mod') }}
+          restore-keys: |
+            moon-registry-v1-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Update MoonBit package registry
         run: moon update
 
