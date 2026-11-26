@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub async fn authorize(Array[Target], target_path~ : String, tool_name~ : String, arguments~ : @json.Json, file_state~ : @agent_tool.FileStateMap, write_scope? : @write_scope.WriteScope, approval? : @agent_runtime.ApprovalChannel, reason? : String) -> @write_scope.WriteScope?
+pub async fn authorize(Target, tool_name~ : String, arguments~ : @json.Json, file_state~ : @agent_tool.FileStateMap, write_scope? : @write_scope.WriteScope, approval? : @agent_runtime.ApprovalChannel, reason? : String) -> @write_scope.WriteScope?
 
 // Errors
 
