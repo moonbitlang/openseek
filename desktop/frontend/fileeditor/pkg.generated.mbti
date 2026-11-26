@@ -10,6 +10,7 @@ import {
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/viewer/diff_provider/moondiff",
   "openseek_desktop/frontend/cloud_client",
+  "openseek_desktop/frontend/conversation_overview",
   "openseek_desktop/frontend/dock",
   "openseek_desktop/frontend/github",
   "openseek_desktop/frontend/github_review",
@@ -164,6 +165,7 @@ pub(all) struct Ctx {
   thinking : @protocol.Thinking?
   owner : @interop.ConversationIdentity
   cloud_files : CloudFiles?
+  cloud_overview_open : Bool
   feedback_enabled : Bool
   request_epoch : Int32
   watch_namespace : String
@@ -877,6 +879,7 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::has_pinned_office_selection(Self, Ctx) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::offer_office_selection(Self, Ctx, String) -> Result[Self, String]
+pub fn State::overview_changes(Self, @i18n.Locale) -> @conversation_overview.Changes
 pub fn State::pending_office_region(Self, Ctx) -> OfficeRegionDraft?
 pub fn State::pending_office_selection(Self, Ctx) -> OfficeSelectionPreview?
 pub fn State::pending_pdf_capture(Self, Ctx) -> PdfCaptureDraft?

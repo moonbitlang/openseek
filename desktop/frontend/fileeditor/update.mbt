@@ -1671,7 +1671,8 @@ fn explorer_visible(state : State, ctx : Ctx) -> Bool {
 
 ///|
 fn changes_visible(state : State, ctx : Ctx) -> Bool {
-  explorer_visible(state, ctx) && state.explorer_mode is ExplorerChanges
+  ctx.cloud_overview_open ||
+  (explorer_visible(state, ctx) && state.explorer_mode is ExplorerChanges)
 }
 
 ///|
@@ -2374,7 +2375,11 @@ pub fn sync(
   // shallow root-directory watch alive. The actual hide/show transition
   // therefore invalidates a ready Changes snapshot; watcher ownership and
   // workspace gaps cover the remaining reroot cases.
-  let explorer_is_visible = explorer_visible(state, ctx)
+  let explorer_is_visible = if ctx.owner is Cloud(..) {
+    changes_visible(state, ctx)
+  } else {
+    explorer_visible(state, ctx)
+  }
   let explorer_reopened = explorer_is_visible && !state.explorer_was_visible
   let changes_are_live = changes_live(state, ctx)
   let changes_may_be_stale = changes_are_live &&
@@ -2402,7 +2407,8 @@ pub fn sync(
         changes_may_be_stale &&
         (
           state.changes is ChangeListLoading(_) ||
-          state.changes is ChangeListReady(..)
+          state.changes is ChangeListReady(..) ||
+          (ctx.cloud_overview_open && state.changes is ChangeListFailed(_))
         )
       )
     ) {
@@ -3668,6 +3674,11 @@ fn update_inner(
           }
           _ => (@cmd.none, state)
         }
+      } else if state.git_graph is GitGraphReady(repository~, snapshot~, ..) &&
+        repository == reply.repository &&
+        snapshot == reply.snapshot {
+        // An ordinary file edit leaves the open commit and any loaded pages intact.
+        (@cmd.none, state)
       } else {
         (
           @cmd.none,
@@ -5000,6 +5011,7 @@ fn test_ctx() -> Ctx {
       session: "desktop-test",
     }),
     cloud_files: None,
+    cloud_overview_open: false,
     feedback_enabled: true,
     request_epoch: 0,
     watch_namespace: "test-page",

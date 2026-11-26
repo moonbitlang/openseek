@@ -1418,6 +1418,9 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
     owner: model.dock_owner(),
+    cloud_overview_open: model.overview_open &&
+    model.screen is Chat &&
+    model.cloud_identity() is Some(_),
     feedback_enabled: model.editor_feedback_enabled(),
     cloud_files: if model.cloud_selected() &&
       model.cloud_identity() is Some(@interop.Cloud(account~, ..)) &&
