@@ -19,7 +19,7 @@ jobs:
   # the editor's own all-target and cross-platform contract, using its scoped
   # editor/moon.work so Proton setup is not part of an editor-only gate.
   moon-gates:
-    name: moon (stable, ${{ matrix.os }})
+    name: moon (pre-release, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,7 +35,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install MoonBit (stable)
+      - name: Install MoonBit (pre-release)
         run: |
           version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
           test -n "$version"
@@ -71,7 +71,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install MoonBit (stable)
+      - name: Install MoonBit (pre-release)
         run: |
           version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
           test -n "$version"

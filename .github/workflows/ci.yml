@@ -42,14 +42,14 @@ jobs:
     permissions:
       contents: read
     strategy:
-      # Run stable targets independently (fail-fast: false), while the
+      # Run pre-release targets independently (fail-fast: false), while the
       # native/JS/wasm split lets the three test suites run in parallel.
       fail-fast: false
       matrix:
-        moonbit-channel: [stable]
+        moonbit-channel: [pre-release]
         target: [native, js, wasm]
         include:
-          - moonbit-channel: stable
+          - moonbit-channel: pre-release
             deny-warn: "--deny-warn"
     steps:
       - name: Checkout code
@@ -70,27 +70,27 @@ jobs:
         run: moon update
 
       - name: Check generated prompts
-        if: matrix.moonbit-channel == 'stable' && matrix.target == 'native'
+        if: matrix.moonbit-channel == 'pre-release' && matrix.target == 'native'
         run: |
           moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
           moon run scripts/md_to_mbt_string -- --check prompt/moonbit_syntax_and_api.mbt.md prompt/generated_moonbit_syntax_and_api.mbt
 
       - name: Check formatting
-        # Run the repository's one canonical formatter once on stable/native.
+        # Run the repository's one canonical formatter once on pre-release/native.
         # A second toolchain channel could require a different committed form.
-        if: matrix.moonbit-channel == 'stable' && matrix.target == 'native'
+        if: matrix.moonbit-channel == 'pre-release' && matrix.target == 'native'
         run: moon fmt --check
 
       - name: Check ${{ matrix.target }} target
         # This is the local-dependency integration check: desktop must compile
         # against the editor member from this checkout. Keeping the target
         # explicit also makes each matrix row own one complete check/test pair;
-        # stable denies warnings across the complete integrated workspace.
+        # pre-release denies warnings across the complete integrated workspace.
         run: moon check --target ${{ matrix.target }} ${{ matrix.deny-warn }}
 
       - name: Check generated interfaces
         # Generated interfaces are toolchain-versioned, so compare them only
-        # with the stable channel that owns the committed `.mbti`. This covers
+        # with the pre-release channel that owns the committed `.mbti`. This covers
         # the editor's public interfaces from the same checkout too. Ignore
         # blank-only formatter drift, but still reject content changes and new
         # `.mbti`.
@@ -213,7 +213,7 @@ jobs:
   # like every other workspace member. Formatting, generated interfaces and
   # the cram suite (POSIX `sh`) stay on the Linux check job.
   tui-windows:
-    name: openseek_tui (stable, native, windows)
+    name: openseek_tui (pre-release, native, windows)
     runs-on: windows-latest
     permissions:
       contents: read
