@@ -425,8 +425,41 @@ async test "multi_edit reports all failed edits and leaves file unchanged" {
     assert_true(output.is_error)
     assert_eq(
       output.content,
-      "error multi_editing: 2 problem(s); no changes applied\n\{path} edit[1] line range 1-1: old_string not found\n\{path} edit[2] line range 3-4: old_string and new_string are identical",
+      (
+        $|error multi_editing: 2 problem(s); no changes applied
+        $|\{path} edit[1] line range 1-1: old_string not found
+        $|─── file context ───────────────────────────────
+        $|```
+        $| > 1 |alpha
+        $|   2 |beta
+        $|   3 |same
+        $|```
+        $|\{path} edit[2] line range 3-4: old_string and new_string are identical
+        $|─── file context ───────────────────────────────
+        $|```
+        $|   1 |alpha
+        $|   2 |beta
+        $| > 3 |same
+        $| > 4 |same
+        $|```
+      ),
     )
+    // Structured `data.failures` stays compact without embedding code fences.
+    guard output.data
+      is Some(
+        {
+          "outcome": "failed",
+          "failures": [
+            { "index": Number(1, ..), "message": String(msg1), .. },
+            { "index": Number(2, ..), "message": String(msg2), .. },
+          ],
+          ..
+        },
+      ) else {
+      fail("expected structured failures data")
+    }
+    assert_eq(msg1, "old_string not found")
+    assert_eq(msg2, "old_string and new_string are identical")
     assert_eq(@fs.read_text(path), original)
   })
 }
@@ -690,5 +723,168 @@ async test "a write scope rejects the whole batch on one out-of-scope path" {
     assert_true(output.content.contains("write blocked"))
     assert_true(@fs.read_text("\{dir}/lib/a.txt") == "aa\n")
     assert_true(@fs.read_text("\{dir}/other/b.txt") == "bb\n")
+  })
+}
+
+///|
+async test "multi_edit not_found reports exact match line hints and file context" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/drift.mbt"
+    let original =
+      #|line 1
+      #|let target = old_val
+      #|line 3
+      #|line 4
+      #|line 5
+      #|line 6
+      #|multi_a
+      #|multi_b
+      #|line 9
+      #|
+    @fs.write_text(path, original, create_mode=CreateOrTruncate)
+    let output = run_multi_edit({
+      "edits": [
+        // start_line drifted below the actual line 2.
+        {
+          "file": path,
+          "old_string": "let target = old_val",
+          "new_string": "let target = new_val",
+          "start_line": 5,
+        },
+        // end_line=7 truncates the 2-line old_string spanning lines 7-8.
+        {
+          "file": path,
+          "old_string": "multi_a\nmulti_b",
+          "new_string": "multi_x\nmulti_y",
+          "start_line": 7,
+          "end_line": 7,
+        },
+      ],
+    })
+    assert_true(output.is_error)
+    assert_true(
+      output.content.contains(
+        "\{path} edit[0] from line 5: old_string not found (exact match found at line 2)",
+      ),
+    )
+    assert_true(
+      output.content.contains(
+        "\{path} edit[1] line range 7-7: old_string not found (exact match found at lines 7-8)",
+      ),
+    )
+    assert_true(output.content.contains(" > 5 |line 5"))
+    assert_true(output.content.contains(" > 7 |multi_a"))
+    assert_true(output.content.contains("   8 |multi_b"))
+    assert_eq(@fs.read_text(path), original)
+  })
+}
+
+///|
+async test "multi_edit not_found reports quote-normalized match hint and handles CRLF" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/quotes.txt"
+    let original = "say \u{201C}hello\u{201D}\r\nsecond line\r\nthird line\r\n"
+    @fs.write_text(path, original, create_mode=CreateOrTruncate)
+    let output = run_multi_edit({
+      "edits": [
+        {
+          "file": path,
+          "old_string": "say \"hello\"",
+          "new_string": "say \"hi\"",
+          "start_line": 2,
+        },
+      ],
+    })
+    assert_true(output.is_error)
+    assert_true(
+      output.content.contains(
+        "old_string not found (quote-normalized match found at line 1)",
+      ),
+    )
+    assert_true(output.content.contains(" > 2 |second line"))
+    // CRLF normalized cleanly: no raw \r leaked into context lines.
+    assert_false(output.content.contains("\r"))
+  })
+}
+
+///|
+async test "multi_edit not_found handles past-EOF start_line and empty file" {
+  @vfs.with_tmpdir(dir => {
+    let short_path = "\{dir}/short.mbt"
+    let empty_path = "\{dir}/empty.mbt"
+    @fs.write_text(
+      short_path,
+      "one\ntwo\nthree\n",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.write_text(empty_path, "", create_mode=CreateOrTruncate)
+    let output = run_multi_edit({
+      "edits": [
+        {
+          "file": short_path,
+          "old_string": "two",
+          "new_string": "TWO",
+          "start_line": 50,
+        },
+        {
+          "file": empty_path,
+          "old_string": "anything",
+          "new_string": "x",
+          "start_line": 1,
+        },
+      ],
+    })
+    assert_true(output.is_error)
+    assert_true(
+      output.content.contains(
+        "old_string not found (exact match found at line 2)",
+      ),
+    )
+    assert_true(
+      output.content.contains(
+        "─── file context (file has 3 line(s); start_line 50 is past EOF) ───",
+      ),
+    )
+    assert_true(output.content.contains("   3 |three"))
+    assert_true(
+      output.content.contains(
+        "─── file context (file is empty) ───────────────",
+      ),
+    )
+  })
+}
+
+///|
+async test "multi_edit caps file context blocks when many edits fail in one batch" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/many.mbt"
+    let lines = [ for i in 1..<=20 => "let x\{i} = \{i}" ]
+    @fs.write_text(path, lines.join("\n") + "\n", create_mode=CreateOrTruncate)
+    let edits : Array[Json] = [
+      for i in 1..<=10 => {
+        {
+          "file": Json(path),
+          "old_string": Json("missing_\{i}"),
+          "new_string": Json("fixed_\{i}"),
+          "start_line": Json(i),
+        }
+      }
+    ]
+    let output = run_multi_edit({ "edits": Json(edits) })
+    assert_true(output.is_error)
+    assert_true(output.content.contains("10 problem(s); no changes applied"))
+    // Every failure still gets its error header line.
+    assert_true(
+      output.content.contains("edit[0] from line 1: old_string not found"),
+    )
+    assert_true(
+      output.content.contains("edit[9] from line 10: old_string not found"),
+    )
+    // Context blocks are capped at FailureContextSiteLimit (8), omitting 2.
+    assert_true(
+      output.content.contains(
+        "(file context omitted for 2 additional failure(s) to keep output concise)",
+      ),
+    )
   })
 }
