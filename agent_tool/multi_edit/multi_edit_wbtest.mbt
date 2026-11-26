@@ -156,13 +156,12 @@ test "build_file_context expands for multiline old_string and clamps wide ranges
 }
 
 ///|
-test "find_other_match_hint picks nearest matches and marks overflow" {
+test "find_other_match_hint picks nearest matches across one-sided clusters and overlaps" {
   let lines = [
     for i in 1..<=20 => if i % 2 == 0 { "needle" } else { "other \{i}" }
   ]
   let content = lines.join("\n") + "\n"
   // Matches are at even lines 2, 4, 6, 8, 10, 12, 14, 16, 18, 20.
-  // Anchored at line 11: nearest 5 are 6, 8, 10, 12, 14 (or 8, 10, 12, 14, 16).
   let hint = find_other_match_hint(content, "needle", 11)
   guard hint is Some(text) else { fail("expected a match hint") }
   assert_true(text.contains("exact match found at lines "))
@@ -175,6 +174,91 @@ test "find_other_match_hint picks nearest matches and marks overflow" {
     find_other_match_hint(dup_line, "foo", 2),
     Some("exact match found at line 1"),
   )
+  // One-sided cluster: matches at lines 1-3 and 101-105, anchored at line 100.
+  // The 5 closest are 101, 102, 103, 104, 105 (not 2, 3, 101, 102, 103).
+  let clustered_lines = [
+    for i in 1..<=105 => {
+      if (i >= 1 && i <= 3) || (i >= 101 && i <= 105) {
+        "target"
+      } else {
+        "filler \{i}"
+      }
+    }
+  ]
+  assert_eq(
+    find_other_match_hint(clustered_lines.join("\n") + "\n", "target", 100),
+    Some("exact match found at lines 101, 102, 103, 104, 105 (and more)"),
+  )
+  // Overlapping multiline matches: `a\na` in `a\na\na\n` matches both 1-2 and 2-3.
+  assert_eq(
+    find_other_match_hint("a\na\na\n", "a\na", 3),
+    Some("exact match found at lines 1-2, 2-3"),
+  )
+}
+
+///|
+test "validate_edit defers file normalization for insertions and skips context past budget" {
+  let content = "line1\r\nline2\r\nline3\r\n"
+  let insert_index = FileContextIndex::new(content)
+  let insert_budget = ContextBudget::new()
+  let insert_items = @decode.decode_edits_json([
+    {
+      "file": "a.mbt",
+      "old_string": "",
+      "new_string": "inserted\n",
+      "start_line": 1,
+    },
+  ])
+  assert_true(
+    validate_edit(
+      content,
+      insert_index,
+      insert_budget,
+      insert_items[0],
+      0,
+      file="a.mbt",
+    )
+    is Valid(_),
+  )
+  // Pure insertion never normalizes the file or builds line_starts.
+  assert_true(insert_index.normalized is None)
+  assert_true(insert_index.line_starts is None)
+
+  // After FailureContextSiteLimit failures on file 1, identical failures on
+  // file 2 skip both normalization and context rendering.
+  let budget = ContextBudget::new()
+  let file1_index = FileContextIndex::new("a\nb\n")
+  let identical_items = @decode.decode_edits_json([
+    { "file": "a.mbt", "old_string": "a", "new_string": "a", "start_line": 1 },
+    { "file": "b.mbt", "old_string": "a", "new_string": "a", "start_line": 1 },
+  ])
+  for i in 0..<FailureContextSiteLimit {
+    assert_true(
+      validate_edit(
+        "a\nb\n",
+        file1_index,
+        budget,
+        identical_items[0],
+        i,
+        file="a.mbt",
+      )
+      is Invalid({ context: Context(_), .. }),
+    )
+  }
+  let file2_index = FileContextIndex::new("x\ny\n")
+  assert_true(
+    validate_edit(
+      "x\ny\n",
+      file2_index,
+      budget,
+      identical_items[1],
+      FailureContextSiteLimit,
+      file="b.mbt",
+    )
+    is Invalid({ context: Omitted, .. }),
+  )
+  assert_true(file2_index.normalized is None)
+  assert_true(file2_index.line_starts is None)
 }
 
 ///|
@@ -188,7 +272,7 @@ test "failure_report enforces character budget across context blocks" {
           index: Some(i),
           range: "from line \{i + 1}",
           message: "old_string not found",
-          context: Some(big_ctx),
+          context: Context(big_ctx),
         } : EditFailure)
     }
   ]

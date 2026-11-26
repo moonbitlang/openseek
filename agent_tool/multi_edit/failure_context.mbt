@@ -25,29 +25,48 @@ const FailureContextSiteLimit : Int32 = 3
 const FailureContextBudgetChars : Int32 = 12_000
 
 ///|
-/// How many nearby matches before and at/after `start_line` to retain when
-/// hinting where an out-of-range `old_string` exists elsewhere in the file.
-const MatchHintWindowEachSide : Int32 = 3
-
-///|
 /// Maximum total match locations listed in one `old_string not found` hint.
+/// Each side retains up to this many nearby matches before merging so closer
+/// matches on one side are never evicted by farther matches on the other.
 const MatchHintDisplayLimit : Int32 = 5
 
 ///|
-/// Per-file normalized content and lazily computed line-start index shared
-/// across all edits targeting the same file in a `multi_edit` batch.
-priv struct FileContextIndex {
-  norm_content : String
+const MatchHintWindowEachSide : Int32 = MatchHintDisplayLimit
+
+///|
+priv struct NormalizedContent {
+  text : String
   offset_map : Array[Int32]
+}
+
+///|
+/// Per-file lazily normalized content and line-start index shared across all
+/// edits targeting the same file in a `multi_edit` batch. Pure insertion
+/// batches never normalize or index the file.
+priv struct FileContextIndex {
+  content : String
+  mut normalized : NormalizedContent?
   mut line_starts : Array[Int32]?
 }
 
 ///|
 fn FileContextIndex::new(content : String) -> FileContextIndex {
-  let (norm_content, offset_map) = @matching.normalize_content_for_matching(
-    content,
-  )
-  { norm_content, offset_map, line_starts: None, }
+  { content, normalized: None, line_starts: None, }
+}
+
+///|
+fn FileContextIndex::normalized(self : FileContextIndex) -> NormalizedContent {
+  match self.normalized {
+    Some(value) => value
+    None => {
+      let (text, offset_map) = @matching.normalize_content_for_matching(
+        self.content,
+      )
+      let value : NormalizedContent = { text, offset_map, }
+      self.normalized = Some(value)
+      value
+    }
+  }
 }
 
 ///|
@@ -55,10 +74,26 @@ fn FileContextIndex::line_starts(self : FileContextIndex) -> Array[Int32] {
   match self.line_starts {
     Some(starts) => starts
     None => {
-      let starts = line_start_index(self.norm_content)
+      let starts = line_start_index(self.normalized().text)
       self.line_starts = Some(starts)
       starts
     }
+  }
+}
+
+///|
+/// Total logical line count derived in O(1) from the cached `line_starts`
+/// index: a trailing `\n` produces one extra sentinel start at EOF.
+fn line_count_from_starts(
+  content : String,
+  line_starts : Array[Int32],
+) -> Int32 {
+  if content == "" {
+    0
+  } else if content.has_suffix("\n") {
+    line_starts.length() - 1
+  } else {
+    line_starts.length()
   }
 }
 
@@ -116,6 +151,52 @@ fn display_context_line(text : String) -> String {
 }
 
 ///|
+/// Context attachment state for an `EditFailure`:
+/// - `NoContext`: failure kind does not attach file context (e.g. overlap, IO).
+/// - `Context(String)`: rendered `─── file context ───` block.
+/// - `Omitted`: context was skipped because the batch budget was already full.
+priv enum FailureContext {
+  NoContext
+  Context(String)
+  Omitted
+}
+
+///|
+/// Batch-wide budget tracker used during validation so failures beyond the
+/// display cap skip file indexing and context rendering altogether.
+priv struct ContextBudget {
+  mut shown : Int32
+  mut chars : Int32
+  mut exhausted : Bool
+}
+
+///|
+fn ContextBudget::new() -> ContextBudget {
+  { shown: 0, chars: 0, exhausted: false, }
+}
+
+///|
+fn ContextBudget::can_accept(self : ContextBudget) -> Bool {
+  !self.exhausted && self.shown < FailureContextSiteLimit
+}
+
+///|
+fn ContextBudget::record(
+  self : ContextBudget,
+  rendered : String,
+) -> FailureContext {
+  if self.shown < FailureContextSiteLimit &&
+    self.chars + rendered.length() <= FailureContextBudgetChars {
+    self.shown += 1
+    self.chars += rendered.length()
+    Context(rendered)
+  } else {
+    self.exhausted = true
+    Omitted
+  }
+}
+
+///|
 /// Build a bounded `─── file context ───` code block around a failed edit's
 /// anchor (`start_line`..`end_line`). Uses LF-normalized content so CRLF files
 /// render cleanly without trailing `\r`.
@@ -125,12 +206,12 @@ fn build_file_context(
   end_line : Int32?,
   old_string_lines : Int32,
 ) -> String {
-  let content = file_index.norm_content
-  let total_lines = total_line_count(content)
-  if total_lines == 0 {
+  let content = file_index.normalized().text
+  if content == "" {
     return "─── file context (file is empty) ───────────────"
   }
   let line_starts = file_index.line_starts()
+  let total_lines = line_count_from_starts(content, line_starts)
   if start_line > total_lines {
     let tail_span = FailureContextLinesBefore + FailureContextLinesAfter + 1
     let first_line = (total_lines - tail_span + 1).max(1)
@@ -188,10 +269,30 @@ priv struct MatchSpans {
 }
 
 ///|
+/// Number of additional lines covered by `needle` beyond its starting line:
+/// newlines strictly before the final code unit. A trailing `\n` stays on the
+/// last matched line rather than spilling onto the next line.
+fn needle_extra_lines(needle : String) -> Int32 {
+  let limit = needle.length() - 1
+  let mut extra = 0
+  for i in 0..<limit {
+    if needle[i] == '\n' {
+      extra += 1
+    }
+  }
+  extra
+}
+
+///|
 /// Scan `haystack` in one linear pass for occurrences of `needle`, retaining
-/// the closest matches above and at/after `start_line` so an out-of-range
-/// `old_string` can hint its actual line number(s) in O(file) time and O(1)
-/// memory.
+/// up to `MatchHintWindowEachSide` closest matches above and at/after
+/// `start_line` so an out-of-range `old_string` can hint its actual line
+/// number(s) in O(file) time and O(1) memory.
+///
+/// After matching on `first_line`, the scan advances to the start of the next
+/// line (`first_line + 1`): every match starting on `first_line` has the same
+/// `(first_line, first_line + extra_lines)` span, while advancing by one line
+/// still discovers overlapping multiline matches starting on subsequent lines.
 fn find_match_spans(
   haystack : String,
   needle : String,
@@ -214,21 +315,17 @@ fn find_match_spans(
     scan_line
   }
 
+  let extra_lines = needle_extra_lines(needle)
   let needle_view = needle[:]
   let mut from = 0
-  let mut last_recorded : (Int32, Int32)? = None
-  while haystack[from:].find(needle_view) is Some(found) {
+  while from < haystack.length() &&
+        haystack[from:].find(needle_view) is Some(found) {
     let offset = from + found
-    from = offset + needle.length()
     let first_line = line_at(offset)
-    let last_line = line_at(offset + needle.length() - 1)
-    let span = (first_line, last_line)
-    if last_recorded is Some(prev) && prev == span {
-      continue
-    }
-    last_recorded = Some(span)
+    let span = (first_line, first_line + extra_lines)
     if first_line < start_line {
       if before.length() == MatchHintWindowEachSide {
+        // Keep the closest matches immediately above start_line.
         ignore(before.remove(0))
         dropped_before = true
       }
@@ -238,6 +335,16 @@ fn find_match_spans(
     } else {
       has_more_after = true
       break
+    }
+    // Advance to the start of the line after `first_line`.
+    let mut next_from = offset
+    while next_from < haystack.length() && haystack[next_from] != '\n' {
+      next_from += 1
+    }
+    from = if next_from < haystack.length() {
+      next_from + 1
+    } else {
+      haystack.length()
     }
   }
   let combined : Array[(Int32, Int32)] = [..before, ..at_or_after]

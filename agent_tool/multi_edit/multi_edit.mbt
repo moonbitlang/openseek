@@ -301,6 +301,7 @@ async fn multi_edit_files(
   let groups = group_contiguous(resolved)
   let failures : Array[EditFailure] = []
   let prepared : Array[PreparedFile] = []
+  let context_budget = ContextBudget::new()
   for group in groups {
     let content = @fs.read_text(group.path) catch {
       error => {
@@ -309,7 +310,7 @@ async fn multi_edit_files(
           index: None,
           range: "",
           message: "error reading file: \{error}",
-          context: None,
+          context: NoContext,
         })
         continue
       }
@@ -321,6 +322,7 @@ async fn multi_edit_files(
         validate_edit(
           content,
           file_index,
+          context_budget,
           edit.item,
           edit.index,
           file=group.file,
@@ -366,7 +368,7 @@ async fn multi_edit_files(
           index: None,
           range: "",
           message,
-          context: None,
+          context: NoContext,
         })
       None =>
         writes.push({
@@ -1291,13 +1293,14 @@ priv struct EditFailure {
   index : Int32?
   range : String
   message : String
-  context : String?
+  context : FailureContext
 }
 
 ///|
 fn validate_edit(
   content : String,
   file_index : FileContextIndex,
+  context_budget : ContextBudget,
   item : @decode.MultiEditItem,
   index : Int32,
   file~ : String,
@@ -1314,7 +1317,7 @@ fn validate_edit(
         index: Some(index),
         range,
         message: "old_string and new_string are both empty",
-        context: None,
+        context: NoContext,
       })
     }
     let at = @line_offset.line_start_offset(content, item.start_line).clamp(
@@ -1329,16 +1332,22 @@ fn validate_edit(
       range,
     })
   }
-  let (norm_old, _) = @matching.normalize_content_for_matching(item.old_string)
   if item.old_string == item.new_string {
-    let context = Some(
-      build_file_context(
-        file_index,
-        item.start_line,
-        item.end_line,
-        total_line_count(norm_old),
-      ),
-    )
+    let context = if context_budget.can_accept() {
+      let (norm_old, _) = @matching.normalize_content_for_matching(
+        item.old_string,
+      )
+      context_budget.record(
+        build_file_context(
+          file_index,
+          item.start_line,
+          item.end_line,
+          total_line_count(norm_old),
+        ),
+      )
+    } else {
+      Omitted
+    }
     return Invalid({
       file,
       index: Some(index),
@@ -1347,8 +1356,10 @@ fn validate_edit(
       context,
     })
   }
-  let norm_content = file_index.norm_content
-  let offset_map = file_index.offset_map
+  let (norm_old, _) = @matching.normalize_content_for_matching(item.old_string)
+  let normalized = file_index.normalized()
+  let norm_content = normalized.text
+  let offset_map = normalized.offset_map
   let region = select_edit_region(norm_content, item.start_line, item.end_line)
   let match_offset = match region.body.find(norm_old) {
     Some(offset) => Some(offset)
@@ -1360,14 +1371,18 @@ fn validate_edit(
       Some(hint) => "old_string not found (\{hint})"
       None => "old_string not found"
     }
-    let context = Some(
-      build_file_context(
-        file_index,
-        item.start_line,
-        item.end_line,
-        total_line_count(norm_old),
-      ),
-    )
+    let context = if context_budget.can_accept() {
+      context_budget.record(
+        build_file_context(
+          file_index,
+          item.start_line,
+          item.end_line,
+          total_line_count(norm_old),
+        ),
+      )
+    } else {
+      Omitted
+    }
     return Invalid({ file, index: Some(index), range, message, context, })
   }
   let norm_global = region.start_offset + offset
@@ -1403,7 +1418,7 @@ fn collect_overlap_failures(
         index: Some(plan.index),
         range: plan.range,
         message: "replacement overlaps edit[\{previous_index}]",
-        context: None,
+        context: NoContext,
       })
     }
     if plan.end > previous_end {
@@ -1441,7 +1456,7 @@ fn failure_report(failures : Array[EditFailure]) -> String {
   for failure in failures {
     let header = format_failure(failure)
     match failure.context {
-      Some(ctx) =>
+      Context(ctx) =>
         if shown_contexts < FailureContextSiteLimit &&
           context_chars + ctx.length() <= FailureContextBudgetChars {
           shown_contexts += 1
@@ -1451,7 +1466,11 @@ fn failure_report(failures : Array[EditFailure]) -> String {
           omitted_contexts += 1
           sections.push(header)
         }
-      None => sections.push(header)
+      Omitted => {
+        omitted_contexts += 1
+        sections.push(header)
+      }
+      NoContext => sections.push(header)
     }
   }
   let suffix = if omitted_contexts > 0 {
