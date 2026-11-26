@@ -48,12 +48,14 @@ async fn bounded(
   cwd : String,
   env : Map[String, String],
   log : String,
-  timeout_ms : Int,
-  grace_ms? : Int = 10000,
-) -> Int? {
+  timeout_ms : Int32,
+  grace_ms~ : Int32 = 10000,
+) -> Int32? {
   let output = @process.redirect_to_file(log, create_mode=CreateOrTruncate)
-  @async.with_timeout_opt(timeout_ms, () => {
-    @process.run(
+  let mut exit_code : Int32? = None
+  @async.with_task_group(group => {
+    let proc = @process.spawn(
+      group,
       command[0],
       command[1:],
       extra_env=env,
@@ -61,25 +63,28 @@ async fn bounded(
       stdout=output,
       stderr=output,
       cwd~,
-      cancel_handler=kill_tree(grace_ms),
+      cancel_handler=@process.hard_cancel(),
+      no_wait=true,
     )
+    match @async.with_timeout_opt(timeout_ms, () => proc.wait()) {
+      Some(code) => exit_code = Some(code)
+      None => {
+        // The engine starts `moon` and snippet runs of its own; signal the
+        // tree it had when the timeout fired, not just the engine.
+        let tree = descendants(proc.pid)
+        signal_all("-TERM", tree)
+        if @async.with_timeout_opt(grace_ms, () => proc.wait()) is None {
+          signal_all("-KILL", tree)
+          ignore(proc.wait())
+        }
+      }
+    }
   })
+  exit_code
 }
 
 ///|
-/// The engine starts `moon` and snippet runs of its own; signal the tree it
-/// had when the timeout fired, not just the engine.
-fn kill_tree(grace_ms : Int) -> @process.CancellationHandler {
-  pid => {
-    let tree = descendants(pid)
-    signal_all("-TERM", tree)
-    @async.sleep(grace_ms)
-    signal_all("-KILL", tree)
-  }
-}
-
-///|
-async fn descendants(root : Int) -> Array[String] {
+async fn descendants(root : Int32) -> Array[String] {
   let listing = @shell.Cmd("ps", ["-A", "-o", "pid=,ppid="]).output().stdout()
   let children : Map[String, Array[String]] = Map([])
   for line in listing.split("\n") {
@@ -120,7 +125,7 @@ fn engine_command(
   name : String,
   prompt : String,
   task : String,
-  max_steps : Int,
+  max_steps : Int32,
 ) -> Array[String] {
   [
     engine,
@@ -154,7 +159,8 @@ fn sha256_hex(data : Bytes) -> String {
 async fn engine_hashes(engines : Map[String, String]) -> Json {
   let hashes : Map[String, Json] = Map([])
   for variant, binary in engines {
-    hashes[variant] = sha256_hex(@fs.read_file(binary).binary()) |> @json.to_json
+    hashes[variant] = sha256_hex(@fs.read_file(binary).binary())
+      |> @json.to_json
   }
   hashes |> @json.to_json
 }
@@ -194,7 +200,7 @@ fn seconds_since(started : Int64) -> Json {
 }
 
 ///|
-fn opt_int(value : Int?) -> Json {
+fn opt_int(value : Int32?) -> Json {
   match value {
     Some(value) => value |> @json.to_json
     None => null
@@ -279,8 +285,7 @@ fn Session::new(items : Array[Json]) -> Session {
 ///|
 fn Session::metrics(self : Session, into : Map[String, Json]) -> Unit {
   into["steps"] = self.assistants.length() |> @json.to_json
-  into["outer_calls"] = self.assistants
-    .fold(init=0, (total, assistant) => {
+  into["outer_calls"] = self.assistants.fold(init=0, (total, assistant) => {
       match assistant {
         { "tool_calls": Array(calls), .. } => total + calls.length()
         _ => total
@@ -288,11 +293,11 @@ fn Session::metrics(self : Session, into : Map[String, Json]) -> Unit {
     })
     |> @json.to_json
   into["nested_calls"] = self.nested.length() |> @json.to_json
-  into["tool_errors"] = self.results
-    .count_if(r => r is { "is_error": True, .. })
+  into["tool_errors"] = self.results.count_if(r => r is { "is_error": True, .. })
     |> @json.to_json
-  into["nested_errors"] = self.nested
-    .count_if(c => c is { "result": { "is_error": True, .. }, .. })
+  into["nested_errors"] = self.nested.count_if(c => {
+      c is { "result": { "is_error": True, .. }, .. }
+    })
     |> @json.to_json
 }
 
@@ -368,7 +373,7 @@ async fn generated_prompt(path : String) -> String {
 ///|
 /// Run every job with at most `concurrency` in flight; results keep job order.
 async fn[T] run_pool(
-  concurrency : Int,
+  concurrency : Int32,
   jobs : Array[async () -> T],
 ) -> Array[T] {
   let slots = @semaphore.Semaphore(concurrency)
@@ -390,7 +395,7 @@ async fn[T] run_pool(
 
 ///|
 /// Pair order alternates per repetition so neither variant always launches first.
-fn paired_variants(repeat : Int) -> Array[String] {
+fn paired_variants(repeat : Int32) -> Array[String] {
   if repeat % 2 == 1 {
     ["baseline", "candidate"]
   } else {
@@ -425,7 +430,7 @@ struct Fixture {
 }
 
 ///|
-fn two_digits(i : Int) -> String {
+fn two_digits(i : Int32) -> String {
   if i < 10 {
     "0\{i}"
   } else {
@@ -434,7 +439,7 @@ fn two_digits(i : Int) -> String {
 }
 
 ///|
-fn computed_total() -> Int {
+fn computed_total() -> Int32 {
   let mut total = 0
   for i in 0..<12 {
     total += (i + 3) * (107 + 19 * i)
@@ -571,8 +576,7 @@ fn search_oracle(session : Session, final_message : Json) -> Bool {
     r is { "tool_name": "web_search", .. }
   })
   for call in session.nested {
-    if call is { "name": "web_search", "result": result, .. } &&
-      result != null {
+    if call is { "name": "web_search", "result": result, .. } && result != null {
       search_results.push(result)
     }
   }
@@ -587,7 +591,7 @@ fn search_oracle(session : Session, final_message : Json) -> Bool {
   guard answer is Object(fields) && fields.length() == 2 else { return false }
   for key, host in { "python": "docs.python.org", "rust": "doc.rust-lang.org" } {
     guard fields.get(key) is Some(Array(urls)) &&
-      urls.length() is (1..=2) &&
+      urls.length() is (1..<=2) &&
       urls.iter().all(url => url is String(_)) &&
       Set::from_array(urls.map(url => url.stringify())).length() ==
       urls.length() else {
@@ -613,8 +617,8 @@ async fn analyze(
   case : String,
   workspace : String,
   expected : Map[String, String],
-  exit_code : Int?,
-  require_ptc? : Bool = false,
+  exit_code : Int32?,
+  require_ptc~ : Bool = false,
   session_name? : String,
 ) -> Map[String, Json] {
   let session = Session::new(session_items(workspace, session_name?))
@@ -653,11 +657,11 @@ async fn analyze(
     "failures": failures |> @json.to_json,
   }
   session.metrics(result)
-  result["interrupted_calls"] = session.nested
-    .count_if(c => !(c is { "status": "done", .. }))
+  result["interrupted_calls"] = session.nested.count_if(c => {
+      !(c is { "status": "done", .. })
+    })
     |> @json.to_json
-  result["model_tool_output_chars"] = session.results
-    .fold(init=0, (total, r) => {
+  result["model_tool_output_chars"] = session.results.fold(init=0, (total, r) => {
       match r {
         { "content": String(content), .. } => total + content.char_length()
         _ => total
@@ -674,8 +678,8 @@ async fn trial(
   out : String,
   variant : String,
   case : String,
-  repeat : Int,
-  timeout_s : Int,
+  repeat : Int32,
+  timeout_s : Int32,
   require_ptc : Bool,
 ) -> Json {
   let name = "\{case}-\{repeat}-\{variant}"
@@ -893,7 +897,8 @@ async fn main_run(args : @argparse.Matches) -> Unit {
   let prompt_hashes : Map[String, Json] = Map([])
   for variant, prompt in variants {
     @fs.write_file("\{out}/\{variant}.md", prompt)
-    prompt_hashes[variant] = sha256_hex(@utf8.encode(prompt[:])) |> @json.to_json
+    prompt_hashes[variant] = sha256_hex(@utf8.encode(prompt[:]))
+      |> @json.to_json
   }
   let engine = @fs.realpath(engine)
   let engines = {
@@ -939,7 +944,10 @@ async fn main_run(args : @argparse.Matches) -> Unit {
       }
     }
   }
-  write_json("\{out}/results.json", run_pool(concurrency, jobs) |> @json.to_json)
+  write_json(
+    "\{out}/results.json",
+    run_pool(concurrency, jobs) |> @json.to_json,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -1172,8 +1180,8 @@ fn python_json(value : Json) -> String {
 ///|
 fn yaml_tests(
   cases : Array[(String, String, Json)],
-  invalid? : Array[(String, String)] = [],
-  prefix? : String = "oracle",
+  invalid~ : Array[(String, String)] = [],
+  prefix~ : String = "oracle",
 ) -> String {
   let blocks = []
   for case in cases {
@@ -1247,7 +1255,7 @@ fn trusted_manifest(candidate : String) -> String {
 
 ///|
 fn is_word_char(c : Char) -> Bool {
-  c is ('a'..='z' | 'A'..='Z' | '0'..='9' | '_')
+  c is ('a'..<='z' | 'A'..<='Z' | '0'..<='9' | '_')
 }
 
 ///|
@@ -1290,10 +1298,10 @@ fn core_imports(block : StringView) -> Array[String] {
     let alias_suffix = {
       let after = rest.trim_start()
       match after.strip_prefix("@") {
-        Some(name) if name.get_char(0) is Some('a'..='z' | '_') => {
+        Some(name) if name.get_char(0) is Some('a'..<='z' | '_') => {
           let mut len = 0
           while len < name.length() &&
-                name.get_char(len) is Some('a'..='z' | '0'..='9' | '_') {
+                name.get_char(len) is Some('a'..<='z' | '0'..<='9' | '_') {
             len += 1
           }
           " @\{name[:len]}"
@@ -1322,7 +1330,7 @@ fn grading_env() -> Map[String, String] {
 
 ///|
 /// The runner behind the engine and the grader, replaceable in tests.
-type Runner = async (Array[String], String, Map[String, String], String, Int) -> Int?
+type Runner = async (Array[String], String, Map[String, String], String, Int32) -> Int32?
 
 ///|
 async fn yaml_bounded(
@@ -1330,20 +1338,20 @@ async fn yaml_bounded(
   cwd : String,
   env : Map[String, String],
   log : String,
-  timeout_ms : Int,
-) -> Int? {
+  timeout_ms : Int32,
+) -> Int32? {
   bounded(command, cwd, env, log, timeout_ms, grace_ms=YAML_GRACE_MS)
 }
 
 ///|
 /// The last `Total tests: N, passed: P, failed: F.` summary: `Some(P)`.
-fn passed_count(text : String) -> Int? {
+fn passed_count(text : String) -> Int32? {
   guard text.rev_find("Total tests: ") is Some(start) else { return None }
   let summary = text[start:]
   guard summary.find(", passed: ") is Some(p) else { return None }
   let digits = summary[p + 10:]
   let mut len = 0
-  while digits.get_char(len) is Some('0'..='9') {
+  while digits.get_char(len) is Some('0'..<='9') {
     len += 1
   }
   guard len > 0 && digits[len:].has_prefix(", failed: ") else { return None }
@@ -1372,7 +1380,7 @@ async fn score(
   workspace : String,
   grading : String,
   log : String,
-  runner? : Runner = yaml_bounded,
+  runner~ : Runner = yaml_bounded,
 ) -> Map[String, Json] {
   @fs.mkdir(grading)
   // Only root-package implementation and its core imports enter the trusted
@@ -1412,23 +1420,27 @@ async fn score(
   let valid = yaml_cases.map(c => (c.0, c.1))
   {
     "oracle_passed": passed.unwrap_or(0) |> @json.to_json,
-    "oracle_total": (yaml_cases.length() + yaml_invalid.length()) |> @json.to_json,
+    "oracle_total": (yaml_cases.length() + yaml_invalid.length())
+    |> @json.to_json,
     "oracle_exit_code": opt_int(code),
     "oracle_failures": failures |> @json.to_json,
     "valid_passed": (if passed is Some(_) {
       yaml_cases.length() - failed_among(valid)
     } else {
       0
-    }) |> @json.to_json,
+    })
+    |> @json.to_json,
     "invalid_passed": (if passed is Some(_) {
       yaml_invalid.length() - failed_among(yaml_invalid)
     } else {
       0
-    }) |> @json.to_json,
+    })
+    |> @json.to_json,
     "compile_or_harness_error": (passed is None) |> @json.to_json,
     // Byte-exact: a candidate that only rewrote line endings changed protected bytes.
     "preserved_fixture": (same_bytes("\{workspace}/moon.mod", YAML_MODULE) &&
-    same_bytes("\{workspace}/visible_test.mbt", visible_tests())) |> @json.to_json,
+    same_bytes("\{workspace}/visible_test.mbt", visible_tests()))
+    |> @json.to_json,
   }
 }
 
@@ -1437,11 +1449,11 @@ async fn yaml_trial(
   engine : String,
   out : String,
   variant : String,
-  repeat : Int,
-  timeout_s : Int,
-  max_steps : Int,
-  runner? : Runner = yaml_bounded,
-  analyze? : async (String, String, Int, Json) -> Json = yaml_analyze_trial,
+  repeat : Int32,
+  timeout_s : Int32,
+  max_steps : Int32,
+  runner~ : Runner = yaml_bounded,
+  analyze~ : async (String, String, Int32, Json) -> Json = yaml_analyze_trial,
 ) -> Json {
   let name = "yaml-\{repeat}-\{variant}"
   let workspace = "\{out}/workspaces/\{name}"
@@ -1483,7 +1495,7 @@ async fn recovered_execution(
   out : String,
   name : String,
   variant : String,
-  repeat : Int,
+  repeat : Int32,
 ) -> Json {
   let checkpoint = "\{out}/\{name}-execution.json"
   if @fs.exists(checkpoint) {
@@ -1497,8 +1509,9 @@ async fn recovered_execution(
       "seconds_source",
     ]
     return (Map <| [
-      for key, value in fields if kept.contains(key) => (key, value)
-    ]) |> @json.to_json
+        for key, value in fields if kept.contains(key) => (key, value)
+      ])
+      |> @json.to_json
   }
   // Recovery for the original reader's child-session ambiguity. Keep OS exit
   // status unavailable and label reconstructed timing.
@@ -1536,7 +1549,7 @@ async fn recovered_execution(
 async fn yaml_analyze_trial(
   out : String,
   variant : String,
-  repeat : Int,
+  repeat : Int32,
   execution : Json,
 ) -> Json {
   let name = "yaml-\{repeat}-\{variant}"
@@ -1572,10 +1585,11 @@ async fn yaml_analyze_trial(
   result["child_sessions"] = children.length() |> @json.to_json
   result["child_steps"] = child_steps |> @json.to_json
   result["usage_scope"] = (if children.is_empty() {
-    "parent (no children)"
-  } else {
-    "parent only; child token usage unavailable"
-  }) |> @json.to_json
+      "parent (no children)"
+    } else {
+      "parent only; child token usage unavailable"
+    })
+    |> @json.to_json
   let mut grading = "\{out}/\{name}-grading"
   let mut suffix = 1
   while @fs.exists(grading) {
@@ -1586,10 +1600,11 @@ async fn yaml_analyze_trial(
     result[key] = value
   }
   result["passed"] = (result.get("oracle_passed") == result.get("oracle_total") &&
-  result.get("preserved_fixture") == Some(true) &&
-  result.get("oracle_exit_code") == Some(0) &&
-  result.get("exit_code") == Some(0) &&
-  session.finished()) |> @json.to_json
+    result.get("preserved_fixture") == Some(true) &&
+    result.get("oracle_exit_code") == Some(0) &&
+    result.get("exit_code") == Some(0) &&
+    session.finished())
+    |> @json.to_json
   let result = result |> @json.to_json
   write_json("\{out}/\{name}.json", result)
   result
@@ -1690,7 +1705,10 @@ async fn main_yaml(args : @argparse.Matches) -> Unit {
       })
     }
   }
-  write_json("\{out}/results.json", run_pool(concurrency, jobs) |> @json.to_json)
+  write_json(
+    "\{out}/results.json",
+    run_pool(concurrency, jobs) |> @json.to_json,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -1715,7 +1733,7 @@ fn[T] usage_error(message : String) -> T raise {
 }
 
 ///|
-fn positive(args : @argparse.Matches, name : String) -> Int raise {
+fn positive(args : @argparse.Matches, name : String) -> Int32 raise {
   let text = value(args, name).unwrap()
   let number = @string.parse_int(text) catch {
     _ => raise Failure("error: --\{name} must be an integer, got \{text}")
@@ -1766,7 +1784,7 @@ async fn with_workspace(body : async (String) -> Unit) -> Unit {
 async fn write_session(
   workspace : String,
   answer : String,
-  results? : Array[Json] = [],
+  results~ : Array[Json] = [],
 ) -> Unit {
   let items : Array[Json] = results.map(r => {
     "kind": "tool_result",
@@ -1794,7 +1812,7 @@ async fn passes(
   case : String,
   workspace : String,
   expected : Map[String, String],
-  require_ptc? : Bool = false,
+  require_ptc~ : Bool = false,
 ) -> Bool {
   analyze(case, workspace, expected, Some(0), require_ptc~).get("passed") ==
   Some(true)
@@ -2013,9 +2031,9 @@ async test "nested errors and interruption are counted" {
 async fn run_shell(
   workspace : String,
   script : String,
-  timeout_ms : Int,
-  grace_ms? : Int = 10000,
-) -> (Int?, String) {
+  timeout_ms : Int32,
+  grace_ms~ : Int32 = 10000,
+) -> (Int32?, String) {
   let log = "\{workspace}/run.log"
   let code = bounded(
     ["sh", "-c", script],
@@ -2266,7 +2284,10 @@ test "usage sums the journal, else older JSONL usage events" {
     { "kind": "assistant", "payload": { "content": "", "usage": usage } },
     { "kind": "tool_result", "payload": { "content": "ok" } },
     { "kind": "assistant", "payload": { "content": "more", "usage": usage } },
-    { "kind": "assistant", "payload": { "content": "replay", "is_replay": true } },
+    {
+      "kind": "assistant",
+      "payload": { "content": "replay", "is_replay": true },
+    },
   ]
   let event = "{\"event\":\"usage\",\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1}}"
   // The journal wins over the log when it records usage.

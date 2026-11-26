@@ -21,7 +21,6 @@ supported_targets = "+wasm+native"
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/process",
   "moonbitlang/openseek_protocol" @protocol,
 } for "test"
 

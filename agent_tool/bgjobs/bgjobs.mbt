@@ -83,7 +83,6 @@ struct BgJobRuntime {
     Int32,
     String?,
     @process.ProcessInput?,
-    @process.CancellationHandler?,
     Map[String, String]?,
   ) -> @shell_exec.ShellExecution
   // Spawn a *retained* foreground execution (may be detached on timeout):
@@ -253,7 +252,6 @@ pub fn BgJobRuntime::BgJobRuntime(
       max_output_chars,
       spill_path,
       stdin,
-      cancel_handler,
       extra_env,
     ) => {
       // Background retention: inline preview up to the budget, full output to
@@ -269,7 +267,6 @@ pub fn BgJobRuntime::BgJobRuntime(
         hard_cap=hard_output_cap,
         spill_path?,
         kill_at_hard_cap=true,
-        cancel_handler?,
         extra_env?,
       )
     },
@@ -361,7 +358,6 @@ pub async fn BgJobRuntime::start(
   output_rewrites~ : Array[(String, String)] = [],
   moonrun_policy_active~ : Bool = false,
   stdin? : @process.ProcessInput,
-  cancel_handler? : @process.CancellationHandler,
   extra_env? : Map[String, String],
   on_end? : async (JobEnd) -> Unit,
   on_published? : () -> Unit,
@@ -376,7 +372,7 @@ pub async fn BgJobRuntime::start(
     "\{dir}/\{@protocol.job_storage_name(id)}.out"
   })
   let exec = (self.spawn_exec)(
-    program, args, cwd, max_output_chars, spill_path, stdin, cancel_handler, extra_env,
+    program, args, cwd, max_output_chars, spill_path, stdin, extra_env,
   )
   // A start that fails after the spawn returns once that process is gone,
   // so its caller never counts it as ended while it winds down.

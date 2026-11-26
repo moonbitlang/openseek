@@ -5,11 +5,6 @@
 const DeliveryTimeoutMs : Int32 = 10_000
 
 ///|
-/// How long a stopped child has, once its stdin is closed, to flush its
-/// result and exit before it is killed.
-const StopGraceMs : Int32 = 10_000
-
-///|
 /// How many subagents one session may have live at once.
 const MaxLive : Int32 = 16
 
@@ -69,7 +64,6 @@ struct Launcher {
   spawn : (async () -> Unit) -> Unit
   max_live : Int32
   max_workers : Int32
-  grace_ms : Int32
   delivery_timeout_ms : Int32
   mut live : Int32
   // Captured reports by child session, kept for as long as this engine
@@ -108,7 +102,6 @@ pub fn Launcher::Launcher(
   result_dir~ : String,
   max_live~ : Int32 = MaxLive,
   max_workers~ : Int32 = MaxWorkers,
-  grace_ms~ : Int32 = StopGraceMs,
   delivery_timeout_ms~ : Int32 = DeliveryTimeoutMs,
 ) -> Launcher {
   let group = scope.group()
@@ -124,7 +117,6 @@ pub fn Launcher::Launcher(
     spawn: task => group.spawn_bg(task, no_wait=true, allow_failure=true),
     max_live,
     max_workers,
-    grace_ms,
     delivery_timeout_ms,
     live: 0,
     reports: Map([]),
@@ -158,10 +150,6 @@ priv struct Child {
   mut outcome : @protocol.SubagentOutcome?
   mut usage : @protocol.SubagentUsage?
   mut report : @protocol.SubagentReport?
-  // Set by the cancel handler before it closes stdin, so teardown (which
-  // requests no stop) is known too: a request write that fails after this
-  // failed because of it, not first.
-  mut stopping : Bool
   // The request could not be delivered, and that came first.
   mut delivery_failed : Bool
   mut workspace : @protocol.SubagentWorkspace
@@ -353,7 +341,6 @@ pub async fn Launcher::start(
     outcome: None,
     usage: None,
     report: None,
-    stopping: false,
     delivery_failed: false,
     workspace,
   }
@@ -367,12 +354,13 @@ pub async fn Launcher::start(
       return Unavailable("could not prepare child \{session}: \{error}")
     }
   }
-  let handler = @process.CancellationHandler(pid => {
-    child.stopping = true
-    writer.close()
-    @async.sleep(self.grace_ms)
-    (@process.hard_cancel().0)(pid)
-  })
+  let mut writer_closed = false
+  let close_writer = () => {
+    if !writer_closed {
+      writer_closed = true
+      writer.close()
+    }
+  }
   let args = [
     ..self.args,
     "--kind",
@@ -399,9 +387,8 @@ pub async fn Launcher::start(
     },
     stdin=Shared(child_stdin),
     extra_env=self.env,
-    cancel_handler=handler,
     on_end=end => {
-      defer writer.close()
+      defer close_writer()
       // Left to recovery if capturing is cut short.
       defer self.working.remove(session)
       // The child has exited: its directory is free.
@@ -421,7 +408,7 @@ pub async fn Launcher::start(
   ) catch {
     error => {
       child_stdin.close()
-      writer.close()
+      close_writer()
       abandon()
       release()
       return Unavailable("could not start child \{session}: \{error}")
@@ -445,11 +432,14 @@ pub async fn Launcher::start(
   }
   let line = request.to_json().stringify() + "\n"
   (self.spawn)(() => {
-    @async.with_timeout(self.delivery_timeout_ms, () => writer.text.write(line)) catch {
+    @async.with_timeout(self.delivery_timeout_ms, () => {
+      guard !writer_closed else { return }
+      writer.text.write(line)
+    }) catch {
       _ =>
         // Failed because the child was already being ended: a stop, a
-        // watchdog (recorded when requested) or teardown (its handler).
-        if !child.stopping && !self.runtime.stop_requested(job_id) {
+        // watchdog (recorded when requested) or teardown.
+        if !@async.is_being_cancelled() && !self.runtime.stop_requested(job_id) {
           child.delivery_failed = true
           ignore(self.runtime.stop(job_id))
         }
