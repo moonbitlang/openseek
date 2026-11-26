@@ -323,7 +323,6 @@ test('Cloud keeps Office and PDF previews in existing tabs and unsupported binar
   await expectFileValidation(page, sessionA, 'report.docx', () => cloud.open(sessionA));
   await expect(page.locator('.word-page')).toBeVisible();
   expect(cloud.fileRequests.filter(request => request.content && request.path === 'report.docx')).toHaveLength(wordReads);
-  await expect(page.getByRole('button', { name: 'Annotate region', exact: true })).toBeDisabled();
   await showTree(page); await file(page, 'book1.xlsx').click();
   await expect(page.locator('.sheet-document table').first()).toBeVisible();
   await showTree(page); await file(page, 'report.pdf').click();
@@ -353,6 +352,52 @@ test('Cloud keeps Office and PDF previews in existing tabs and unsupported binar
   await expect(page.locator('.viewer-notice')).toContainText(/large/i);
   expect(fileHostRequests(cloud)).toEqual([]);
 });
+
+for (const [name, surface, button, kind] of [
+  ['report.docx', '.word-page', 'Annotate region', 'office-region'],
+  ['report.pdf', '.pdfViewer canvas', 'Capture region', 'pdf-region'],
+]) {
+  test(`Cloud sends the selected ${name} region and comment to its own conversation`, async ({ page }) => {
+    const cloud = new CloudFilesHarness(page);
+    cloud.directories.set(`${sessionA}:`, [{ name, is_dir: false }]);
+    cloud.contents.set(`${sessionA}:${name}`, { kind: 'binary_content', ...cloud.device.officeFiles[`docs/${name}`] });
+    await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+    await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/files/import`, route => {
+      const { source } = route.request().postDataJSON();
+      return route.fulfill({ json: { path: `.openseek/attachments/${source.name}` } });
+    });
+    await file(page, name).click();
+    const document = page.locator(surface).first();
+    await expect(document).toBeVisible();
+    await page.locator('#task').fill('Check my document');
+    await page.getByRole('button', { name: button, exact: true }).click();
+    await expect(page.locator('.office-region-capture, .pdf-region-capture')).toBeVisible();
+    const bounds = await document.boundingBox();
+    await page.mouse.move(bounds.x + 30, bounds.y + 30); await page.mouse.down();
+    await page.mouse.move(bounds.x + 210, bounds.y + 120, { steps: 8 }); await page.mouse.up();
+    const feedback = page.locator('.pdf-capture-feedback');
+    await feedback.locator('textarea').fill('Explain this region');
+    if (kind === 'office-region') {
+      await feedback.getByRole('checkbox').check();
+      await feedback.locator('.agent-feedback-input-action').click();
+      await expect(page.locator('.composer-image img')).toHaveCount(1);
+      await cloud.open(sessionB);
+      await expect(page.locator('.composer-image img')).toHaveCount(0);
+      await cloud.open(sessionA);
+      await page.locator('#send').click();
+    } else {
+      await feedback.locator('textarea').press('Alt+Enter');
+    }
+    await expect.poll(() => cloud.postCount).toBe(1);
+    const request = cloud.requests.find(r => r.method === 'POST' && r.path.endsWith('/commands'));
+    expect(request.path).toBe(`/v1/sessions/${sessionA}/commands`);
+    const [text, image] = JSON.parse(request.body).command.content;
+    expect(text.text).toContain('Check my document');
+    const selection = JSON.parse(text.text.match(/<office_selection>(.*?)<\/office_selection>/s)[1]);
+    expect(selection).toMatchObject({ selection: { kind }, source: { file: name }, comment: 'Explain this region' });
+    expect(image).toMatchObject({ type: 'image', media_type: 'image/png', data: expect.stringMatching(/^iVBORw0KGgo/) });
+  });
+}
 
 test('generation completion refreshes Cloud directories and an open text preview', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
