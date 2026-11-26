@@ -351,7 +351,7 @@ async fn run_against(
             conn.send_response(200, "OK", extra_headers={
               "Content-Type": "application/json",
             })
-            conn.write_string(answer.stringify())
+            conn.text.write(answer.stringify())
             conn.end_response()
             conn.close()
           },
@@ -367,15 +367,20 @@ async fn run_against(
       }
       env["OPENSEEK_PTC"] = handoff.stringify()
     }
-    let result = @shell.Cmd(
-      "moonrun",
-      [artifact, "--", ..args],
-      cwd~,
-      env~,
-      inherit_env=false,
-    ).output(timeout_ms=60000)
-    exit_code = result.exit_code()
-    output = result.stdout() + result.stderr()
+    let result = @async.with_timeout(60000, () => {
+      @process.run(
+        "moonrun",
+        [artifact, "--", ..args],
+        cwd~,
+        extra_env=env,
+        inherit_env=false,
+        stdin=Empty,
+        stdout=Collect,
+        stderr=Collect,
+      )
+    })
+    exit_code = result.exit_code
+    output = result.stdout_text() + result.stderr_text()
   })
   (exit_code, output)
 }

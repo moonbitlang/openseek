@@ -3,7 +3,7 @@ import {
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/http",
   "moonbitlang/core/async/socket",
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/openseek/testkit/filesystem" @vfs,
@@ -19,7 +19,7 @@ options(
     "moonbitlang/core/async",
     "moonbitlang/core/async/fs",
     "moonbitlang/core/async/http",
-    "moonbitlang/core/async/shell",
+    "moonbitlang/core/async/process",
     "moonbitlang/core/async/socket",
   ],
 )

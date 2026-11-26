@@ -188,13 +188,22 @@ async fn verify_ci(root : String, temp : String, exe : String) -> Unit {
     } else {
       args.push("--once")
     }
-    let result = @shell.Cmd("moonrun", args, cwd=dir, env~, inherit_env=false).output(
-      timeout_ms=15000,
-    )
-    let output = result.stdout() + result.stderr()
-    assert_eq(result.exit_code() == 0, success, msg=name + "\n" + output)
+    let result = @async.with_timeout(15000, () => {
+      @process.run(
+        "moonrun",
+        args,
+        cwd=dir,
+        extra_env=env,
+        inherit_env=false,
+        stdin=Empty,
+        stdout=Collect,
+        stderr=Collect,
+      )
+    })
+    let output = result.stdout_text() + result.stderr_text()
+    assert_eq(result.exit_code == 0, success, msg=name + "\n" + output)
     assert_true(output.contains(expected), msg=name + "\n" + output)
-    for line in result.stdout().split("\n") {
+    for line in result.stdout_text().split("\n") {
       if !line.has_prefix("{\"result\"") {
         continue
       }
@@ -249,14 +258,19 @@ async fn verify_ci(root : String, temp : String, exe : String) -> Unit {
     let env = clean_env()
     env["PATH"] = bin + ":" + path
     env["OPENSEEK_CI_FIXTURE"] = dir
-    let result = @shell.Cmd(
-      "moonrun",
-      [artifact, "--", ..options],
-      cwd=dir,
-      env~,
-      inherit_env=false,
-    ).output(timeout_ms=15000)
-    assert_true(result.exit_code() != 0, msg=result.stdout())
+    let result = @async.with_timeout(15000, () => {
+      @process.run(
+        "moonrun",
+        [artifact, "--", ..options],
+        cwd=dir,
+        extra_env=env,
+        inherit_env=false,
+        stdin=Empty,
+        stdout=Collect,
+        stderr=Collect,
+      )
+    })
+    assert_true(result.exit_code != 0, msg=result.stdout_text())
     assert_false(@fs.exists(dir + "/calls.jsonl"))
   }
   println("ci-watch: invalid arguments rejected before gh")
