@@ -6,6 +6,7 @@ class CloudReviewHarness extends CloudHarness {
     super(page);
     this.reviewRequests = [];
     this.repository = true;
+    this.branch = 'codex/browser-fixture';
     this.reviewStatus = 200;
     this.reviewError = '';
     this.fileRevision = 1;
@@ -31,7 +32,14 @@ class CloudReviewHarness extends CloudHarness {
       const reply = this.device.replyFor({ method, params: { ...body, session, workspace: '/workspace' } });
       if (operation === 'changes' || operation === 'history') reply.repository = this.repository;
       if (operation === 'changes' && !this.repository) reply.changes = [];
-      if (operation === 'history' && !this.repository) reply.commits = [];
+      if (operation === 'history') {
+        reply.snapshot.branch = this.branch;
+        if (!this.repository || !this.device.gitHead) {
+          reply.commits = [];
+          reply.has_more = false;
+          reply.snapshot = { refs: [], tips: [], branch: this.repository ? this.branch : null };
+        }
+      }
       return json(reply);
     }
     const path = url.searchParams.get('path') || '';
@@ -183,4 +191,75 @@ test('Cloud review preserves Git rejection reasons and retries without treating 
   await page.evaluate(session => window.cloudInvalidateFiles(session), sessionA);
   await expect.poll(() => cloud.reviewRequests.filter(request => request.operation === 'changes').length).toBeGreaterThan(before);
   await expect(changedMain(page)).toBeVisible();
+});
+
+test('Cloud overview shows the current checkout and changed files with the dock closed', async ({ page }) => {
+  const cloud = new CloudReviewHarness(page);
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  expect(cloud.reviewRequests).toEqual([]);
+  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  const overview = page.locator('.conv-overview');
+  await expect(overview).toContainText(cloud.branch);
+  await expect(overview.getByTitle(cloud.device.gitHead)).toHaveText('HEADcccccccc');
+  await expect(overview).not.toContainText(cloud.device.gitBaseline.slice(0, 8));
+  await expect(overview.getByTitle('src/main.mbt')).toHaveText('Msrc/main.mbt');
+  await expect(overview.getByTitle('src/lib.mbt')).toBeVisible();
+
+  // Switching between two branches at the same commit still changes the overview.
+  cloud.branch = 'feature/another-branch';
+  cloud.device.gitChanges = [];
+  await page.evaluate(session => window.cloudInvalidateFiles(session), sessionA);
+  await expect(overview).toContainText(cloud.branch);
+  await expect(overview).toContainText('No changed files.');
+  await expect(overview).not.toContainText('src/main.mbt');
+
+  cloud.branch = null;
+  cloud.device.gitHead = cloud.device.gitParent;
+  await cloud.open(sessionB);
+  await expect(overview.getByTitle(cloud.device.gitHead)).toHaveText('HEADbbbbbbbb');
+  await expect(overview).not.toContainText('feature/another-branch');
+  expect(cloud.reviewRequests.some(r => r.session === sessionB && r.operation === 'history')).toBe(true);
+  await expect(page.getByRole('button', { name: 'Show panel', exact: true })).toBeVisible();
+});
+
+test('a Cloud overview refresh keeps the selected review commit open after an ordinary edit', async ({ page }) => {
+  const cloud = new CloudReviewHarness(page);
+  await cloud.install(); await cloud.goto(); await cloud.openReview();
+  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  const history = page.getByRole('tree', { name: 'Git commit history' });
+  await history.getByRole('treeitem', { name: /Cover Desktop Git flows/ }).click();
+  const commitFile = history.getByRole('treeitem', { name: /src\/main\.mbt/ });
+  await expect(commitFile).toBeVisible();
+  cloud.device.gitChanges = [];
+  await page.evaluate(session => window.cloudInvalidateFiles(session), sessionA);
+  await expect(page.locator('.conv-overview')).toContainText('No changed files.');
+  await expect(commitFile).toBeVisible();
+});
+
+test('Cloud overview distinguishes an unborn branch, a non-repository and a failed read', async ({ page }) => {
+  const cloud = new CloudReviewHarness(page);
+  cloud.branch = 'main';
+  cloud.device.gitHead = null;
+  cloud.device.gitChanges = [];
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  const overview = page.locator('.conv-overview');
+  await expect(overview.getByTitle('main')).toBeVisible();
+  await expect(overview).toContainText('No commits');
+  await expect(overview).toContainText('No changed files.');
+
+  cloud.repository = false;
+  await page.evaluate(session => window.cloudInvalidateFiles(session), sessionA);
+  await expect(overview).toContainText('not a Git repository');
+  await expect(overview.getByTitle('main')).toHaveCount(0);
+
+  cloud.reviewStatus = 403;
+  await cloud.open(sessionB);
+  await expect(overview).toContainText('HTTP 403');
+  cloud.reviewStatus = 200; cloud.repository = true;
+  await page.getByRole('button', { name: 'Hide overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  await expect(overview.getByTitle('main')).toBeVisible();
+  await expect(overview).toContainText('No changed files.');
+  await expect(overview).not.toContainText('HTTP 403');
 });

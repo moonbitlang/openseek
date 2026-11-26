@@ -215,6 +215,7 @@ fn refresh_git_graph(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
+  background~ : Bool = false,
 ) -> (@cmd.Cmd, State) {
   let owner = ctx.owner
 
@@ -237,12 +238,16 @@ fn refresh_git_graph(
       cloud?=ctx.cloud_files,
       locale=ctx.locale,
     ),
-    {
-      ..state,
-      git_graph: GitGraphLoading,
-      git_graph_generation: generation,
-      git_graph_selected: None,
-      git_commit_files: GitCommitFilesIdle,
+    if background && state.git_graph is GitGraphReady(loading_more=false, ..) {
+      { ..state, git_graph_generation: generation, }
+    } else {
+      {
+        ..state,
+        git_graph: GitGraphLoading,
+        git_graph_generation: generation,
+        git_graph_selected: None,
+        git_commit_files: GitCommitFilesIdle,
+      }
     },
   )
 }

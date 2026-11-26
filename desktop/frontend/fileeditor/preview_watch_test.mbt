@@ -13,6 +13,7 @@ test "PDF-only dock retains the watcher without opening text documents" {
   let ctx : @fileeditor.Ctx = {
     locale: English,
     cloud_files: None,
+    cloud_overview_open: false,
     feedback_enabled: true,
     owner: @interop.Host({
       channel: @interop.ChannelId::Local,

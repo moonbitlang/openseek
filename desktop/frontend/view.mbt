@@ -2294,6 +2294,15 @@ fn view(
           } else {
             @html.nothing
           },
+          if model.cloud_identity() is Some(_) {
+            @conversation_overview.toggle(
+              locale=model.locale,
+              model.overview_open,
+              dispatch(ToggleOverview),
+            )
+          } else {
+            @html.nothing
+          },
         ]
       } else {
         match model.chat_column() {
@@ -2372,6 +2381,18 @@ fn view(
                 )
               } else {
                 composer_html
+              },
+              if model.overview_open &&
+                model.cloud_identity() is Some(owner) &&
+                model.file_panel.owner == Some(owner) {
+                @conversation_overview.view(
+                  locale=model.locale,
+                  model.overview,
+                  changes=Some(model.file_panel.overview_changes(model.locale)),
+                  dispatch.map(msg => Overview(msg)),
+                )
+              } else {
+                @html.nothing
               },
             ]
           CloudHome => [cloud_home_view(dispatch, model)]

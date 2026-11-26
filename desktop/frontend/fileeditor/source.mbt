@@ -292,7 +292,14 @@ fn refresh_cloud_files(
   } else {
     (@cmd.none, next)
   }
-  (@cmd.batch([@cmd.batch(commands), review]), next)
+  // A branch switch can leave HEAD unchanged. Refresh its name on workspace
+  // invalidation even when no Changes poll would detect a different commit.
+  let (graph, next) = if ctx.cloud_overview_open {
+    refresh_git_graph(dispatch, next, ctx, background=true)
+  } else {
+    (@cmd.none, next)
+  }
+  (@cmd.batch([@cmd.batch(commands), review, graph]), next)
 }
 
 ///|

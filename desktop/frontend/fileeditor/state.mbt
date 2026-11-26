@@ -623,11 +623,8 @@ pub(all) struct State {
   // HEAD read is in flight; recording that request by path prevents a slow
   // read from being superseded by every Changes poll.
   background_review_requests : Map[@common.Uri, Int32]
-  // Whether the explorer pane was visible on the preceding sync pass. This is
-  // stricter than the enclosing dock being open: with a file active the tree
-  // toggle (and narrow drill-down) can hide the explorer while the dock stays
-  // open. Retaining this transition bit keeps Changes refresh behavior
-  // independent from whether any file watcher remains active.
+  // Previous visibility of the Host explorer, or of either Cloud Git view.
+  // Reopening a view refreshes its inventory even if a watcher stayed active.
   explorer_was_visible : Bool
   // The effective paths most recently requested from the Host (`None` =
   // parked). Recursive selections omit ordinary paths already covered by the
@@ -834,6 +831,7 @@ pub fn State::prepare_owner(
     review_diff_ignore_comments: self.review_diff_ignore_comments,
     review_diff_ignore_tests: self.review_diff_ignore_tests,
     changes_generation: self.changes_generation,
+    git_graph_generation: self.git_graph_generation,
     request_epoch: self.request_epoch + 1,
     file_link_generation: self.file_link_generation,
     review_generation: self.review_generation,
@@ -889,6 +887,7 @@ pub(all) struct Ctx {
   thinking : @protocol.Thinking?
   owner : @interop.ConversationIdentity
   cloud_files : CloudFiles?
+  cloud_overview_open : Bool
   feedback_enabled : Bool
   // The current placement incarnation for filesystem request/reply fencing.
   request_epoch : Int32
