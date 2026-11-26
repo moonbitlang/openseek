@@ -142,6 +142,9 @@
 .export-status { margin-top: var(--space-5); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .export-status:empty { margin-top: 0; }
 .export-progress { display: grid; gap: var(--space-4); }
+.export-link-row input {
+  background-color: var(--color-bg-canvas);
+}
 .export-link-row input,
 .session-import-actions input {
   flex: 1;
