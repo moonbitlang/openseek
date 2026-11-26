@@ -145,16 +145,18 @@ async fn serve(
       inherit_env=false,
       extra_env=provider.environment,
       no_console_window=true,
-      on_cancel=pid => {
+      on_cancel=child => {
         if @async.platform is Windows {
           // moonx delegates to a child moonrun on Windows rather than exec.
           @processx.collect_output_no_stdin("taskkill", [
             "/PID",
-            pid.to_string(),
+            child.pid.to_string(),
             "/T",
             "/F",
           ])
           |> ignore
+        } else {
+          child.cancel()
         }
       },
     )

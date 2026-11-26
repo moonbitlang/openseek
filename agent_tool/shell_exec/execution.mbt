@@ -122,7 +122,7 @@ pub async fn ShellExecution::start(
   spill_path? : String,
   kill_when_full~ : Bool = false,
   kill_at_hard_cap~ : Bool = false,
-  cancel_handler? : async (Int32) -> Unit,
+  cancel_handler? : async (@process.Process) -> Unit,
   extra_env? : Map[String, String],
 ) -> ShellExecution {
   let group = scope.group()
@@ -144,12 +144,14 @@ pub async fn ShellExecution::start(
     stderr=DuplicateStdout,
     cwd?=cwd.map(cwd => cwd.clamped_view()),
     extra_env?,
-    on_cancel=pid => {
+    on_cancel=child => {
       if started.val is Some(exec) {
         exec.note_stop()
       }
       if cancel_handler is Some(cancel) {
-        cancel(pid)
+        cancel(child)
+      } else {
+        child.cancel()
       }
     },
     no_wait=true,

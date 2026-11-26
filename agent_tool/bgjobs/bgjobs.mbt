@@ -83,7 +83,7 @@ struct BgJobRuntime {
     Int32,
     String?,
     @process.ProcessInput?,
-    (async (Int32) -> Unit)?,
+    (async (@process.Process) -> Unit)?,
     Map[String, String]?,
   ) -> @shell_exec.ShellExecution
   // Spawn a *retained* foreground execution (may be detached on timeout):
@@ -361,7 +361,7 @@ pub async fn BgJobRuntime::start(
   output_rewrites~ : Array[(String, String)] = [],
   moonrun_policy_active~ : Bool = false,
   stdin? : @process.ProcessInput,
-  cancel_handler? : async (Int32) -> Unit,
+  cancel_handler? : async (@process.Process) -> Unit,
   extra_env? : Map[String, String],
   on_end? : async (JobEnd) -> Unit,
   on_published? : () -> Unit,

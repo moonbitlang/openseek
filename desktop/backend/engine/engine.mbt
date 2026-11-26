@@ -1623,15 +1623,16 @@ async fn start_serve_engine(
     // would otherwise open its own visible conhost window on Windows.
     no_console_window=true,
     cancel_handler=graceful_cancel,
-    on_cancel=pid => {
+    on_cancel=child => {
       if @xlog.warn() is Some(w) {
         w
         ..write_object_begin()
         ..write_object_field("event", "desktop_engine_process_task_cancelled")
         ..write_object_field("session_key", config.session)
-        ..write_object_field("pid", pid)
+        ..write_object_field("pid", child.pid)
         .write_object_end()
       }
+      child.cancel()
     },
     no_wait=true,
   )

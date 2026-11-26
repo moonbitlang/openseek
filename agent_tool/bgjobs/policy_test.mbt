@@ -71,7 +71,7 @@ async test "a stop goes through the job's cancel handler" {
     let (input, writer) = @process.write_to_process()
     defer input.close()
     defer writer.close()
-    let handler : async (Int32) -> Unit = _ => {
+    let handler : async (@process.Process) -> Unit = _ => {
       writer.close()
       @async.sleep(2000)
     }

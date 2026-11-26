@@ -11,11 +11,12 @@ pub struct Process {
 }
 
 ///|
-/// Spawn a supervised child. On cancellation, run `on_cancel` before asking
-/// core to terminate it using `cancel_handler`. The hook may close an input
-/// channel and wait for a graceful exit. If the child exits during the hook,
-/// the hook is cancelled immediately. If the hook fails, termination still
-/// runs and the task group joins the child before reporting the failure.
+/// Spawn a supervised child. On cancellation, `on_cancel` decides how and when
+/// to stop it. Calling the supplied core child's `cancel()` starts the policy
+/// selected by `cancel_handler`. Returning without cancelling keeps waiting
+/// for the child. If the child exits during the hook, the hook is cancelled.
+/// If the hook fails, terminate and join the child before reporting the error:
+/// core's public Process API cannot relinquish ownership of a live child.
 ///
 /// Protecting the child's owning group lets the application finish its hook
 /// before core starts termination, without detaching the process from its
@@ -32,67 +33,81 @@ pub async fn spawn(
   cwd? : StringView,
   no_console_window~ : Bool = false,
   cancel_handler~ : @process.CancellationHandler = @process.hard_cancel(),
-  on_cancel~ : async (Int32) -> Unit = _ => (),
+  on_cancel~ : async (@process.Process) -> Unit = child => child.cancel(),
   no_wait? : Bool,
 ) -> Process {
-  let ready : @async.Queue[Result[@process.Process, Error]] = Queue(
-    kind=Blocking(1),
+  spawn_with(
+    group,
+    owned => {
+      @process.spawn(
+        owned,
+        cmd,
+        args,
+        extra_env~,
+        inherit_env~,
+        stdin~,
+        stdout~,
+        stderr~,
+        cwd?,
+        no_console_window~,
+        cancel_handler~,
+      )
+    },
+    on_cancel~,
+    no_wait?,
   )
+}
+
+///|
+async fn spawn_with(
+  group : @async.TaskGroup,
+  launch : async (@async.TaskGroup) -> @process.Process,
+  on_cancel~ : async (@process.Process) -> Unit,
+  no_wait? : Bool,
+) -> Process {
+  let ready : @async.Queue[@async.TaskGroup] = Queue(kind=Blocking(1))
+  let started = @async.Cond()
+  let mut spawn_done = false
+  let mut spawned : @process.Process? = None
   let result = group.spawn(no_wait?, () => {
     let mut exit_code = 0
     ignore(
       @async.handle_cancellation(() => {
         @async.with_task_group(lifetime => {
-          let started : @async.Queue[Result[@process.Process, Error]] = Queue(
-            kind=Blocking(1),
-          )
           let owner = lifetime.spawn(allow_failure=true, () => {
             @async.protect_from_cancel(() => {
               let mut code = 0
               @async.with_task_group(owned => {
-                let child = @process.spawn(
-                  owned,
-                  cmd,
-                  args,
-                  extra_env~,
-                  inherit_env~,
-                  stdin~,
-                  stdout~,
-                  stderr~,
-                  cwd?,
-                  no_console_window~,
-                  cancel_handler~,
-                ) catch {
-                  error => {
-                    started.put(Err(error))
-                    return
-                  }
+                ignore(ready.try_put(owned))
+                while !spawn_done {
+                  started.wait()
                 }
-                started.put(Ok(child))
-                code = child.wait()
+                if spawned is Some(child) {
+                  code = child.wait()
+                }
               })
               code
             })
           })
-          // Finish the spawn handshake even if cancellation arrives while core
-          // is opening the child. Both the caller and supervisor receive failure.
-          let outcome = @async.protect_from_cancel(() => {
-            let outcome = started.get()
-            ready.put(outcome)
-            outcome
+          // The caller performs the cancellable spawn and always publishes its
+          // outcome. Only ownership and cleanup are shielded from cancellation.
+          @async.protect_from_cancel(() => {
+            while !spawn_done {
+              started.wait()
+            }
           })
-          let child = match outcome {
-            Ok(child) => child
-            Err(_) => return
-          }
+          guard spawned is Some(child) else { return }
           match @async.handle_cancellation(() => owner.wait()) {
             Some(code) => exit_code = code
             None =>
               @async.protect_from_cancel(() => {
                 @async.with_task_group(cancelling => {
                   cancelling.spawn_bg(no_wait=true, () => {
-                    defer child.cancel()
-                    on_cancel(child.pid)
+                    guard child.try_wait() is None else { return }
+                    errdefer child.cancel()
+                    // Early child exit cancels the hook normally. Only a hook
+                    // error needs fallback termination before joining its owner.
+                    ignore(@async.handle_cancellation(() => on_cancel(child)))
                   })
                   exit_code = owner.wait()
                 })
@@ -103,7 +118,15 @@ pub async fn spawn(
     )
     exit_code
   })
-  let child = ready.get().unwrap_or_error()
+  // No suspension between successful spawn and publication: cancellation can
+  // never leave a created child without a supervisor or a returned handle.
+  defer {
+    spawn_done = true
+    started.broadcast()
+  }
+  let owned = ready.get()
+  let child = launch(owned)
+  spawned = Some(child)
   {
     pid: child.pid,
     stdin: child.stdin,

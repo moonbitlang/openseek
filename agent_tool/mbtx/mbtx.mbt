@@ -995,7 +995,12 @@ async fn execute(
         stderr=AppendFile(log),
         no_console_window=true,
         cancel_handler=@process.graceful_cancel(timeout=5000),
-        on_cancel=_ => if program is Some(program) { program.stop() },
+        on_cancel=child => {
+          if program is Some(program) {
+            program.stop()
+          }
+          child.cancel()
+        },
       )
       exit_code = child.wait()
     })

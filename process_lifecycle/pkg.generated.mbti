@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub async fn spawn(@async.TaskGroup, StringView, ArrayView[String], extra_env? : Map[String, String], inherit_env? : Bool, stdin? : @process.ProcessInput, stdout? : @process.ProcessOutput, stderr? : @process.ProcessOutput, cwd? : StringView, no_console_window? : Bool, cancel_handler? : @process.CancellationHandler, on_cancel? : async (Int32) -> Unit, no_wait? : Bool) -> Process
+pub async fn spawn(@async.TaskGroup, StringView, ArrayView[String], extra_env? : Map[String, String], inherit_env? : Bool, stdin? : @process.ProcessInput, stdout? : @process.ProcessOutput, stderr? : @process.ProcessOutput, cwd? : StringView, no_console_window? : Bool, cancel_handler? : @process.CancellationHandler, on_cancel? : async (@process.Process) -> Unit, no_wait? : Bool) -> Process
 
 // Errors
 
