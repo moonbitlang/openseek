@@ -103,7 +103,7 @@ fn render_tree(nodes : Array[@cdp.AxNode]) -> String {
   for node in nodes {
     by_id[node.id] = node
     for child in node.children {
-      parented.add(child)
+      parented.insert(child)
     }
   }
   let out = StringBuilder()

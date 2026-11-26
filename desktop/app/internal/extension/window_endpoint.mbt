@@ -73,7 +73,7 @@ async test "native window ops are absent from the relay method catalog" {
   for endpoint in window_only {
     let name = endpoint.name()
     assert_false(names.contains(name))
-    names.add(name)
+    names.insert(name)
     assert_false(catalog.any(shared => shared.name() == name))
   }
 }

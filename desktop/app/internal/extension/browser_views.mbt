@@ -155,7 +155,7 @@ pub fn BrowserViews::view_event(
   event : @proton.WebContentsEvent,
 ) -> Unit {
   match event {
-    LoadingChanged(is_loading=true) => self.loading.add(id)
+    LoadingChanged(is_loading=true) => self.loading.insert(id)
     LoadingChanged(is_loading=false) | Closed => self.loading.remove(id)
     _ => ()
   }
