@@ -53,17 +53,32 @@ pub fn definition(
 
 ///|
 #derive(Eq)
-priv struct NodeVersion {
-  location : String
-  contents : NodeContents
+priv struct FileVersion {
+  canonical : String
+  digest : String?
 }
 
 ///|
 #derive(Eq)
-priv enum NodeContents {
-  File(String)
-  Directory
-  Symlink(Bytes)
+priv enum NodeVersion {
+  File(FileVersion)
+  Directory(String)
+  Symlink(String)
+}
+
+///|
+#derive(Eq)
+priv struct RemovalVersion {
+  // Postorder: children precede their directory, and the target is last.
+  entries : Array[(String, NodeVersion)]
+}
+
+///|
+fn NodeVersion::location(self : NodeVersion) -> String {
+  match self {
+    File(file) => file.canonical
+    Directory(location) | Symlink(location) => location
+  }
 }
 
 ///|
@@ -118,46 +133,43 @@ async fn execute_with_workspace(
       return removal_error(input.path, @tool_error.failure_message("\{error}"))
   }
   file_state.with_access(() => {
-    let target = inspect_node(path)
-    let directory = target.contents is Directory
-    let reason = match target.contents {
-      Directory => {
-        if @workspace_path.is_under_workspace_root(
-            target.location,
-            @fs.realpath(workspace_root),
-          ) {
-          return removal_error(
-            path, "cannot remove the workspace root or its ancestors",
-          )
-        }
-        let entries = directory_entries(path)
-        if remove_owned_directory(
+    let version = inspect_target(path, workspace_root, file_state)
+    let (_, target) = version.entries[version.entries.length() - 1]
+    let directory = target is Directory(_)
+    let reason = match target {
+      Directory(_) => {
+        let automatic = version.entries.length() == 1 ||
+          created_directory_tree(version, file_state)
+        if automatic &&
+          !(write_scope is Some(scope) &&
+          version.entries.any(entry => {
+            scope.check_entry(entry.0, entry.1.location()) is Some(_)
+          })) {
+          guard inspect_target(path, workspace_root, file_state, write_scope?) ==
+            version else {
+            return removal_error(path, "directory changed before deletion")
+          }
+          return delete_directory(
             path,
-            target,
-            entries,
+            input.reason,
+            version,
             file_state,
             write_scope?,
-          ) {
-          return removed(path, input.reason, directory~)
+          )
         }
-        let files = entries.count_if(e => e.1 is Regular)
-        let links = entries.count_if(e => e.1 is SymLink)
-        let link_summary = if links == 0 {
-          ""
-        } else {
-          ", \{links} symbolic links"
-        }
+        let files = version.entries.count_if(entry => !(entry.1 is Directory(_)))
         Some(
-          "recursive directory deletion: \{files} files\{link_summary} and \{entries.length() - 1 - files - links} subdirectories; all contents present at deletion will be removed",
+          "recursive directory deletion: \{files} files and \{version.entries.length() - files - 1} subdirectories; all contents present at deletion will be removed",
         )
       }
       Symlink(_) => Some("unlink symbolic link")
-      File(digest) => {
+      File(file) => {
         if input.path.has_suffix("/") ||
           input.path.has_suffix(@path.sep.to_string()) {
           return removal_error(path, "not a directory")
         }
-        if file_state.created_and_unchanged(path, digest) {
+        if file.digest is Some(digest) &&
+          file_state.created_and_unchanged(path, digest) {
           None
         } else if file_state.get(path) is Some(Created) {
           Some("the file's content has changed since the agent last wrote it")
@@ -167,7 +179,7 @@ async fn execute_with_workspace(
       }
     }
     let _ = @permission.authorize(
-      RemoveEntry(path, location=target.location),
+      RemoveEntry(path, location=target.location()),
       tool_name="remove",
       arguments={ "path": path, "reason": input.reason },
       file_state~,
@@ -184,15 +196,9 @@ async fn execute_with_workspace(
       // Recursive removal can partially succeed. Drop stale creation records
       // even if a later filesystem operation fails.
       file_state.forget_tree(path)
-      @fs.remove(target.location, recursive=true)
+      @fs.remove(target.location(), recursive=true)
     } else {
-      @fs.remove(
-        if target.contents is Symlink(_) {
-          target.location
-        } else {
-          path
-        },
-      )
+      @fs.remove(if target is Symlink(location) { location } else { path })
       file_state.forget(path)
       file_state.forget_directory(path)
     }
@@ -203,104 +209,132 @@ async fn execute_with_workspace(
 }
 
 ///|
-async fn inspect_node(path : String) -> NodeVersion {
+/// A non-empty tree can bypass approval only when every entry was created by
+/// this session and every regular file still has the content recorded for it.
+/// Directory provenance matters separately: a pre-existing empty directory
+/// that happens to contain only agent-created files is still user-owned.
+fn created_directory_tree(
+  version : RemovalVersion,
+  file_state : @agent_tool.FileStateMap,
+) -> Bool {
+  version.entries.all(entry => {
+    match entry {
+      (path, File(file)) =>
+        file.digest is Some(digest) &&
+        file_state.created_and_unchanged(path, digest)
+      (_, Symlink(_)) => false
+      (path, Directory(_)) => file_state.created_directory(path)
+    }
+  })
+}
+
+///|
+/// Inspect the entry itself. A file digest, when requested, covers its raw bytes.
+async fn inspect_node(
+  path : String,
+  hash_file~ : Bool = true,
+  write_scope? : @write_scope.WriteScope,
+) -> NodeVersion {
   let kind = @fs.kind(path, follow_symlink=false) catch {
     @os_error.OsError(NotFound, ..) => fail("no such file")
     err => raise err
   }
-  match kind {
+  let node = match kind {
     SymLink => {
       let entry = @path.Path(path)
       let parent = @fs.realpath(entry.dirname().to_string())
-      let location = @path.Path(parent)
-        .join(Path(entry.basename().to_owned()))
-        .to_string()
-      { location, contents: Symlink(read_link_target(location)), }
-    }
-    Directory => { location: @fs.realpath(path), contents: Directory, }
-    Regular => {
-      let location = @fs.realpath(path)
-      let digest = @crypto.bytes_to_hex_string(
-        @crypto.sha256(@fs.read_binary(path)),
+      Symlink(
+        @path.Path(parent).join(Path(entry.basename().to_owned())).to_string(),
       )
-      { location, contents: File(digest), }
+    }
+    Directory => Directory(@fs.realpath(path))
+    Regular => {
+      let canonical = @fs.realpath(path)
+      let digest = if hash_file {
+        Some(@crypto.bytes_to_hex_string(@crypto.sha256(@fs.read_binary(path))))
+      } else {
+        None
+      }
+      File({ canonical, digest, })
     }
     _ => fail("cannot remove special files")
   }
-}
-
-///|
-/// List children before parents for the approval preview and automatic deletion.
-async fn directory_entries(root : String) -> Array[(String, @fs.FileKind)] {
-  let entries = []
-  async fn visit(path : String) -> Unit {
-    for name in @fs.readdir(path, include_hidden=true) {
-      let child = if @path.sep == '/' {
-        @workspace_path.join_child(path, name)
-      } else {
-        @workspace_path.join_child_preserving_separator(path, name)
-      }
-      let kind = @fs.kind(child, follow_symlink=false)
-      match kind {
-        Directory => visit(child)
-        Regular | SymLink => entries.push((child, kind))
-        _ => fail("cannot remove special files")
-      }
-    }
-    entries.push((path, Directory))
+  if write_scope is Some(scope) &&
+    scope.check_entry(path, node.location()) is Some(reason) {
+    fail("write blocked: \{reason}")
   }
-  visit(root)
-  entries
+  node
 }
 
 ///|
-/// Without approval only remove the checked entries. Non-recursive rmdir
-/// preserves anything that appears after the ownership check.
-async fn remove_owned_directory(
-  path : String,
-  root : NodeVersion,
-  entries : Array[(String, @fs.FileKind)],
+async fn inspect_target(
+  target_path : String,
+  workspace_root : String,
   file_state : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
-) -> Bool {
-  if entries.length() > 1 && !file_state.created_directory(path) {
-    return false
-  }
-  let owned = []
-  for (entry, kind) in entries {
-    match kind {
-      Directory if entries.length() == 1 || file_state.created_directory(entry) =>
-        ()
-      Regular if file_state.get(entry) is Some(Created) => ()
-      _ => return false
+) -> RemovalVersion {
+  let entries = []
+  let root = @fs.realpath(workspace_root)
+  let may_own_tree = file_state.created_directory(target_path)
+  async fn visit(path : String) -> Unit {
+    // The preview needs only entry kinds. Hash contents for direct files and
+    // for files eligible for automatic deletion.
+    let node = inspect_node(
+      path,
+      hash_file=path == target_path ||
+        (may_own_tree && file_state.get(path) is Some(Created)),
+      write_scope?,
+    )
+    if node is Directory(canonical) {
+      // This also protects filesystem roots and aliases of workspace ancestors.
+      if @workspace_path.is_under_workspace_root(canonical, root) {
+        fail("cannot remove the workspace root or its ancestors")
+      }
+      for name in @fs.readdir(path, include_hidden=true, sort=true) {
+        visit(
+          if @path.sep == '/' {
+            @workspace_path.join_child(path, name)
+          } else {
+            @workspace_path.join_child_preserving_separator(path, name)
+          },
+        )
+      }
     }
-    let node = if entry == path { root } else { inspect_node(entry) }
-    match (kind, node.contents) {
-      (Directory, Directory) => ()
-      (Regular, File(digest)) if file_state.created_and_unchanged(entry, digest) =>
-        ()
-      _ => return false
-    }
-    if write_scope is Some(scope) &&
-      scope.check_entry(entry, node.location) is Some(_) {
-      return false
-    }
-    owned.push((entry, node))
+    entries.push((path, node))
   }
-  guard inspect_node(path) == root else {
-    fail("directory location changed before deletion")
-  }
-  for (entry, expected) in owned {
-    guard inspect_node(entry) == expected else {
-      fail(
-        "directory changed during automatic deletion; remaining entries were kept",
-      )
+  visit(target_path)
+  { entries, }
+}
+
+///|
+async fn delete_directory(
+  path : String,
+  reason : String,
+  version : RemovalVersion,
+  file_state : @agent_tool.FileStateMap,
+  write_scope? : @write_scope.WriteScope,
+) -> @agent_tool.ToolAction {
+  // Delete only the reviewed entries. Never use recursive rmdir, which could
+  // silently include new files added by an external writer after the recheck.
+  for (entry, expected) in version.entries {
+    guard inspect_node(entry, write_scope?) == expected else {
+      fail("directory changed during deletion; remaining entries were kept")
     }
-    @fs.remove(entry)
-    file_state.forget(entry)
-    file_state.forget_directory(entry)
+    match expected {
+      File(_) | Symlink(_) => {
+        @fs.remove(entry)
+        file_state.forget(entry)
+      }
+      Directory(_) => {
+        @fs.remove(entry)
+        file_state.forget_directory(entry)
+      }
+    }
   }
-  true
+  @agent_tool.respond(
+    "ok: recursively removed \{path} (reason: \{reason})",
+    brief=@agent_tool.brief_line("removed \{path}"),
+  )
 }
 
 ///|

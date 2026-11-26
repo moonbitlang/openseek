@@ -208,34 +208,25 @@ async test "unlink checks the entry location and resolves intermediate links" {
 }
 
 ///|
-async test "unlink approval binds the stored target spelling, independently of target contents" {
+async test "approval unlinks the same entry after its target changes" {
   @vfs.with_tmpdir(dir => {
+    @vfs.FileSystem({ "first": "one", "second": "two" }).write_to(dir)
     let link = "\{dir}/link"
-    @fs.write_text("\{dir}/file", "before", create_mode=CreateNew)
-    @fs.symlink(link, target="file")
-    for redirect in [true, false] {
-      let result = run_remove(
-        FileStateMap(),
-        { "path": link, "reason": "cleanup" },
-        approval=ApprovalChannel(_ => {
-          if redirect {
-            @fs.remove(link)
-            @fs.symlink(link, target="./file")
-          } else {
-            @fs.write_text("\{dir}/file", "after", create_mode=TruncateExisting)
-          }
-          AllowedOnce
-        }),
-      )
-      guard result is Respond(out) else { fail("expected response") }
-      assert_eq(out.is_error, redirect, msg=out.content)
-      if redirect {
-        assert_true(out.content.contains("changed while awaiting approval"))
-        assert_true(@fs.kind(link, follow_symlink=false) is SymLink)
-      }
-    }
-    assert_eq(@fs.readdir(dir), ["file"])
-    assert_eq(@fs.read_text("\{dir}/file"), "after")
+    @fs.symlink(link, target="first")
+    let result = run_remove(
+      FileStateMap(),
+      { "path": link, "reason": "cleanup" },
+      approval=ApprovalChannel(_ => {
+        @fs.remove(link)
+        @fs.symlink(link, target="second")
+        AllowedOnce
+      }),
+    )
+    guard result is Respond(out) else { fail("expected response") }
+    assert_false(out.is_error, msg=out.content)
+    assert_eq(@fs.readdir(dir, sort=true), ["first", "second"])
+    assert_eq(@fs.read_text("\{dir}/first"), "one")
+    assert_eq(@fs.read_text("\{dir}/second"), "two")
   })
 }
 

@@ -19,7 +19,7 @@ async test "directory approval describes and removes a complete tree including h
         asked.val = true
         assert_eq(
           ask.detail,
-          "\{dir}/tree (recursive directory deletion: 2 files, 2 symbolic links and 2 subdirectories; all contents present at deletion will be removed)",
+          "\{dir}/tree (recursive directory deletion: 4 files and 2 subdirectories; all contents present at deletion will be removed)",
         )
         assert_true(ask.body is Some(body) && body.contains("cleanup"))
         AllowedOnce

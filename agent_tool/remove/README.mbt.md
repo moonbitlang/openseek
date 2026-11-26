@@ -14,7 +14,8 @@ recursively deletes a directory.
 - Empty directories are deleted automatically using non-recursive `rmdir`;
   if an entry appears before removal, it fails without deleting that entry.
 - Other nonempty directories require approval, showing the recursive file and
-  subdirectory counts. Hidden files and empty subdirectories are included.
+  subdirectory counts. Links count as files. Hidden files and empty
+  subdirectories are included.
 - Symbolic links, including dangling links, require approval. A link inside a
   directory is a leaf in the approved tree. Unlinking it preserves its target.
   A trailing slash on the link still unlinks the entry. Intermediate links
@@ -41,7 +42,7 @@ leave a partially removed tree.
 
 A standalone file approval covers its location and raw-byte SHA-256. A
 standalone symlink approval covers its name in the resolved parent directory
-and its stored link target. Both are rechecked after the approval wait.
+and requires that the entry still be a symlink when approval returns.
 
 The definition owns its locking through `FileStateMap::with_access`: the initial
 check and automatic deletion share one locked phase; approval waits outside

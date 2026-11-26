@@ -9,10 +9,8 @@ import {
   "moonbitlang/openseek/agent_tool/write_scope",
   "moonbitlang/openseek/agent_tool/remove/internal/decode",
   "moonbitlang/openseek/internal/workspace_path",
-  "moonbitlang/core/env",
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/os_error",
-  "moonbitlang/core/async/process",
 }
 
 import {
@@ -29,6 +27,5 @@ options(
     "moonbitlang/core/async",
     "moonbitlang/core/async/fs",
     "moonbitlang/core/async/os_error",
-    "moonbitlang/core/async/process",
   ],
 )
