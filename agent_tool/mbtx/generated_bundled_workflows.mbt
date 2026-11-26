@@ -198,7 +198,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|}
           #|---
           #|
@@ -215,7 +215,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|}
           #|---
           #|
@@ -233,7 +233,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|  "moonbitlang/core/env",
           #|}
           #|---
@@ -251,7 +251,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|  "moonbitlang/core/argparse",
           #|  "moonbitlang/core/json",
           #|}
@@ -2225,7 +2225,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/openseek_tools@0.4.2" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
           #|}
@@ -2615,7 +2615,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|  "moonbitlang/core/env",
           #|}
           #|---
@@ -2632,7 +2632,7 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/encoding/utf8",
           #|}
@@ -2702,7 +2702,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import {
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/encoding/utf8",
           #|  "moonbitlang/core/json",
@@ -4833,7 +4833,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/encoding/utf8",
           #|}
@@ -4927,7 +4927,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/openseek_tools@0.4.2" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
           #|}
@@ -6074,7 +6074,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/async@0.22.10/shell",
           #|}
           #|---
           #|
