@@ -120,7 +120,7 @@ async test "teardown is recorded as the first stop cause" {
       AgentTaskScope(group),
       program="moonx",
       args=[CLI_SLEEP, "10"],
-      cancel_handler=CancellationHandler(_ => @async.sleep(10_000)),
+      cancel_handler=_ => @async.sleep(10_000),
     )
     // What the group's cancellation does to the process task.
     exec.process.cancel()

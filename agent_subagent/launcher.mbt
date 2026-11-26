@@ -367,12 +367,11 @@ pub async fn Launcher::start(
       return Unavailable("could not prepare child \{session}: \{error}")
     }
   }
-  let handler = @process.CancellationHandler(pid => {
+  let handler : async (Int32) -> Unit = _ => {
     child.stopping = true
     writer.close()
     @async.sleep(self.grace_ms)
-    (@process.hard_cancel().0)(pid)
-  })
+  }
   let args = [
     ..self.args,
     "--kind",

@@ -54,7 +54,7 @@ pub fn ShellExecution::request_stop(Self) -> Unit
 pub fn ShellExecution::seq(Self) -> Int32
 pub fn ShellExecution::size(Self) -> Int32
 pub fn ShellExecution::spill_path(Self) -> String?
-pub async fn ShellExecution::start(@agent_runtime.AgentTaskScope, program~ : String, args~ : Array[String], cwd? : String, stdin? : @process.ProcessInput, inline_cap? : Int32, hard_cap? : Int32, spill_path? : String, kill_when_full? : Bool, kill_at_hard_cap? : Bool, cancel_handler? : @process.CancellationHandler, extra_env? : Map[String, String]) -> Self
+pub async fn ShellExecution::start(@agent_runtime.AgentTaskScope, program~ : String, args~ : Array[String], cwd? : String, stdin? : @process.ProcessInput, inline_cap? : Int32, hard_cap? : Int32, spill_path? : String, kill_when_full? : Bool, kill_at_hard_cap? : Bool, cancel_handler? : async (Int32) -> Unit, extra_env? : Map[String, String]) -> Self
 pub fn ShellExecution::started_at_ms(Self) -> Int64
 pub fn ShellExecution::status(Self) -> ExecStatus
 pub async fn ShellExecution::stop(Self) -> Bool

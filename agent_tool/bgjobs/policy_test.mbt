@@ -71,10 +71,10 @@ async test "a stop goes through the job's cancel handler" {
     let (input, writer) = @process.write_to_process()
     defer input.close()
     defer writer.close()
-    let handler = @process.CancellationHandler(_ => {
+    let handler : async (Int32) -> Unit = _ => {
       writer.close()
       @async.sleep(2000)
-    })
+    }
     let id = rt.start(
       program="sh",
       args=["-c", "cat >/dev/null; echo flushed"],

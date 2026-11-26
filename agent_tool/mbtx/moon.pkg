@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/process_lifecycle" @managed_process,
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/mcp/host" @mcphost,
   "moonbitlang/openseek/agent_tool/internal/uuid",

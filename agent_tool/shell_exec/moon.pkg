@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/process_lifecycle" @managed_process,
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",

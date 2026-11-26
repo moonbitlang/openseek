@@ -55,7 +55,7 @@ fn ExecStatus::is_terminal(self : ExecStatus) -> Bool {
 /// running after the execution is terminal.
 struct ShellExecution {
   sink : ShellOutputSink
-  process : @process.Process
+  process : @managed_process.Process
   mut status : ExecStatus
   // Set before the child is cancelled (by `stop`, or by the output-limit kill)
   // so the monitor reports `Killed` rather than the kill signal's exit code.
@@ -105,12 +105,12 @@ struct ShellExecution {
 /// inheriting the engine's held-open pipe hangs `git`). Pass another input when
 /// the program should actually read something.
 ///
-/// `cancel_handler` is how the process is ended when the execution is stopped
-/// or its group is cancelled; by default it is killed at once. A program that
-/// winds down on its own signal (closing its stdin, say) passes a handler that
-/// gives that signal and a grace before killing. With one, the execution's
-/// output is drained until the process has exited even when the group is
-/// being cancelled, so the handler must end the process.
+/// `cancel_handler` runs before termination when the execution is stopped or
+/// its group is cancelled. It can signal a graceful shutdown (closing stdin,
+/// for example) and wait for a bounded grace period. When it returns, the
+/// process is killed if still running. If the child exits first, the handler
+/// is cancelled. With a handler, output is drained through the child's exit
+/// even during group cancellation; without one, termination is immediate.
 pub async fn ShellExecution::start(
   scope : @agent_runtime.AgentTaskScope,
   program~ : String,
@@ -122,7 +122,7 @@ pub async fn ShellExecution::start(
   spill_path? : String,
   kill_when_full~ : Bool = false,
   kill_at_hard_cap~ : Bool = false,
-  cancel_handler? : @process.CancellationHandler,
+  cancel_handler? : async (Int32) -> Unit,
   extra_env? : Map[String, String],
 ) -> ShellExecution {
   let group = scope.group()
@@ -135,10 +135,7 @@ pub async fn ShellExecution::start(
   // teardown alike; teardown requests nothing, so it is recorded here, before
   // the handler's own effects, unless a cause is already known.
   let started : Ref[ShellExecution?] = Ref(None)
-  let CancellationHandler(cancel) = cancel_handler.unwrap_or_else(() => {
-    @process.hard_cancel()
-  })
-  let process = @process.spawn(
+  let process = @managed_process.spawn(
     group,
     program,
     args,
@@ -147,12 +144,14 @@ pub async fn ShellExecution::start(
     stderr=DuplicateStdout,
     cwd?=cwd.map(cwd => cwd.clamped_view()),
     extra_env?,
-    cancel_handler=CancellationHandler(pid => {
+    on_cancel=pid => {
       if started.val is Some(exec) {
         exec.note_stop()
       }
-      cancel(pid)
-    }),
+      if cancel_handler is Some(cancel) {
+        cancel(pid)
+      }
+    },
     no_wait=true,
     no_console_window=true,
   )
@@ -201,7 +200,7 @@ pub async fn ShellExecution::start(
 async fn ShellExecution::monitor(
   self : ShellExecution,
   reader : @process.ReadFromProcess,
-  process : @process.Process,
+  process : @managed_process.Process,
 ) -> Unit {
   defer self.sink.close()
   defer reader.close()
