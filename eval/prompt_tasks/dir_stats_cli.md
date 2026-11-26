@@ -35,7 +35,7 @@ Validation expectations before finishing:
 
 - Run `moon check --target native`.
 - Run `moon test --target native`.
-- Run `moon info` and `moon fmt`.
+- Run `moon fmt`.
 - Run at least these CLI probes:
   - `--stdin` listing one file with known content, checking the exact JSON.
   - `--stdin` listing an empty file → `{"files":1,"lines":0,"bytes":0}`.

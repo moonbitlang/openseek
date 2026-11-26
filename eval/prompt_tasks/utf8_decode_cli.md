@@ -31,7 +31,7 @@ Validation expectations before finishing:
 
 - Run `moon check --target native`.
 - Run `moon test --target native`.
-- Run `moon info` and `moon fmt`.
+- Run `moon fmt`.
 - Run at least these CLI probes (stdin hex → expected):
   - `f09f9880` → contains `U+1F600` (a 4-byte sequence).
   - `48656C6C6F` → contains `U+0048` (ASCII "Hello").

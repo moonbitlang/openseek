@@ -152,7 +152,7 @@ default step budget), with:
     the package, and the guidance they link, and run the validation they
     require for this package. That always includes `moon check` and
     `moon test` for the package in its module or workspace, and the target
-    that package needs. Run `moon info` and `moon fmt` with the package path:
+    that package needs. Scope `moon check` and `moon fmt` to the package path:
     run over the whole module, a toolchain newer than the project's can
     rewrite other packages' files, and any change outside the allowed files
     makes the capture `unmergeable`.
@@ -292,8 +292,8 @@ Never trade an invariant for fewer lines.
   stored view pins its whole string. Own at storage, view in transit;
 - touch generated files or vendored code, or add files.
 
-**Verify.** Run `moon check` and `moon test` for the package, plus `moon fmt`
-and `moon info` with its path, and confirm the `.mbti` is unchanged.
+**Verify.** Run `moon check`, `moon test`, and `moon fmt` with the package path,
+and confirm the generated `.mbti` is unchanged.
 `moon ide hover` confirms that a method resolves on the receiver's type.
 
 ## Budget

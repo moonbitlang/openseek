@@ -38,7 +38,7 @@ Validation expectations before finishing:
 
 - Run `moon check --target native`.
 - Run `moon test --target native`.
-- Run `moon info` and `moon fmt`.
+- Run `moon fmt`.
 - Run at least these CLI probes:
   - `pointer /a~1b/c~0d` on the document `{"a/b":{"c~d":5}}` (escaping).
   - a `replace` patch and an array `add` with the `-` append token.
