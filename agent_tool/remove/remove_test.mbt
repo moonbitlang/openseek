@@ -73,6 +73,11 @@ async test "remove deletes a non-source file the agent created" {
     let path = "\{dir}/notes.txt"
     let state = @agent_tool.FileStateMap()
     state.record_created(path, recorded_digest(path))
+    guard run_remove(state, { "path": "\{path}/", "reason": "temp file" })
+      is Respond(trailing) else {
+      fail("expected response")
+    }
+    assert_true(trailing.content.contains("not a directory"))
     let result = run_remove(state, { "path": path, "reason": "temp file" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
@@ -303,20 +308,5 @@ async test "a write scope confines remove to its allowed paths" {
     }
     assert_false(admitted.is_error)
     assert_false(@fs.exists("\{dir}/lib/mine.txt"))
-  })
-}
-
-///|
-async test "a trailing separator on a regular file preserves the file" {
-  @vfs.with_tmpdir(dir => {
-    @vfs.FileSystem({ "keep": "content" }).write_to(dir)
-    let result = run_remove(
-      FileStateMap(),
-      { "path": "\{dir}/keep/", "reason": "cleanup" },
-      approval=ApprovalChannel(_ => fail("must not ask")),
-    )
-    guard result is Respond(out) else { fail("expected response") }
-    assert_true(out.content.contains("not a directory"))
-    assert_eq(@fs.read_text("\{dir}/keep"), "content")
   })
 }

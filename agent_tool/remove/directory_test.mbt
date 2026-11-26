@@ -1,10 +1,14 @@
 ///|
 async test "directory approval describes and removes a complete tree including hidden and empty entries" {
   @vfs.with_tmpdir(dir => {
-    @vfs.FileSystem({ "tree/a": "a", "tree/nested/.hidden": "hidden" }).write_to(
-      dir,
-    )
+    @vfs.FileSystem({
+      "tree/a": "a",
+      "tree/nested/.hidden": "hidden",
+      "outside/file": "keep",
+    }).write_to(dir)
     @fs.mkdir("\{dir}/tree/empty")
+    @fs.symlink("\{dir}/tree/nested/out", target="\{dir}/outside")
+    @fs.symlink("\{dir}/tree/loop", target="\{dir}/tree")
     let state = @agent_tool.FileStateMap()
     state.record_created("\{dir}/tree/a", @agent_tool.content_digest("a"))
     let asked = Ref(false)
@@ -15,7 +19,7 @@ async test "directory approval describes and removes a complete tree including h
         asked.val = true
         assert_eq(
           ask.detail,
-          "\{dir}/tree (recursive directory deletion: 2 files and 2 subdirectories; all contents will be removed)",
+          "\{dir}/tree (recursive directory deletion: 2 files, 2 symbolic links and 2 subdirectories; all contents will be removed)",
         )
         assert_true(ask.body is Some(body) && body.contains("cleanup"))
         AllowedOnce
@@ -29,6 +33,7 @@ async test "directory approval describes and removes a complete tree including h
     assert_true(asked.val)
     assert_false(@fs.exists("\{dir}/tree"))
     assert_eq(state.get("\{dir}/tree/a"), None)
+    assert_eq(@fs.read_text("\{dir}/outside/file"), "keep")
   })
 }
 
@@ -211,28 +216,5 @@ async test "a complete agent-created directory tree is removed without approval"
     assert_true(state.get(path) is None)
     assert_false(state.created_directory(root))
     assert_false(state.created_directory(nested))
-  })
-}
-
-///|
-async test "recursive deletion unlinks directory links without traversing their targets" {
-  @vfs.with_tmpdir(dir => {
-    @vfs.FileSystem({ "tree/file": "remove", "outside/file": "keep" }).write_to(
-      dir,
-    )
-    @fs.symlink("\{dir}/tree/out", target="\{dir}/outside")
-    @fs.symlink("\{dir}/tree/loop", target="\{dir}/tree")
-    let result = run_remove(
-      FileStateMap(),
-      { "path": "\{dir}/tree", "reason": "cleanup" },
-      approval=ApprovalChannel(ask => {
-        assert_true(ask.detail.contains("2 symbolic links"))
-        AllowedOnce
-      }),
-    )
-    guard result is Respond(out) else { fail("expected response") }
-    assert_false(out.is_error, msg=out.content)
-    assert_false(@fs.exists("\{dir}/tree"))
-    assert_eq(@fs.read_text("\{dir}/outside/file"), "keep")
   })
 }

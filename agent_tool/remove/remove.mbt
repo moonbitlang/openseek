@@ -93,31 +93,22 @@ fn removal_error(path : String, message : String) -> @agent_tool.ToolAction {
 
 ///|
 fn removal_path(workspace_root : String, input : String) -> String raise {
-  let requested = @path.Path(input)
-  if requested.basename() is ("." | "..") {
+  let name = @path.Path(input).basename()
+  if name is ("." | "..") {
     fail("cannot remove . or ..")
   }
-  // Preserve kernel resolution of intermediate links followed by "..".
-  let components = if @path.sep == '\\' {
-    input.replace_all(old="\\", new="/")
-  } else {
-    input
+  guard !name.is_empty() else {
+    return @workspace_path.resolve(workspace_root, input)
   }
-  let resolved = if !requested.is_absolute() &&
-    components.split("/").any(part => part == "..") &&
-    workspace_root != "." &&
-    workspace_root != "" {
-    @workspace_path.join_child(workspace_root, input)
+  // Strip trailing separators before lstat, but let the kernel interpret an
+  // intermediate ".." since its predecessor can be a directory symlink.
+  let separator = @path.sep.to_string()
+  let path = input.trim_end(chars="/" + separator).to_owned()
+  let components = path.replace_all(old=separator, new="/").split("/")
+  if !@path.Path(path).is_absolute() && components.any(part => part == "..") {
+    @workspace_path.join_child(workspace_root, path)
   } else {
-    @workspace_path.resolve(workspace_root, input)
-  }
-  // A trailing separator makes lstat follow a directory link on POSIX.
-  if @path.Path(resolved).basename().is_empty() {
-    resolved
-  } else {
-    resolved
-    .trim_end(chars=if @path.sep == '\\' { "/\\" } else { "/" })
-    .to_owned()
+    @workspace_path.resolve(workspace_root, path)
   }
 }
 
@@ -146,7 +137,7 @@ async fn execute_with_workspace(
     let version = inspect_target(path, workspace_root)
     if (
         input.path.has_suffix("/") ||
-        (@path.sep == '\\' && input.path.has_suffix("\\"))
+        input.path.has_suffix(@path.sep.to_string())
       ) &&
       version.entries is [(_, File(_))] {
       return removal_error(path, "not a directory")
@@ -177,48 +168,26 @@ async fn execute_with_workspace(
           },
         )
     }
-    let reasons = []
-    if reason is Some(message) {
-      reasons.push(message)
-    }
-    if write_scope is Some(scope) {
-      for (entry, node) in version.entries {
-        if scope.check_entry(entry, node.location()) is Some(message) {
-          reasons.push("write blocked: \{entry}: \{message}")
+    let write_scope = @permission.authorize(
+      [
+        for (entry, node) in version.entries => {
+          RemoveEntry(entry, location=node.location())
         }
-      }
-    }
-    let write_scope = if reasons.is_empty() {
-      write_scope
-    } else {
-      let ask = @permission.prepare_approval(
-        target_path=path,
-        tool_name="remove",
-        arguments={ "path": path, "reason": input.reason },
-        file_state~,
-        approval?,
-        reason=reasons.join("; "),
-      )
-      ask()
-      write_scope.map(scope => {
-        scope.with_grants(
-          [
-            for (entry, node) in version.entries => (entry, node.location())
-          ],
-        )
-      })
-    }
+      ],
+      target_path=path,
+      tool_name="remove",
+      arguments={ "path": path, "reason": input.reason },
+      file_state~,
+      write_scope?,
+      approval?,
+      reason?,
+    )
     guard inspect_target(path, workspace_root, write_scope?) == version else {
       return removal_error(
         path, "file or directory changed while awaiting approval; deletion refused. Reconsider and request approval again",
       )
     }
-    if version.entries.last() is Some((_, Directory(_))) {
-      delete_directory(path, input.reason, version, file_state, write_scope?)
-    } else {
-      let (_, node) = version.entries[0]
-      delete_file(path, input.reason, node, file_state)
-    }
+    delete_target(path, input.reason, version, file_state, write_scope?)
   }) catch {
     error => removal_error(path, @tool_error.failure_message("\{error}"))
   }
@@ -310,57 +279,27 @@ async fn inspect_target(
 }
 
 ///|
-async fn delete_directory(
+async fn delete_target(
   path : String,
   reason : String,
   version : RemovalVersion,
   file_state : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  // Delete only the reviewed entries. Never use recursive rmdir, which could
-  // silently include new files added by an external writer after the recheck.
-  for (entry, expected) in version.entries {
-    guard inspect_node(entry, write_scope?) == expected else {
+  let directory = version.entries.last() is Some((_, Directory(_)))
+  for (entry, node) in version.entries {
+    // A single leaf was just revalidated. A tree can change between removals.
+    if directory && inspect_node(entry, write_scope?) != node {
       fail("directory changed during deletion; remaining entries were kept")
     }
-    expected.remove_entry(entry, file_state)
+    @fs.remove(if node is Symlink(location, _) { location } else { entry })
+    file_state.forget(entry)
+    file_state.forget_directory(entry)
   }
-  @agent_tool.respond(
-    "ok: recursively removed \{path} (reason: \{reason})",
-    brief=@agent_tool.brief_line("removed \{path}"),
-  )
-}
-
-///|
-async fn NodeVersion::remove_entry(
-  self : NodeVersion,
-  path : String,
-  file_state : @agent_tool.FileStateMap,
-) -> Unit {
-  // Unlink a reviewed link by name under the captured parent.
-  @fs.remove(if self is Symlink(location, _) { location } else { path })
-  match self {
-    File(_) => file_state.forget(path)
-    Directory(_) => file_state.forget_directory(path)
-    Symlink(_, _) => {
-      // A link can replace a previously recorded file or directory.
-      file_state.forget(path)
-      file_state.forget_directory(path)
-    }
+  let summary = if directory {
+    "ok: recursively removed \{path} (reason: \{reason})"
+  } else {
+    @auto_check.append_summary(path, "ok: removed \{path} (reason: \{reason})")
   }
-}
-
-///|
-async fn delete_file(
-  path : String,
-  reason : String,
-  node : NodeVersion,
-  file_state : @agent_tool.FileStateMap,
-) -> @agent_tool.ToolAction {
-  node.remove_entry(path, file_state)
-  let summary = "ok: removed \{path} (reason: \{reason})"
-  @agent_tool.respond(
-    @auto_check.append_summary(path, summary),
-    brief=@agent_tool.brief_line("removed \{path}"),
-  )
+  @agent_tool.respond(summary, brief=@agent_tool.brief_line("removed \{path}"))
 }
