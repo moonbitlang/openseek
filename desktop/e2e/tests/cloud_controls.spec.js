@@ -28,6 +28,7 @@ test('Cloud Stop waits for termination and preserves the editable draft', async 
   const heartbeat = page.locator('#stream > .transcript-run-status:last-child');
   const dots = heartbeat.locator('.transcript-run-dots > span:visible');
   await expect(heartbeat).toHaveText('Waiting for your approval…');
+  await expect(app.rowContainer(sessionA).getByRole('status')).toHaveAccessibleName('Needs your input');
   await expect(dots).toHaveCount(3);
   await expect(dots.first()).toHaveCSS('animation-name', 'none');
   await page.locator('#task').fill('Keep this next draft');

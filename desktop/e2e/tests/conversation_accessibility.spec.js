@@ -339,7 +339,7 @@ test('idle rows give the full trailing width to titles and overlay actions on ho
   await second.hover();
   const loadingMetrics = await second.evaluate(row => {
     const label = row.querySelector('.conversation-open').getBoundingClientRect();
-    const spinner = row.querySelector('.conversation-load-spinner').getBoundingClientRect();
+    const spinner = row.querySelector('.sidebar-run-status.running').getBoundingClientRect();
     const button = row.querySelector('.row-menu-button').getBoundingClientRect();
     return {
       labelRight: label.right,

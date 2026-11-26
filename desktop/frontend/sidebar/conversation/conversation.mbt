@@ -432,6 +432,51 @@ fn rename_field(
 }
 
 ///|
+fn Input::status_icon(self : Input, locale : @i18n.Locale) -> @html.Html? {
+  if self.load_failed && !self.loading {
+    return Some(
+      @html.span(
+        class="conversation-load-failed",
+        attrs=@html.Attrs::build().aria_label(
+          ui(locale, ConversationLoadFailed),
+        ),
+        "!",
+      ),
+    )
+  }
+  let (message, image, class_name) = match (self.run_mark, self.loading) {
+    (NeedsInputMark, _) => (NeedsInput, @icons.icon_question, "needs-input")
+    (RunningMark, _) | (_, true) =>
+      (
+        if self.run_mark is RunningMark {
+          RunningLabel
+        } else {
+          LoadingMessages
+        },
+        @icons.icon_loading,
+        "running",
+      )
+    (CompletedMark, false) => (CompletedUnread, @icons.icon_check, "completed")
+    (FailedMark, false) => (FailedUnread, @icons.icon_error, "failed")
+    (StoppedMark, false) => (StoppedUnread, @icons.icon_debug_stop, "completed")
+    (EndedMark, false) => (EndedUnread, @icons.icon_circle, "completed")
+    (NoRunMark, false) => return None
+  }
+  let label = ui(locale, message)
+  Some(
+    @html.span(
+      class="sidebar-run-status " + class_name,
+      attrs=@html.Attrs::build()
+        .role("status")
+        .aria_live("polite")
+        .aria_label(label)
+        .title(label),
+      @icons.icon(image),
+    ),
+  )
+}
+
+///|
 /// A real Rabbita component: it is constructed once for an `assoc_by` key,
 /// consumes incremental input, and returns an incremental DOM value.
 pub fn component(
@@ -522,87 +567,7 @@ pub fn component(
         @html.span(class="sidebar-label", input.label)
       },
     ]
-    let status : Array[@html.Html] = []
-    if input.loading {
-      status.push(
-        @html.span(
-          class="conversation-load-spinner",
-          attrs=@html.Attrs::build()
-            .role("status")
-            .aria_label(ui(locale, LoadingConversation)),
-          "",
-        ),
-      )
-    } else if input.load_failed {
-      status.push(
-        @html.span(
-          class="conversation-load-failed",
-          attrs=@html.Attrs::build().aria_label(
-            ui(locale, ConversationLoadFailed),
-          ),
-          "!",
-        ),
-      )
-    }
-    match input.run_mark {
-      NoRunMark => ()
-      RunningMark
-      | NeedsInputMark
-      | CompletedMark
-      | FailedMark
-      | StoppedMark
-      | EndedMark => {
-        let (label, image, class_name) = match input.run_mark {
-          RunningMark =>
-            (
-              ui(locale, RunningLabel),
-              @icons.icon_loading,
-              "sidebar-run-status running",
-            )
-          NeedsInputMark =>
-            (
-              ui(locale, NeedsInput),
-              @icons.icon_question,
-              "sidebar-run-status needs-input",
-            )
-          CompletedMark =>
-            (
-              ui(locale, CompletedUnread),
-              @icons.icon_check,
-              "sidebar-run-status completed",
-            )
-          FailedMark =>
-            (
-              ui(locale, FailedUnread),
-              @icons.icon_error,
-              "sidebar-run-status failed",
-            )
-          StoppedMark =>
-            (
-              ui(locale, StoppedUnread),
-              @icons.icon_debug_stop,
-              "sidebar-run-status completed",
-            )
-          _ =>
-            (
-              ui(locale, EndedUnread),
-              @icons.icon_circle,
-              "sidebar-run-status completed",
-            )
-        }
-        status.push(
-          @html.span(
-            class=class_name,
-            attrs=@html.Attrs::build()
-              .role("status")
-              .aria_live("polite")
-              .aria_label(label)
-              .title(label),
-            @icons.icon(image),
-          ),
-        )
-      }
-    }
+    let status = input.status_icon(locale)
     let menu_kind = input.menu_kind()
     // A live row folds its actions behind one overflow trigger, so Rename
     // sits beside Archive and Delete in the menu the row's context click
@@ -620,16 +585,12 @@ pub fn component(
     let trailing_slot : Array[@html.Html] = []
     // The title field takes the whole row while it is edited.
     if !renaming &&
-      (
-        !status.is_empty() ||
-        !buttons.is_empty() ||
-        !trailing_actions.is_empty()
-      ) {
+      (status is Some(_) || !buttons.is_empty() || !trailing_actions.is_empty()) {
       // The status group stays in the slot even when empty: a glyph coming or
-      // going (the load spinner, a run mark) must not shift the action group
+      // going must not shift the action group
       // to another child position, which would re-create a focused button.
       let trailing : Array[@html.Html] = [
-        @html.span(class="row-status", status),
+        @html.span(class="row-status", status.iter().to_array()),
       ]
       for action in trailing_actions {
         let (title, button_class, image, id_suffix) = match action {

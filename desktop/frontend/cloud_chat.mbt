@@ -639,9 +639,7 @@ fn Model::cloud_chat_rows(
         label: item.title.unwrap_or(shell_text(self.locale, NewChatLabel)),
         nested: false,
         active,
-        loading: conversation.map_or(false, conversation => {
-          conversation.loading || conversation.history_older_request is Some(_)
-        }),
+        loading: active && conversation is Some({ loading: true, .. }),
         load_failed: conversation.map_or(false, conversation => {
           conversation.history_required && conversation.notice is Some(_)
         }),
