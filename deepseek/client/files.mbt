@@ -267,7 +267,7 @@ pub async fn Client::upload_image(
     let response = connection.end_request()
     let text = connection.read_all().text()
     guard response.code >= 200 && response.code < 300 else {
-      raise HttpStatus(response.code, text)
+      raise HttpStatus(response.code, redact_credential(text, self.api_key))
     }
     upload.decode_response(text)
   })

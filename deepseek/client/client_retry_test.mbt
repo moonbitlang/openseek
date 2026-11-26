@@ -364,3 +364,176 @@ async test "chat does not retry an unparseable endpoint URL" {
   assert_eq(retries.val, 0)
   assert_true(message.contains("cannot be retried automatically"))
 }
+
+///|
+/// A provider that reflects the request credential in its error body must not
+/// leak it into the message the turn records.
+async test "chat redacts the request credential from an error body" {
+  @async.with_task_group() <| group => {
+    guard bind_test_server("local TCP bind unavailable; skipping retry test")
+      is Some(server) else {
+      return
+    }
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (request, body, conn) => {
+          let _ = body.read_all()
+          let echoed = match request.headers.get("Authorization") {
+            Some(value) => value
+            None => "missing"
+          }
+          conn.send_response(400, "Bad Request", extra_headers={
+            "Content-Type": "application/json",
+          })
+          conn.write("{\"error\":\"rejected \{echoed}\"}")
+        },
+        max_connections=4,
+      )
+    }
+    let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+    let client = retry_client(url, attempts=1)
+    let message = try {
+      ignore(client.chat([ChatMessage(User, content=[Text("hello")])]))
+      "succeeded"
+    } catch {
+      error => "\{error}"
+    }
+    assert_true(message.contains("DeepSeek API error 400"))
+    assert_true(message.contains("[redacted]"))
+    assert_false(message.contains("test-key"))
+  }
+}
+
+///|
+/// The retried body follows the same rule: the message that survives the retry
+/// budget carries the status, not the credential.
+async test "chat redacts the request credential after retry exhaustion" {
+  @async.with_task_group() <| group => {
+    guard bind_test_server("local TCP bind unavailable; skipping retry test")
+      is Some(server) else {
+      return
+    }
+    let hits : Ref[Int32] = { val: 0, }
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (request, body, conn) => {
+          let _ = body.read_all()
+          hits.val += 1
+          let echoed = match request.headers.get("Authorization") {
+            Some(value) => value
+            None => "missing"
+          }
+          conn.send_response(503, "Unavailable", extra_headers={
+            "Content-Type": "text/plain",
+          })
+          conn.write("upstream rejected \{echoed}")
+        },
+        max_connections=4,
+      )
+    }
+    let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+    let client = retry_client(url, attempts=2)
+    let message = try {
+      ignore(client.chat([ChatMessage(User, content=[Text("hello")])]))
+      "succeeded"
+    } catch {
+      error => "\{error}"
+    }
+    assert_true(message.contains("DeepSeek API error 503"))
+    assert_true(message.contains("[redacted]"))
+    assert_false(message.contains("test-key"))
+    assert_eq(hits.val, 2)
+  }
+}
+
+///|
+/// A malformed 2xx body is reported with its diagnostics, also without the
+/// credential.
+async test "chat redacts the request credential from malformed response diagnostics" {
+  @async.with_task_group() <| group => {
+    guard bind_test_server("local TCP bind unavailable; skipping retry test")
+      is Some(server) else {
+      return
+    }
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (request, body, conn) => {
+          let _ = body.read_all()
+          let echoed = match request.headers.get("Authorization") {
+            Some(value) => value
+            None => "missing"
+          }
+          conn.send_response(200, "OK", extra_headers={
+            "Content-Type": "application/json",
+          })
+          conn.write("not-json \{echoed}")
+        },
+        max_connections=4,
+      )
+    }
+    let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+    let client = retry_client(url, attempts=1)
+    let message = try {
+      ignore(client.chat([ChatMessage(User, content=[Text("hello")])]))
+      "succeeded"
+    } catch {
+      error => "\{error}"
+    }
+    assert_true(message.contains("DeepSeek response is not JSON"))
+    assert_true(message.contains("[redacted]"))
+    assert_false(message.contains("test-key"))
+  }
+}
+
+///|
+/// Retry notices surface the same scrubbed reason the final message uses.
+async test "streaming retry notice redacts the request credential" {
+  @async.with_task_group() <| group => {
+    guard bind_test_server("local TCP bind unavailable; skipping retry test")
+      is Some(server) else {
+      return
+    }
+    let hits : Ref[Int32] = { val: 0, }
+    group.spawn_bg(no_wait=true) <| () => {
+      server.run_forever(
+        (request, body, conn) => {
+          let _ = body.read_all()
+          hits.val += 1
+          if hits.val == 1 {
+            let echoed = match request.headers.get("Authorization") {
+              Some(value) => value
+              None => "missing"
+            }
+            conn.send_response(429, "Too Many Requests", extra_headers={
+              "Content-Type": "text/plain",
+            })
+            conn.write("rate limited \{echoed}")
+          } else {
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            conn.write(
+              "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n",
+            )
+            conn.write("data: [DONE]\n\n")
+          }
+        },
+        max_connections=4,
+      )
+    }
+    let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+    let client = retry_client(url, attempts=2)
+    let reasons : Array[String] = []
+    let response = client.chat(
+      [ChatMessage(User, content=[Text("hello")])],
+      stream=StreamHandler(on_content_delta=_ => (), on_retry=(_, _, reason) => {
+        reasons.push(reason)
+      }),
+    )
+    assert_eq(response.content, "ok")
+    assert_eq(reasons.length(), 1)
+    assert_true(reasons[0].contains("HTTP 429"))
+    assert_true(reasons[0].contains("[redacted]"))
+    assert_false(reasons[0].contains("test-key"))
+  }
+}
