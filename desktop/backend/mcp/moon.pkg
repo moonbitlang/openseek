@@ -30,7 +30,6 @@ options(
     "dispatcher_test.mbt": [ "native" ],
     "server.mbt": [ "native" ],
     "server_test.mbt": [ "native" ],
-    "stateless.mbt": [ "native" ],
     "stateless_test.mbt": [ "native" ],
     "stdio.mbt": [ "native" ],
     "stdio_test.mbt": [ "native" ],

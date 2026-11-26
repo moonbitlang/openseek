@@ -17,6 +17,7 @@ pub fn Dispatcher::Dispatcher(
 
 ///|
 /// Register a batch atomically before serving requests.
+#cfg(target="native")
 pub fn Dispatcher::add_tools(
   self : Dispatcher,
   tools : Array[Tool],
@@ -36,18 +37,3 @@ pub fn Dispatcher::add_tools(
 ///|
 /// Reported as `serverInfo.name`.
 const ServerName = "seekmoon"
-
-///|
-/// A failure of the server itself, as opposed to one of its tools.
-pub suberror ServerError {
-  ServerError(String)
-}
-
-///|
-pub impl Show for ServerError with fn output(self, logger) {
-  let ServerError(message) = self
-  logger.write_string(message)
-}
-
-///|
-pub extend ServerError with Show::{output, to_string}
