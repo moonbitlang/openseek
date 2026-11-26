@@ -3,6 +3,7 @@ import {
   "moonbitlang/openseek/cli",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/core/env",
+  "moonbitlang/core/string",
 }
 
 import {

@@ -43,5 +43,4 @@ test('the Codex approval mode uses the headed select and confirms full access', 
   await dialog.getByRole('button', { name: 'Enable full access' }).click();
   await expect(trigger).toHaveText('Full access');
   await expect(page.locator('.codex-permission-control')).toHaveClass(/danger/);
-  expect(app.pageErrors).toEqual([]);
 });

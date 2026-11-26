@@ -68,5 +68,4 @@ test('archived chats live in Settings with filter, read-only open, restore and d
   await expect(main.getByRole('tabpanel', { name: 'General', exact: true })).toBeVisible();
   await main.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(main).not.toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });

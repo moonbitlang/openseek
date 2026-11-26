@@ -4,59 +4,29 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 async function openNative(page, pick, prepare) {
   const app = new DesktopBrowserHarness(page);
   await app.install();
-  await page.exposeFunction('attachmentDesktopRequest', request => {
-    app.requests.push(request);
-    if (request.method === 'app.system_appearance') return { dark: false };
-    if (request.method === 'host.pick_attachment') return pick();
-    if (request.method === 'fs.prepare_attachment' && prepare) return prepare();
-    return app.replyFor(request);
-  });
-  await page.addInitScript(() => {
-    const listeners = new Map();
-    const events = { on(name, callback) {
-      const callbacks = listeners.get(name) || new Set();
-      listeners.set(name, callbacks);
-      callbacks.add(callback);
-      return () => callbacks.delete(callback);
-    } };
-    window.__MoonBit__ = {
-      getTitlebarArea: async () => null,
-      app: events, events,
-      openseek: new Proxy({}, { get: (_, method) => async params => {
-        if (method === 'host.connect') {
-          for (const callback of listeners.get('openseek.agent.connected') || []) {
-            callback({ payload: { protocol: 6 } });
-          }
-        }
-        return window.attachmentDesktopRequest({ method, params });
-      } }),
-    };
-  });
+  app.onRpc('host.pick_attachment', () => pick());
+  if (prepare) app.onRpc('fs.prepare_attachment', () => prepare());
+  await app.installNative();
   await page.goto('/index.html');
   await page.getByRole('main').waitFor();
   await page.locator('#task').fill('Keep this draft');
   return app;
 }
 
-{
-  const delayed = true;
-  test(`native picker cancellation leaves draft usable (${delayed ? 'delayed' : 'immediate'})`, async ({ page }) => {
-    let cancel;
-    const app = await openNative(page, () => delayed
-      ? new Promise(resolve => { cancel = () => resolve({}); }) : {});
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await page.getByRole('button', { name: 'Attach files', exact: true }).click();
-      await expect.poll(() => app.requests.filter(r => r.method === 'host.pick_attachment').length).toBe(attempt + 1);
-      await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
-      await expect(page.locator('#send')).toBeEnabled();
-      await expect(page.getByText('Reading attachments…', { exact: true })).toBeHidden();
-      if (delayed) cancel();
-      await expect(page.locator('#task')).toHaveValue('Keep this draft');
-    }
-    expect(app.requests.some(r => r.method === 'fs.prepare_attachment')).toBe(false);
-    expect(app.pageErrors).toEqual([]);
-  });
-}
+test('native picker cancellation leaves draft usable (delayed)', async ({ page }) => {
+  let cancel;
+  const app = await openNative(page, () => new Promise(resolve => { cancel = () => resolve({}); }));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await expect.poll(() => app.requests.filter(r => r.method === 'host.pick_attachment').length).toBe(attempt + 1);
+    await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
+    await expect(page.locator('#send')).toBeEnabled();
+    await expect(page.getByText('Reading attachments…', { exact: true })).toBeHidden();
+    cancel();
+    await expect(page.locator('#task')).toHaveValue('Keep this draft');
+  }
+  expect(app.requests.some(r => r.method === 'fs.prepare_attachment')).toBe(false);
+});
 
 test('native selection blocks send only while preparing the selected attachment', async ({ page }) => {
   let finish;
@@ -70,7 +40,6 @@ test('native selection blocks send only while preparing the selected attachment'
   await expect(page.locator('.mention-chip').filter({ hasText: 'report.pdf' })).toBeVisible();
   await expect(page.locator('#send')).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('native picker failure shows an error without blocking the draft', async ({ page }) => {
@@ -81,5 +50,4 @@ test('native picker failure shows an error without blocking the draft', async ({
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
   await expect(page.getByText('Reading attachments…', { exact: true })).toBeHidden();
   expect(app.requests.some(r => r.method === 'fs.prepare_attachment')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });

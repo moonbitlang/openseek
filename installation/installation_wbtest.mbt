@@ -60,8 +60,11 @@ async test "setup installs missing dependencies and reuses them offline" {
     available=isolated_available,
     toolchain=fixture_toolchain,
   )
-  assert_true(usable(home + "/.moon/bin/moon", ["version"]))
-  assert_true(usable(home + "/.openseek/bin/openseek", ["--help"]))
+  assert_eq(command(home + "/.moon/bin/moon", ["version"]), "existing-sdk\n")
+  assert_eq(
+    command(home + "/.openseek/bin/openseek", ["--help"]),
+    "bootstrap-cli\n",
+  )
   assert_eq(
     @fs.read_text(home + "/.openseek/share/licenses/LICENSE"),
     "fixture license",
@@ -203,7 +206,10 @@ async test "setup propagates installer failure and trusts successful return" {
   }
   assert_true(error.contains("installer failed"))
   install(home, source_cli, available~, toolchain=fixture_toolchain)
-  assert_true(usable(home + "/.openseek/bin/openseek", ["--help"]))
+  assert_eq(
+    command(home + "/.openseek/bin/openseek", ["--help"]),
+    "bootstrap-cli\n",
+  )
   assert_eq(@fs.read_text(home + "/.moon/credentials"), "keep")
 }
 
@@ -283,4 +289,55 @@ async test "setup installs the app-server companion and repairs its absence" {
     toolchain=_ => fail("SDK already prepared"),
   )
   assert_eq(command(installed, []), "fixture-server\n")
+}
+
+///|
+async test "retry_text_file_busy retries transient ETXTBSY and stops on other errors" {
+  if @async.platform is Windows {
+    return
+  }
+  let attempts = Ref(0)
+  let output = retry_text_file_busy(Immediate, 3, () => {
+    attempts.val += 1
+    if attempts.val < 3 {
+      raise @os_error.OsError::from_errno(
+        PosixEtxtbsy,
+        context="@process.run()",
+      )
+    }
+    "ok"
+  })
+  assert_eq(output, "ok")
+  assert_eq(attempts.val, 3)
+
+  let non_busy_attempts = Ref(0)
+  let non_busy = try {
+    let _ : String = retry_text_file_busy(Immediate, 2, () => {
+      non_busy_attempts.val += 1
+      raise @os_error.OsError::from_errno(2, context="@process.run()")
+    })
+    "unexpected"
+  } catch {
+    @os_error.OsError(NotFound, ..) => "not_found"
+    error => "other: \{error}"
+  }
+  assert_eq(non_busy, "not_found")
+  assert_eq(non_busy_attempts.val, 1)
+
+  let exhausted_attempts = Ref(0)
+  let exhausted = try {
+    let _ : String = retry_text_file_busy(Immediate, 2, () => {
+      exhausted_attempts.val += 1
+      raise @os_error.OsError::from_errno(
+        PosixEtxtbsy,
+        context="@process.run()",
+      )
+    })
+    "unexpected"
+  } catch {
+    error if is_text_file_busy(error) => "busy"
+    error => "other: \{error}"
+  }
+  assert_eq(exhausted, "busy")
+  assert_eq(exhausted_attempts.val, 3)
 }

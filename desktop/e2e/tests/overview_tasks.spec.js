@@ -102,5 +102,4 @@ test('the overview lists what the conversation runs in the background', async ({
     view.controllable = false;
   }
   await expect(title).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });

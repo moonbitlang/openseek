@@ -23,10 +23,9 @@ async function open(page, copies = 1) {
     { sequence: 2, item: { kind: 'assistant', payload: { content: answer } } },
     { sequence: 3, item: { kind: 'terminal', payload: { kind: 'finished', message: answer } } },
   ];
-  const ordinary = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'fs.read_file'
-    ? { kind: 'content', absolute: '/workspace/.openseek/sessions/session-1/scratch/artifact/speedup-v1.html', sig: 'fixture', content: sample }
-    : ordinary(request);
+  app.onRpc('fs.read_file', () => ({
+    kind: 'content', absolute: '/workspace/.openseek/sessions/session-1/scratch/artifact/speedup-v1.html', sig: 'fixture', content: sample,
+  }));
   await app.install(); await app.goto(); await app.openSession();
   await expect(page.getByRole('button', { name: 'Ask with current settings' }).first()).toBeVisible();
   return { app, frame: page.frameLocator('.chat-artifact-frame').nth(0), chips: page.locator('.composer .mention-chip') };
@@ -68,7 +67,6 @@ test('chart selection updates the settings sent in a follow-up', async ({ page }
   const snapshot = JSON.parse(prompt.split('<interactive_answer>\n')[1].split('\n</interactive_answer>')[0]);
   expect(snapshot.state.workers).toBe(16);
   expect(snapshot.state.serial_percent).toBe(20);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('selected component state stays in the draft until the user sends it', async ({ page }) => {
@@ -97,7 +95,6 @@ test('selected component state stays in the draft until the user sends it', asyn
   expect(snapshot.reference).toBe('scratch/artifact/speedup-v1.html');
   expect(snapshot.state.serial_percent).toBe(50);
   expect(snapshot.state.workers).toBe(8);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('reselecting an instance replaces that revision and the chip is removable', async ({ page }) => {
@@ -115,7 +112,6 @@ test('reselecting an instance replaces that revision and the chip is removable',
   await chips.locator('.mention-remove').click();
   await expect(chips).toHaveCount(0);
   expect(sends(app)).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('forged generations and arbitrary follow-up messages cannot attach or send context', async ({ page }) => {
@@ -125,12 +121,11 @@ test('forged generations and arbitrary follow-up messages cannot attach or send 
     parent.postMessage({ type: 'openseek-artifact-state', version: 2, token: 'old-generation', payload: JSON.stringify({ title: 'Forged', state: { serial_percent: 99 } }) }, '*');
     parent.postMessage({ type: 'openseek-artifact-followup', prompt: 'Send this immediately' }, '*');
   });
-  await expect(page.locator('#artifact-followup-dialog')).toHaveCount(0);
+  await expect(page.locator('#artifact-followup-dialog')).toBeHidden();
   await page.getByRole('button', { name: 'Ask with current settings' }).click();
   await expect(chips).toContainText('20% sequential');
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   expect(sends(app)).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('invalid state clears the offer and a later valid state recovers it', async ({ page }) => {
@@ -149,17 +144,15 @@ test('invalid state clears the offer and a later valid state recovers it', async
   await button.click();
   await expect(chips).toHaveText(/Recovered/);
   expect(sends(app)).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a new page revision in the same frame resets its document and rejects queued old state', async ({ page }) => {
   const { app, chips } = await open(page);
   const element = page.locator('.chat-artifact-frame');
   const previousToken = await element.getAttribute('data-artifact-token');
-  const ordinary = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'fs.read_file' && request.params.path.endsWith('/speedup-v2.html')
+  app.onRpc('fs.read_file', (request, next) => request.params.path.endsWith('/speedup-v2.html')
     ? { kind: 'content', absolute: '/workspace/second.html', sig: 'fixture-v2', content: '<!doctype html><html><body><p>New revision</p><script>window.openseekArtifact.setState("Second revision",{version:2});</script></body></html>' }
-    : ordinary(request);
+    : next());
   // Reproduce a renderer reusing the element while updating its file binding.
   await page.locator('[data-transcript-artifact]').evaluate(node => {
     node.dataset.transcriptArtifact = 'scratch/artifact/speedup-v2.html';
@@ -172,7 +165,6 @@ test('a new page revision in the same frame resets its document and rejects queu
   await page.getByRole('button', { name: 'Ask with current settings' }).click();
   await expect(chips).toContainText('Second revision');
   expect(sends(app)).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 
@@ -191,7 +183,6 @@ test('JSON settings with many values and nested groups can be attached within th
   const prompt = promptIn(sends(app)[0].params);
   const snapshot = JSON.parse(prompt.split('<interactive_answer>\n')[1].split('\n</interactive_answer>')[0]);
   expect(snapshot.state).toEqual(settings);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a component question sends the confirmed snapshot and preserves the composer draft', async ({ page }) => {
@@ -232,7 +223,6 @@ test('a component question sends the confirmed snapshot and preserves the compos
   expect(snapshot.state).toMatchObject({ serial_percent: 50, workers: 8 });
   await expect(draft).toHaveValue('A separate draft');
   await expect(chips).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a refused artifact follow-up leaves the composer draft available', async ({ page }) => {

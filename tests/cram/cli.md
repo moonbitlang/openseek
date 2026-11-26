@@ -33,8 +33,8 @@ Commands:
 
 Options:
   -h, --help                             Show help information.
-  --api-key <api-key>                    API key for the selected chat provider. [default: ]
-  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-key <api-key>                    API key for the selected chat provider. [env: OPENSEEK_API_KEY] [default: ]
+  --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, glm-5.3-flash, or any model id configured in Settings. [env: OPENSEEK_MODEL] [default: deepseek-flash]
   --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
   --retry-attempts <retry-attempts>      Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
   --retry-backoff-ms <retry-backoff-ms>  Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
@@ -133,8 +133,8 @@ Arguments:
 
 Options:
   -h, --help                                                   Show help information.
-  --api-key <api-key>                                          API key for the selected chat provider. [default: ]
-  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-key <api-key>                                          API key for the selected chat provider. [env: OPENSEEK_API_KEY] [default: ]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, glm-5.3-flash, or any model id configured in Settings. [env: OPENSEEK_MODEL] [default: deepseek-flash]
   --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
   --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
   --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
@@ -153,7 +153,7 @@ Options:
   --skills-dir <skills-dir>                                    Another skills directory, advertised alongside the user-level and workspace ones, which shadow its same-named skills. Repeat to add more; empty values are ignored. [default: ]
   --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are offered to the agent's scripts through the tools SDK's mcp package. A skill directory may bring servers of its own in an mcp.json beside its SKILL.md. Each server connects when a script first reaches it. Repeat to merge files in order; later servers with the same name replace earlier ones. Empty values are ignored; an empty value alone loads no file, even with OPENSEEK_MCP_CONFIG set. [env: OPENSEEK_MCP_CONFIG] [default: ]
   --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
-  --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run). [env: OPENSEEK_APPROVAL] [default: never]
+  --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking), review (a reviewer subagent decides against the user's own messages; what it cannot settle goes to the controller under serve and is refused under run), yolo (automatically grant each request without review or a prompt). [env: OPENSEEK_APPROVAL] [default: never]
   --result-file <result-file>                                  Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.
   --result-root <result-root>                                  The directory --result-file must be written in: the result must be a new file inside it. A launcher pins it to decide where a run it starts may write.
   --kind <kind>                                                Run a preset instead of the general agent: explore, review, approval, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.

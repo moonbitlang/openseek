@@ -92,6 +92,7 @@ pub(all) enum Msg {
   CheckedOut(Int32, Result[@protocol.GithubCheckoutReply, String])
   ConfirmCheckout(@protocol.GithubCheckoutChanges)
   DismissCheckout
+  CheckoutDialogClosed
   ToggleCheckoutDetails
   CurrentLoaded(Int32, Result[@protocol.GithubCheckoutStatus, String])
   DetailLoaded(Int32, Result[@protocol.GithubPullRequestDetail, String])

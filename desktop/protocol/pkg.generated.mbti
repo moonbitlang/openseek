@@ -10,9 +10,17 @@ import {
 // Values
 pub const CloudOrigin : String = "https://cloud.moonbitlang.com"
 
-pub const HostProtocolRevision : Int32 = 14
+pub const DefaultCustomModelContextWindow : Int32 = 1_000_000
+
+pub const HostProtocolRevision : Int32 = 15
+
+pub const MaxCustomModelContextWindow : Int32 = 10_000_000
+
+pub const MaxCustomModels : Int32 = 50
 
 pub const MaxImageBytes : Int32 = 20971520
+
+pub const MinCustomModelContextWindow : Int32 = 1_024
 
 pub const SideChatTokenLength : Int32 = 8
 
@@ -110,6 +118,7 @@ pub impl @json.ToJson for AgentEventPayload
 #derive(Eq, @debug.Debug)
 pub(all) struct ApiConnectionProbePayload {
   revision : Int32
+  model : String?
 }
 pub impl @json.FromJson for ApiConnectionProbePayload
 pub impl @json.ToJson for ApiConnectionProbePayload
@@ -159,11 +168,20 @@ pub impl @json.FromJson for AppSystemAppearanceReply
 pub impl @json.ToJson for AppSystemAppearanceReply
 
 #derive(Eq, @debug.Debug)
-pub(all) struct AppTitlebarThemePayload {
+pub(all) struct AppTitlebarStylePayload {
   dark : Bool
+  height : Double
+  background_color : String
+  symbol_color : String
 }
-pub impl @json.FromJson for AppTitlebarThemePayload
-pub impl @json.ToJson for AppTitlebarThemePayload
+pub impl @json.FromJson for AppTitlebarStylePayload
+pub impl @json.ToJson for AppTitlebarStylePayload
+
+pub(all) struct AppTitlebarStyleReply {
+  custom_overlay : Bool
+}
+pub impl @json.FromJson for AppTitlebarStyleReply
+pub impl @json.ToJson for AppTitlebarStyleReply
 
 #derive(Eq, @debug.Debug)
 pub(all) struct ApplyUpdateReply {
@@ -671,8 +689,8 @@ pub impl @json.ToJson for CloudFileDownloadReply
 
 pub(all) enum CloudHistoryCacheAction {
   List
-  Read(session~ : String)
-  Write(session~ : String, page~ : CloudHistoryCachePage)
+  Read(session~ : String, view~ : CloudHistoryView)
+  Write(session~ : String, view~ : CloudHistoryView, page~ : CloudHistoryCachePage)
   Remove(session~ : String)
 }
 
@@ -716,6 +734,13 @@ pub fn CloudHistoryCacheRequest::from_json(@json.Json, @json.DecodeContext) -> S
 pub fn CloudHistoryCacheRequest::to_json(Self) -> @json.Json
 pub impl @json.FromJson for CloudHistoryCacheRequest
 pub impl @json.ToJson for CloudHistoryCacheRequest
+
+#derive(Eq)
+pub(all) enum CloudHistoryView {
+  Minimal
+  Detail
+}
+pub fn CloudHistoryView::wire_name(Self) -> String
 
 #derive(Eq, @debug.Debug)
 pub(all) enum CloudMcpEvent {
@@ -1252,6 +1277,15 @@ pub fn CreateDirectoryPayload::to_json(Self) -> @json.Json
 pub fn CreateDirectoryPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for CreateDirectoryPayload
 pub impl @json.ToJson for CreateDirectoryPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct CustomModel {
+  id : String
+  label : String?
+  context_window : Int32
+}
+pub impl @json.FromJson for CustomModel
+pub impl @json.ToJson for CustomModel
 
 #derive(Eq, @debug.Debug)
 pub(all) struct DiagnosticsPayload {
@@ -1982,6 +2016,30 @@ pub fn GithubPullRequestPayload::to_json(Self) -> @json.Json
 pub fn GithubPullRequestPayload::to_repr(Self) -> @debug.Repr
 pub impl @json.FromJson for GithubPullRequestPayload
 pub impl @json.ToJson for GithubPullRequestPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct GithubPullRequestSummariesPayload {
+  urls : Array[String]
+}
+pub fn GithubPullRequestSummariesPayload::equal(Self, Self) -> Bool
+pub fn GithubPullRequestSummariesPayload::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
+pub fn GithubPullRequestSummariesPayload::not_equal(Self, Self) -> Bool
+pub fn GithubPullRequestSummariesPayload::to_json(Self) -> @json.Json
+pub fn GithubPullRequestSummariesPayload::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for GithubPullRequestSummariesPayload
+pub impl @json.ToJson for GithubPullRequestSummariesPayload
+
+#derive(Eq, @debug.Debug)
+pub(all) struct GithubPullRequestSummariesReply {
+  pull_requests : Map[String, GitPullRequest]
+}
+pub fn GithubPullRequestSummariesReply::equal(Self, Self) -> Bool
+pub fn GithubPullRequestSummariesReply::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
+pub fn GithubPullRequestSummariesReply::not_equal(Self, Self) -> Bool
+pub fn GithubPullRequestSummariesReply::to_json(Self) -> @json.Json
+pub fn GithubPullRequestSummariesReply::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for GithubPullRequestSummariesReply
+pub impl @json.ToJson for GithubPullRequestSummariesReply
 
 #derive(Eq, @debug.Debug)
 pub(all) struct GithubPullRequestSummaryPayload {
@@ -2887,10 +2945,12 @@ pub impl @json.ToJson for OpenPathReply
 pub(all) enum OpenSeekApproval {
   ApprovalAsk
   ApprovalReview
+  ApprovalYolo
 }
 pub fn OpenSeekApproval::equal(Self, Self) -> Bool
 pub fn OpenSeekApproval::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
 pub fn OpenSeekApproval::not_equal(Self, Self) -> Bool
+pub fn OpenSeekApproval::parse(String) -> Self?
 pub fn OpenSeekApproval::to_json(Self) -> @json.Json
 pub fn OpenSeekApproval::to_repr(Self) -> @debug.Repr
 pub fn OpenSeekApproval::wire(Self) -> String
@@ -4026,6 +4086,7 @@ pub(all) struct SessionListEntry {
   title : String?
   updated_at_ms : Double?
   model_settings : SessionModelSettings?
+  pull_requests : Array[String]
 }
 pub fn SessionListEntry::equal(Self, Self) -> Bool
 pub fn SessionListEntry::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
@@ -4304,6 +4365,7 @@ pub(all) struct SettingsSetPayload {
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
+  models : Array[CustomModel]?
 }
 pub fn SettingsSetPayload::equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError
@@ -4321,6 +4383,7 @@ pub(all) struct SettingsStatusPayload {
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
+  models : Array[CustomModel]
 }
 pub fn SettingsStatusPayload::equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::from_json(@json.Json, @json.DecodeContext) -> Self raise @json.JsonDecodeError

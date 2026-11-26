@@ -2,7 +2,6 @@
 
 ///|
 priv enum UiMessage {
-  SubagentRuns(Int32)
   RenameLabel
   RenameConversation
   ArchiveLabel
@@ -12,7 +11,7 @@ priv enum UiMessage {
   DeleteLabel
   DeletePermanently
   DeleteUnavailable
-  LoadingConversation
+  LoadingMessages
   ConversationLoadFailed
   RunningLabel
   NeedsInput
@@ -20,20 +19,17 @@ priv enum UiMessage {
   FailedUnread
   StoppedUnread
   EndedUnread
+  PullRequestOpen
+  PullRequestDraft
+  PullRequestMerged
+  PullRequestClosed
+  PullRequestAttached
+  PullRequestSummaryMulti(Int32, String)
 }
 
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
-    (English, SubagentRuns(1)) => "1 subagent run"
-    (Spanish, SubagentRuns(1)) => "1 ejecución de subagente"
-    (English, SubagentRuns(count)) => "\{count} subagent runs"
-    (Spanish, SubagentRuns(count)) => "\{count} ejecuciones de subagentes"
-    (SimplifiedChinese, SubagentRuns(count)) => "\{count} 次子智能体运行"
-    (TraditionalChinese, SubagentRuns(count)) =>
-      "\{count} 次子代理程式執行"
-    (Japanese, SubagentRuns(count)) =>
-      "\{count} 件のサブエージェント実行"
     (English, RenameLabel) => "Rename…"
     (Spanish, RenameLabel) => "Cambiar nombre…"
     (SimplifiedChinese, RenameLabel) => "重命名…"
@@ -84,11 +80,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "此對話來源不支援永久刪除"
     (Japanese, DeleteUnavailable) =>
       "このチャットのソースは完全削除に対応していません"
-    (English, LoadingConversation) => "Loading conversation"
-    (Spanish, LoadingConversation) => "Cargando conversación"
-    (SimplifiedChinese, LoadingConversation) => "正在加载对话"
-    (TraditionalChinese, LoadingConversation) => "正在載入對話"
-    (Japanese, LoadingConversation) => "チャットを読み込み中"
+    (English, LoadingMessages) => "Loading messages"
+    (Spanish, LoadingMessages) => "Cargando mensajes"
+    (SimplifiedChinese, LoadingMessages) => "正在加载消息"
+    (TraditionalChinese, LoadingMessages) => "正在載入訊息"
+    (Japanese, LoadingMessages) => "メッセージを読み込み中"
     (English, ConversationLoadFailed) => "Conversation failed to load"
     (Spanish, ConversationLoadFailed) => "No se pudo cargar la conversación"
     (SimplifiedChinese, ConversationLoadFailed) => "对话加载失败"
@@ -125,5 +121,40 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, EndedUnread) => "已结束 — 未读"
     (TraditionalChinese, EndedUnread) => "已結束 — 未讀"
     (Japanese, EndedUnread) => "終了済み — 未読"
+    (English, PullRequestOpen) => "Open pull request"
+    (Spanish, PullRequestOpen) => "Pull request abierto"
+    (SimplifiedChinese, PullRequestOpen) => "打开的 PR"
+    (TraditionalChinese, PullRequestOpen) => "開啟中的 PR"
+    (Japanese, PullRequestOpen) => "オープン中の PR"
+    (English, PullRequestDraft) => "Draft pull request"
+    (Spanish, PullRequestDraft) => "Pull request en borrador"
+    (SimplifiedChinese, PullRequestDraft) => "草稿 PR"
+    (TraditionalChinese, PullRequestDraft) => "草稿 PR"
+    (Japanese, PullRequestDraft) => "ドラフト PR"
+    (English, PullRequestMerged) => "Merged pull request"
+    (Spanish, PullRequestMerged) => "Pull request fusionado"
+    (SimplifiedChinese, PullRequestMerged) => "已合并的 PR"
+    (TraditionalChinese, PullRequestMerged) => "已合併的 PR"
+    (Japanese, PullRequestMerged) => "マージ済みの PR"
+    (English, PullRequestClosed) => "Closed pull request"
+    (Spanish, PullRequestClosed) => "Pull request cerrado"
+    (SimplifiedChinese, PullRequestClosed) => "已关闭的 PR"
+    (TraditionalChinese, PullRequestClosed) => "已關閉的 PR"
+    (Japanese, PullRequestClosed) => "クローズ済みの PR"
+    (English, PullRequestAttached) => "Attached pull request"
+    (Spanish, PullRequestAttached) => "Pull request adjunto"
+    (SimplifiedChinese, PullRequestAttached) => "已关联的 PR"
+    (TraditionalChinese, PullRequestAttached) => "已關聯的 PR"
+    (Japanese, PullRequestAttached) => "関連付けられた PR"
+    (English, PullRequestSummaryMulti(count, state)) =>
+      "\{count} pull requests (\{state})"
+    (Spanish, PullRequestSummaryMulti(count, state)) =>
+      "\{count} pull requests (\{state})"
+    (SimplifiedChinese, PullRequestSummaryMulti(count, state)) =>
+      "\{count} 个 PR（\{state}）"
+    (TraditionalChinese, PullRequestSummaryMulti(count, state)) =>
+      "\{count} 個 PR（\{state}）"
+    (Japanese, PullRequestSummaryMulti(count, state)) =>
+      "\{count} 件の PR（\{state}）"
   }
 }

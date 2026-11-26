@@ -272,37 +272,36 @@ test "retiring another draft preserves a cached Codex conversation's actions" {
 }
 
 ///|
-fn CodexPermissionPicker::confirmation_dialog(
+pub fn permission_dialog(
   locale~ : @i18n.Locale = English,
-  self : CodexPermissionPicker,
   dispatch : @cmd.Emit[Msg],
-) -> @html.Html? {
-  guard self is CodexPermissionConfirmingFullAccess(_) else { return None }
-  let cancel = dispatch(CancelFullAccess)
-  Some(
-    @rui.dialog(
-      id="codex-permission-dialog",
-      class="dialog-size-small",
-      show_close=false,
-      on_cancel=cancel,
-      attrs=@html.Attrs::build().aria_label(ui(locale, EnableFullCodex)),
-      [
-        @rui.dialog_header(@rui.dialog_title(ui(locale, EnableFullQuestion))),
-        @html.div(ui(locale, FullAccessWarning)),
+) -> @html.Html {
+  @rui.dialog(
+    id="codex-permission-dialog",
+    class="dialog-size-small",
+    show_close=false,
+    on_close=_ => dispatch(CancelFullAccess),
+    attrs=@html.Attrs::build().aria_label(ui(locale, EnableFullCodex)),
+    [
+      @rui.dialog_header(@rui.dialog_title(ui(locale, EnableFullQuestion))),
+      @html.div(ui(locale, FullAccessWarning)),
+      @html.form(
+        method_="dialog",
         @rui.dialog_footer([
           @html.button(
             class="button secondary",
-            on_click=cancel,
+            type_="submit",
             ui(locale, CancelLabel),
           ),
           @html.button(
             class="button danger",
+            type_="button",
             on_click=dispatch(ConfirmFullAccess),
             ui(locale, EnableFullAccess),
           ),
         ]),
-      ],
-    ),
+      ),
+    ],
   )
 }
 
@@ -393,14 +392,6 @@ pub fn State::composer_input(
   {
     identity: self.composer_identity(context.channel),
     draft: { task: self.draft, mentions: self.mentions, images: self.images, },
-    // Before the first real User item arrives, the only honest progress fact
-    // is that this accepted local submission is starting. Later Codex turns
-    // can overlap, so no broader single-turn heartbeat is inferred here.
-    run: if self.waiting_for_first_user_item() {
-      Some({ stage: @composer.Starting, started_ms: None, tokens: 0, })
-    } else {
-      None
-    },
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [
       {

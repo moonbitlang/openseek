@@ -21,6 +21,32 @@ test "client endpoint defaults follow selected model" {
 }
 
 ///|
+/// The agent loop plans against the client model's context window.
+test "client context window follows the model" {
+  assert_eq(@client.Client(api_key="test-key").context_window(), 1_000_000)
+  assert_eq(
+    @client.Client(api_key="test-key", model=Kimi(K27Code)).context_window(),
+    262_144,
+  )
+  // A model this build does not ship, as the desktop host saves it: the entry's
+  // own window travels with the run and wins over the table.
+  assert_eq(
+    @client.Client(
+      api_key="test-key",
+      model=@deepseek.Model::parse("gemini-4-hydrogen"),
+    ).context_window(),
+    1_000_000,
+  )
+  assert_eq(
+    @client.Client(
+      api_key="test-key",
+      model=Custom("gemini-4-hydrogen", context_window=131_072),
+    ).context_window(),
+    131_072,
+  )
+}
+
+///|
 test "client debug redacts api key" {
   let client = @client.Client(
     api_key="test-key",

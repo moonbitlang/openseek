@@ -373,7 +373,23 @@ fn forget_ssh(
   } else {
     (@cmd.none, next)
   }
-  (@cmd.batch([focus, ssh_restore_focus()]), next)
+  (
+    @cmd.batch([
+      focus,
+      if !ui.editor_open {
+        @dialog.close("ssh-modal")
+      } else {
+        @cmd.none
+      },
+      if model.project_picker is Some(picker) && picker.channel() == channel {
+        @dialog.close("project-picker-dialog")
+      } else {
+        @cmd.none
+      },
+      ssh_restore_focus(),
+    ]),
+    next,
+  )
 }
 
 ///|
@@ -485,6 +501,7 @@ fn update_ssh(
       (
         @cmd.batch([
           ssh_remember_focus(),
+          @dialog.close("project-picker-dialog"),
           @dialog.show("ssh-modal"),
           ssh_focus("ssh-command"),
         ]),
@@ -506,7 +523,9 @@ fn update_ssh(
         },
       )
     Close => {
-      guard !ui.busy else { return (@cmd.none, model) }
+      guard (ui.editor_open || ui.details is Some(_)) && !ui.busy else {
+        return (@cmd.none, model)
+      }
       if ui.remove_confirm is Some(_) {
         return update_ssh(dispatch, CancelRemove, model)
       }
@@ -785,7 +804,15 @@ fn update_ssh(
         model,
       )
       (
-        @cmd.batch([cmd, ssh_connect(dispatch, id, disconnect=true, attempt~)]),
+        @cmd.batch([
+          cmd,
+          if !ui.editor_open && ui.intents.get(id) == Some(WorkspaceConnect) {
+            @dialog.close("ssh-modal")
+          } else {
+            @cmd.none
+          },
+          ssh_connect(dispatch, id, disconnect=true, attempt~),
+        ]),
         model,
       )
     }
@@ -803,7 +830,14 @@ fn update_ssh(
             details: Some(id),
           },
         })
-        return (@cmd.batch([@dialog.show("ssh-modal"), connect]), model)
+        return (
+          @cmd.batch([
+            @dialog.close("project-picker-dialog"),
+            @dialog.show("ssh-modal"),
+            connect,
+          ]),
+          model,
+        )
       }
       let model = {
         ..model,
@@ -818,7 +852,7 @@ fn update_ssh(
       }
       let (cmd, model) = focus_channel(dispatch, model, channel)
       let (next, model) = update(dispatch, PickProject(channel), model)
-      (@cmd.batch([cmd, next]), model)
+      (@cmd.batch([@dialog.close("ssh-modal"), cmd, next]), model)
     }
     Event(value) => {
       let envelope : @protocol.SshEvent = @json.from_json(value) catch {
@@ -1037,6 +1071,15 @@ fn update_ssh(
         let (cmd, model) = (
           @cmd.batch([
             cmd,
+            if !ui.editor_open &&
+              (
+                (return_to_entry && ui.return_details is None) ||
+                ui.intents.get(id) == Some(WorkspaceConnect)
+              ) {
+              @dialog.close("ssh-modal")
+            } else {
+              @cmd.none
+            },
             if return_to_entry && ui.return_picker is Some(_) {
               @dialog.show("project-picker-dialog")
             } else {
@@ -1366,6 +1409,16 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let content : Array[@html.Html] = []
   let actions : Array[@html.Html] = []
   let mut title = ssh_text(locale, AddHost)
+  // These requests mean “stay here” (busy), “go back”, or “cancel the
+  // connection”. All other dismissals can use the native dialog default.
+  let stay = ui.busy ||
+    ui.remove_confirm is Some(_) ||
+    ui.return_details is Some(_) ||
+    (
+      ssh_visible_host(ui) is Some(id) &&
+      ui.connecting.contains(id) &&
+      ui.intents.get(id) == Some(DetailsConnect)
+    )
   if ui.editor_open {
     let draft = ssh_draft(ui)
     let editing = ui.editing is Some(_)
@@ -1467,7 +1520,11 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.button(
             class="button secondary",
             disabled=ui.busy,
-            on_click=dispatch(Ssh(Close)),
+            on_click=if stay {
+              dispatch(Ssh(Close))
+            } else {
+              @dialog.close("ssh-modal")
+            },
             if connecting {
               ssh_text(locale, CancelConnection)
             } else {
@@ -1596,12 +1653,21 @@ fn ssh_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     } else {
       "any"
     },
-    on_cancel=dispatch(Ssh(Close)),
+    on_cancel?=if stay { Some(dispatch(Ssh(Close))) } else { None },
+    on_close=_ => {
+      // Auth input is DOM-only; do not retain an unsubmitted secret in the closed dialog.
+      ignore(ssh_take_secret())
+      dispatch(Ssh(Close))
+    },
     attrs=@html.Attrs::build()
       .aria_labelledby("ssh-modal-title")
       .on_submit(event => {
-        event.prevent_default()
-        dispatch(Ssh(Close))
+        if stay {
+          event.prevent_default()
+          dispatch(Ssh(Close))
+        } else {
+          @cmd.none
+        }
       })
       .on_keydown(event => {
         if event.key() == "Enter" &&

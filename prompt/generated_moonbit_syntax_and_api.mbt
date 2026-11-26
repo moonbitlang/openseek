@@ -18,11 +18,14 @@ fn moonbit_syntax_and_api() -> String {
     #|  comment, comes before the opening `---`.
     #|- Import every package it uses separately, core packages included and by
     #|  their real path: `moonbitlang/core/encoding/base64`, not
-    #|  `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
+    #|  `moonbitlang/core/base64` — `@builtin/ide.mbtx` with `args=["doc", "@base64"]` prints the path.
     #|- Use `fn main`. The entry point infers async and error effects. Import
     #|  `moonbitlang/core/async` only when using its APIs, such as `@async.sleep`.
     #|- Declare async helpers with `async fn` and write async calls directly.
     #|- Use `println` (no `print`).
+    #|
+    #|A successful `moon check` updates `pkg.generated.mbti` for checked local
+    #|packages whose preferred backend is included. Review the diff for public API changes.
     #|
     #|A minimal `moon check` script:
     #|
@@ -97,7 +100,9 @@ fn moonbit_syntax_and_api() -> String {
     #|
     #|## Shell EDSL with moonbitlang/core/async/shell
     #|
-    #|Use `@shell.Cmd` to run an external program and capture its output.
+    #|Use `@shell.Cmd` to run an external program and capture its output. Pass
+    #|`stdin=Text(s)`, `stdin=FromFile(path)`, or `stdin=Binary(bytes)` as labeled
+    #|arguments to `@shell.Cmd` (there is no `.stdin(...)` builder method).
     #|
     #|Shell utilities can be expressed in MoonBit, including on Windows:
     #|
@@ -144,12 +149,13 @@ fn moonbit_syntax_and_api() -> String {
     #|    "cli/rg@0.1.1", "--",
     #|    // A regex needle is one ordinary string element, so double the
     #|    // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
-    #|    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
+    #|     "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
     #|  ]).output()
-    #|  // For redirect with `Cmd(.., stdout=ToFile(...))` to a file under
+    #|  // Redirect input with `Cmd(prog, args, stdin=Text(s))` or `stdin=FromFile(p)`.
+    #|  // Redirect output with `Cmd(.., stdout=ToFile(...))` to a file under
     #|  // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
     #|  // directory, and that directory is the one place a snippet may write (`/tmp`
-    #|  // itself is refused)
+    #|  // itself is refused).
     #|
     #|  // `test` is a keyword, don't write `let test = ...`
     #|  // Slicing clamps instead of panicking, so this is safe on shorter output.
@@ -159,10 +165,11 @@ fn moonbit_syntax_and_api() -> String {
     #|}
     #|```
     #|
-    #|Use `moon ide doc @moonbitlang/core/async/shell` for a package API overview.
-    #|Use `moon ide doc '@moonbitlang/core/async/shell.<Type>'` for a specific type's
+    #|Use `@builtin/ide.mbtx` with `args=["doc", "@moonbitlang/core/async/shell"]`
+    #|for a package API overview, or
+    #|`args=["doc", "@moonbitlang/core/async/shell.<Type>"]` for a specific type's
     #|definition and documentation, as in
-    #|`moon ide doc @moonbitlang/core/async/shell.Stdin`.
+    #|`args=["doc", "@moonbitlang/core/async/shell.Stdin"]`.
     #|
     #|For compiler feedback, stream the line-delimited JSON from one `moon check`
     #|rather than collecting it and parsing it afterward:

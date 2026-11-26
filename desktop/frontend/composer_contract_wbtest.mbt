@@ -14,17 +14,10 @@ test "composer input is a projection instead of the root model" {
 }
 
 ///|
-test "the composer is handed the turn's facts, not a rendered row" {
+test "the composer retains the active turn identity without progress display" {
   let running = running_model()
   guard running.active_conversation() is Some(conv) else {
     fail("expected a running conversation")
-  }
-  // Facts only. The wording, the clock, and the tick that advances it belong
-  // to the component, so a span that changes every second costs one
-  // component's render instead of reprojecting every component's input.
-  guard running.composer_input().run
-    is Some({ stage: Thinking, started_ms: None, tokens: 0, }) else {
-    fail("expected the open turn's heartbeat facts")
   }
   assert_eq(
     running.composer_input().turn_id,
@@ -34,7 +27,6 @@ test "the composer is handed the turn's facts, not a rendered row" {
     },
   )
   let idle = running.replace_conversation({ ..conv, run: NoRun(ended=None), })
-  assert_eq(idle.composer_input().run, None)
   assert_eq(idle.composer_input().turn_id, None)
 }
 

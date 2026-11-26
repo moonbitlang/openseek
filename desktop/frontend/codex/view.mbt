@@ -176,7 +176,6 @@ fn SidebarContext::draft_input(
     // chip already names which agent the chat will start with.
     label: ui(locale, NewChat),
     nested,
-    subrun: false,
     active: self.selected,
     loading: false,
     load_failed: false,
@@ -184,8 +183,8 @@ fn SidebarContext::draft_input(
     openable: true,
     rename: None,
     run_mark: @conversation.NoRunMark,
+    pull_request: None,
     trailing: [],
-    children: [],
   }
 }
 
@@ -349,7 +348,6 @@ fn CodexThreadRow::archived_sidebar_input(
     title: self.cwd.unwrap_or(self.title.unwrap_or(ui(locale, NewChat))),
     label: self.title.unwrap_or(ui(locale, NewChat)),
     nested: false,
-    subrun: false,
     active: false,
     loading: false,
     load_failed: false,
@@ -357,8 +355,8 @@ fn CodexThreadRow::archived_sidebar_input(
     openable: false,
     rename: None,
     run_mark: @conversation.NoRunMark,
+    pull_request: None,
     trailing: [@conversation.Restore(title=ui(locale, RestoreCodex))],
-    children: [],
   }
 }
 
@@ -406,7 +404,6 @@ fn CodexThreadRow::sidebar_input(
     title: self.cwd.unwrap_or(self.title.unwrap_or(ui(locale, NewChat))),
     label: self.title.unwrap_or(ui(locale, NewChat)),
     nested,
-    subrun: false,
     active: selected,
     loading: false,
     load_failed: false,
@@ -414,8 +411,8 @@ fn CodexThreadRow::sidebar_input(
     openable: true,
     rename: None,
     run_mark,
+    pull_request: None,
     trailing: [@conversation.Archive(title=ui(locale, ArchiveCodex))],
-    children: [],
   }
 }
 
@@ -550,29 +547,21 @@ pub fn State::header(
 }
 
 ///|
-/// Conversation content and dialogs beneath the shell-owned header.
-pub fn State::page(
-  locale~ : @i18n.Locale = English,
+pub fn State::archive_dialog(
   self : State,
-  dispatch : @cmd.Emit[Msg],
-  actions : PageActions,
-) -> Array[@html.Html] {
-  let page : Array[@html.Html] = [actions.transcript, actions.composer]
-  if self.archive_confirm is Some(confirm) {
-    page.push(
-      @composer.WorktreeArchiveDialog::{
-        refusal: confirm.refusal,
-        conversation_noun: "task",
-        cancel: dispatch(CancelArchiveDiscard),
-        confirm: dispatch(ConfirmArchiveDiscard),
-      }.render(),
-    )
-  }
-  if self.permission_picker.confirmation_dialog(locale~, dispatch)
-    is Some(dialog) {
-    page.push(dialog)
-  }
-  page
+  locale~ : @i18n.Locale,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
+  @composer.worktree_archive_dialog(
+    locale~,
+    id="worktree-archive-dialog",
+    self.archive_confirm.map(confirm => @composer.WorktreeArchiveDialog::{
+      refusal: confirm.refusal,
+      conversation_noun: "task",
+      cancel: emit(CancelArchiveDiscard),
+      confirm: emit(ConfirmArchiveDiscard),
+    }),
+  )
 }
 
 ///|

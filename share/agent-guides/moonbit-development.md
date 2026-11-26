@@ -42,7 +42,6 @@ full diagnostics.
 - `moon cram test`: durable CLI transcript tests under `tests/cram`;
   use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
   Example: `moon cram test tests/cram`.
-- `moon info`: regenerate and inspect `.mbti` interface files.
 - `moon fmt`: format MoonBit sources before finishing. Example:
   `moon fmt --check parser`.
 - `moon build`: check build artifacts or backend-specific builds. Example:
@@ -88,7 +87,7 @@ example rather than guessing the flags.
 ## MoonBit Project Setup
 
 - Current MoonBit modules use `moon.mod`.
-- Create `moon.mod` before running `moon info`; otherwise `moon` may walk up to
+- Create `moon.mod` before running `moon check`; otherwise `moon` may walk up to
   an unrelated parent module.
 - `moon.mod` is the module manifest: keep module `name`, `version`,
   module-level dependency versions, `warnings`, and module options there.

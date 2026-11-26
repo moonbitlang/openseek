@@ -1633,3 +1633,49 @@ async test "an oversized tool result is clamped at the loop" {
     assert_true(clamped)
   }
 }
+
+///|
+/// The window the turn plans against is the launcher's, not the build's table:
+/// a model this build does not ship is saved with the endpoint's own number,
+/// and the host states that number for the run. 120_000 tokens is 12% of the 1M
+/// this build assumes for an unknown id — no pressure at all — and 92% of the
+/// 128K the launcher states, which must yield.
+///
+/// This test exercises the explicit window that the launcher passes to the agent.
+async test "a stated context window decides the ceiling" {
+  @async.with_task_group() <| group => {
+    let checkpoint_requests : Array[Json] = []
+    let mut main_step = 0
+    let handle = request => {
+      if is_checkpoint_request(request) {
+        checkpoint_requests.push(request)
+        Body(checkpoint_body("CEILING-SUMMARY"))
+      } else {
+        main_step += 1
+        Sse(sse_tool_call("call_1", "probe", 120_000))
+      }
+    }
+    guard auto_compact_test_server(group, handle) is Some(url) else { return }
+    let session = @agent_session.Session(
+        SessionId("launcher-window"),
+        system_prompt="system",
+      )
+      .append(User(UserMessage(Content([Text("prior question")]))))
+      .append(Terminal(Finished("prior answer")))
+    let result = @agent.run_turn_in_scope(
+      runtime=AgentRuntime(),
+      scope=AgentTaskScope(group),
+      api_key="test-key",
+      model=Custom("gemini-4-hydrogen", context_window=131_072),
+      session~,
+      content=Content([Text("keep grinding")]),
+      append_item=(session, item) => session.append(item),
+      api_url=url,
+      tools=probe_tools(["result-1"]),
+    )
+    assert_eq(main_step, 1)
+    assert_eq(checkpoint_requests.length(), 1)
+    assert_true(yield_notice(result).contains("[context ceiling]"))
+    assert_eq(summary_before_terminal(result).content(), "CEILING-SUMMARY")
+  }
+}

@@ -18,7 +18,7 @@ fn @deepseek.Model::label(self : @deepseek.Model) -> String {
     Deepseek(V4Flash) => "DeepSeek Flash"
     Glm(G53) => "GLM 5.3"
     Glm(G53Flash) => "GLM 5.3 Flash"
-    Kimi(_) => self.to_string()
+    Kimi(_) | Custom(_, ..) => self.to_string()
   }
 }
 
@@ -27,7 +27,9 @@ fn @deepseek.Model::label(self : @deepseek.Model) -> String {
 fn @deepseek.Model::supports_reasoning(self : @deepseek.Model) -> Bool {
   match self {
     Deepseek(_) | Glm(_) => true
-    Kimi(_) => false
+    // A user entry's own flag decides whether its reasoning control shows;
+    // the model alone cannot answer for an endpoint this build never saw.
+    Kimi(_) | Custom(_, ..) => false
   }
 }
 
@@ -124,7 +126,13 @@ test "engine models round-trip their wire names" {
   assert_true(parse_engine_model("glm-5.3") is Some(Glm(G53)))
   assert_true(@deepseek.Model::Glm(G53Flash).supports_reasoning())
   assert_true(@deepseek.Model::Deepseek(V4Flash).supports_reasoning())
-  assert_true(parse_engine_model(" custom-model ") is None)
+  // A name this build does not know is a user's own model, not a bad value:
+  // the id survives the round trip so the run can send it.
+  assert_true(
+    parse_engine_model(" custom-model ")
+    is Some(@deepseek.Custom("custom-model", ..)),
+  )
+  // A blank name has no endpoint that could serve it.
   assert_true(parse_engine_model("  ") is None)
 }
 
@@ -214,18 +222,12 @@ const SidebarModeStorageKey : String = "openseek.sidebar_mode"
 const CloudFollowupBehaviorStorageKey : String = "openseek.cloud_followup_behavior"
 
 ///|
-/// Every conversation set to request approval, so reopening one keeps
-/// asking. Only that choice is stored: a conversation missing here is
-/// auto-reviewed, which is also what a new conversation does — asking is
-/// opted into per conversation, never inherited from an unrelated one. Rows
-/// are keys (`conversation_storage_key`), newest first, capped at
-/// `ConversationApprovalsLimit`. Builds that asked by default stored the opposite
-/// list under `openseek.conversation_approvals`; it is no longer read, since
-/// every conversation it held is auto-reviewed now anyway.
+/// Non-default local conversation approval modes, newest first. Older values
+/// contain only the keys of conversations set to ask.
 const ConversationApprovalsStorageKey : String = "openseek.conversation_asks"
 
 ///|
-/// How many conversations remember that they ask for approval.
+/// How many conversations retain a non-default approval mode.
 /// Conversations are unbounded and this is one localStorage value, so the
 /// list is capped; past the cap the least recently chosen conversation
 /// forgets and is auto-reviewed, exactly like one the user never set to ask.
@@ -381,16 +383,35 @@ fn ApiProvider::default_model(self : ApiProvider) -> @deepseek.Model {
 }
 
 ///|
-/// Whether a model belongs to the selected provider. Custom endpoints accept
-/// every model; Kimi retains its existing endpoint selection.
+/// Whether a model belongs to the selected provider's family — the rule a fresh
+/// chat is aligned by, not the rule that says a model can run (see
+/// `Model::model_availability`). An entry names its own endpoint, so it belongs
+/// to the custom provider alone; a tier this build ships belongs to the family
+/// that serves it. Kimi retains its existing endpoint selection.
 fn @deepseek.Model::matches_provider(
   self : @deepseek.Model,
   provider : ApiProvider,
 ) -> Bool {
   match (provider, self) {
-    (Custom, _) | (_, Kimi(_)) => true
+    (Custom, Custom(_)) => true
+    (_, Kimi(_)) => true
     (Deepseek | OpenRouter, Deepseek(_)) | (Glm, Glm(_)) => true
     _ => false
+  }
+}
+
+///|
+fn provider_default_model_for(
+  provider : ApiProvider,
+  models : Array[@protocol.CustomModel],
+) -> @deepseek.Model {
+  match provider {
+    Custom =>
+      match models {
+        [first, ..] => custom_model_engine_model(first)
+        [] => provider.default_model()
+      }
+    _ => provider.default_model()
   }
 }
 
@@ -1074,6 +1095,10 @@ priv struct DeviceState {
   // Cleared only at BridgeReady, immediately before fresh live and archived
   // lists are requested for the new connection.
   archive_overrides : Array[ArchiveOverride]
+  // Per-session attached PR URLs synced via `session.artifacts_changed` or
+  // overview mutations newer than the last `session.list` reply. Cleared on
+  // BridgeReady before the fresh session list arrives.
+  session_pull_requests : Map[String, Array[String]]
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
   projects : Array[@common.Uri]
@@ -1119,6 +1144,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     sessions: [],
     archived: [],
     archive_overrides: [],
+    session_pull_requests: {},
     projects: [],
     project_catalog: None,
     chat_root: None,
@@ -1252,9 +1278,8 @@ priv struct Model {
   // unified model chip was last picked from, persisted page-locally. An
   // existing conversation never reads this — its agent is fixed at creation.
   default_agent : AgentChoice
-  // The conversations whose permission questions the person answers (see
-  // `ConversationApprovalsStorageKey`); a reviewer answers every other one.
-  asking_conversations : Array[String]
+  // Absent conversations use auto-review.
+  conversation_approval_modes : Array[(String, @protocol.OpenSeekApproval)]
   // The DeepSeek (and non-GLM custom-model) reasoning choice new chats start
   // from, and the fallback for a stored session that recorded none. GLM
   // keeps a separate preference below because its forced-thinking low mode
@@ -1271,6 +1296,9 @@ priv struct Model {
   // `DeviceState`.
   setup_api_key : String
   api_connection_probe : ApiConnectionProbe?
+  // The custom-model editor, open while `Some`. Its draft lives here rather
+  // than in the settings page so navigating cannot lose typed fields.
+  custom_model : CustomModelDraft?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
@@ -1635,6 +1663,8 @@ priv struct HostEndpoint {
 priv struct HostSettings {
   revision : Int32
   endpoint : HostEndpoint
+  // The models the user saved, in the order the host stores them.
+  models : Array[@protocol.CustomModel]
   // The default prompt for new chats: `builtin_moonbit_guide` or `custom`,
   // with the host's saved custom text either way.
   prompt_source : String
@@ -1876,9 +1906,10 @@ priv enum Msg {
   // The native window gained or lost OS focus. This is deliberately distinct
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
-  TestApiConnection
+  TestApiConnection(String?)
   ApiConnectionProbed(Int32, @protocol.ApiConnectionProbeReply)
   SaveApiKey
+  CustomModel(CustomModelMsg)
   OpenSchedules
   SchedulePage(SchedulePageMsg)
   OpenSkills
@@ -2561,6 +2592,11 @@ priv enum DeviceMsg {
   // The host saved a new list of this session's attached pull requests and
   // branches.
   ArtifactsChanged(String)
+  // Result of re-reading a session's attached artifacts for sidebar PR badges.
+  SessionArtifactsSynced(
+    session~ : String,
+    Result[@protocol.SessionArtifacts, String],
+  )
   Engine(String?, @wire.Event, session~ : String)
   // The exact local start request returned its run result. `accepted` is the
   // prompt's ownership receipt and can recover a Started notification lost on
@@ -2754,13 +2790,14 @@ fn initial_model(
     default_model: Deepseek(V4Flash),
     default_prompt: @prompt.Model::new(),
     default_agent: OpenSeekAgent,
-    asking_conversations: [],
+    conversation_approval_modes: [],
     openseek_reasoning: ThinkingHigh,
     glm_reasoning: ThinkingOff,
     max_steps: DefaultMaxSteps,
     cloud_followup_behavior: FollowupSteer,
     api_connection_probe: None,
     setup_api_key: "",
+    custom_model: None,
     is_desktop: desktop,
     is_android_app: android,
     window_focused: !desktop || @interop.page_has_focus(),
@@ -3117,16 +3154,19 @@ fn Model::host_settings_error(self : Model) -> String? {
 }
 
 ///|
-/// Show the setup dialog when `channel`'s settings left it open for the
-/// focused host; a background host's reply never raises it.
+/// Apply the focused host's setup decision after a settings change.
 fn Model::api_setup_dialog(
   self : Model,
   channel : @interop.ChannelId,
+  was_open~ : Bool,
 ) -> @cmd.Cmd {
-  if channel == self.focused && self.api_setup_open && !self.cloud_selected() {
+  guard channel == self.focused && self.api_setup_open != was_open else {
+    return @cmd.none
+  }
+  if self.api_setup_open {
     @dialog.show("api-setup-dialog")
   } else {
-    @cmd.none
+    @dialog.close("api-setup-dialog")
   }
 }
 
@@ -3233,23 +3273,32 @@ fn Model::align_new_chats_with_provider(
   channel : @interop.ChannelId,
 ) -> Model {
   guard self.device_state(channel) is Some(dev) &&
-    dev.host_settings.current is Some({ endpoint: { provider, .. }, .. }) else {
+    dev.host_settings.current
+    is Some({ endpoint: { provider, .. }, models, .. }) else {
     return self
   }
-  let next = if channel == self.focused &&
-    !self.default_model.matches_provider(provider) {
-    { ..self, default_model: provider.default_model(), }
+  let model_aligned = (model : @deepseek.Model) => {
+    match provider {
+      // On a custom endpoint, only models configured in its saved entries are
+      // served; removed or unconfigured ones fall forward to a saved entry.
+      Custom => find_custom_model(models, model) is Some(_)
+      _ => model.matches_provider(provider)
+    }
+  }
+  let fallback = provider_default_model_for(provider, models)
+  let next = if channel == self.focused && !model_aligned(self.default_model) {
+    { ..self, default_model: fallback, }
   } else {
     self
   }
-  let new_chat_model = if next.default_model.matches_provider(provider) {
+  let new_chat_model = if model_aligned(next.default_model) {
     next.default_model
   } else {
-    provider.default_model()
+    fallback
   }
   let conversations = next.conversations.map(conv => {
     if conv.device == channel &&
-      !conv.engine_model.matches_provider(provider) &&
+      !model_aligned(conv.engine_model) &&
       next.conversation_is_new_chat(conv) {
       { ..conv, engine_model: new_chat_model, }
     } else {
@@ -3278,7 +3327,7 @@ fn Model::reasoning_for(
 ) -> @protocol.Thinking {
   match engine_model {
     Glm(_) => self.glm_reasoning
-    Deepseek(_) | Kimi(_) => self.openseek_reasoning
+    Deepseek(_) | Kimi(_) | Custom(_, ..) => self.openseek_reasoning
   }
 }
 
@@ -3760,11 +3809,12 @@ fn Model::approval_for(
   session : String,
 ) -> @protocol.OpenSeekApproval {
   let key = conversation_storage_key(channel, session)
-  if self.asking_conversations.contains(key) {
-    ApprovalAsk
-  } else {
-    ApprovalReview
+  for (stored, mode) in self.conversation_approval_modes {
+    if stored == key {
+      return mode
+    }
   }
+  ApprovalReview
 }
 
 ///|
@@ -3777,8 +3827,8 @@ fn Model::with_approval(
 ) -> Model {
   {
     ..self,
-    asking_conversations: approvals_with(
-      self.asking_conversations,
+    conversation_approval_modes: approvals_with(
+      self.conversation_approval_modes,
       conversation_storage_key(channel, session),
       approval,
     ),
@@ -3786,20 +3836,16 @@ fn Model::with_approval(
 }
 
 ///|
-/// Fold one conversation's approval choice into the asking list: an ask
-/// moves the key to the front (dropping the oldest past the cap), a review
-/// removes it. Free-standing because the durable store folds the same way:
-/// a write merges into the rows already there rather than replacing them
-/// (see `save_conversation_approval`).
+/// Merge one choice into the persisted list and keep the most recent choices.
 fn approvals_with(
-  keys : Array[String],
+  rows : Array[(String, @protocol.OpenSeekApproval)],
   key : String,
   approval : @protocol.OpenSeekApproval,
-) -> Array[String] {
-  let merged : Array[String] = if approval is ApprovalAsk { [key] } else { [] }
-  for existing in keys {
-    if existing != key && merged.length() < ConversationApprovalsLimit {
-      merged.push(existing)
+) -> Array[(String, @protocol.OpenSeekApproval)] {
+  let merged = if approval is ApprovalReview { [] } else { [(key, approval)] }
+  for row in rows {
+    if row.0 != key && merged.length() < ConversationApprovalsLimit {
+      merged.push(row)
     }
   }
   merged
@@ -4280,29 +4326,20 @@ fn Conversation::visible_subruns(self : Conversation) -> Array[@subrun.Lane] {
 }
 
 ///|
-/// What the run is doing right now, as one line docked above the composer.
-/// `None` between runs — an idle conversation reports nothing.
-///
-/// Purely derived from the run phase, like `display_status`, so no handler
-/// has to keep a stored line in sync. Before the first reasoning delta this
-/// only knows the current step. Once reasoning arrives, the transcript itself
-/// becomes the progress indicator while this heartbeat continues to report
-/// elapsed time.
-/// The open turn as the composer's heartbeat row needs it: facts only. The
-/// wording, the clock, and the tick that advances it belong to the composer,
-/// so a span that changes every second costs one component's render instead
-/// of reprojecting every component's input once a second.
-fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
-  let stage : @composer.RunStage = match self.run {
+/// Baseline progress from the run phase and its reported step. Neither an
+/// open run nor a step event is evidence of a live reasoning stream.
+fn Conversation::run_heartbeat(
+  self : Conversation,
+) -> @transcript.RunHeartbeat? {
+  let (stage, step) : (@transcript.RunStage, Int32?) = match self.run {
     NoRun(..) => return None
-    Starting(..) => Starting
-    Open(stage=Opened, ..) => Thinking
-    Open(stage=AtStep(Some(step)), ..) => AtStep(step)
-    Open(stage=AtStep(None), ..) => Working
-    Open(stage=Cancelling, ..) => Stopping
+    Starting(..) => (Starting, None)
+    Open(stage=Opened, ..) => (Working, None)
+    Open(stage=AtStep(step), ..) => (Working, step)
+    Open(stage=Cancelling, ..) => (Stopping, None)
   }
   // A pending retry replaces the step wording; a Stop already sent still wins.
-  let stage : @composer.RunStage = if self.turn.retrying is Some(retrying) &&
+  let stage : @transcript.RunStage = if self.turn.retrying is Some(retrying) &&
     !(stage is Stopping) {
     Retrying(
       attempt=retrying.attempt,
@@ -4314,6 +4351,7 @@ fn Conversation::run_heartbeat(self : Conversation) -> @composer.RunHeartbeat? {
   }
   Some({
     stage,
+    step,
     started_ms: self.run_started_ms,
     tokens: self.turn.usage_tokens,
   })

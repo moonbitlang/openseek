@@ -42,9 +42,28 @@ fn scroll_path_row(id : String) -> Unit {
 pub fn view(
   locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
-  picker : State,
+  picker : State?,
   location? : @html.Html,
 ) -> @html.Html {
+  @rui.dialog(
+    id="project-picker-dialog",
+    class="dialog-size-medium dialog-scroll-layout",
+    close_label=ui(locale, ClosePicker),
+    on_close=_ => emit(Close),
+    attrs=@html.Attrs::build().aria_labelledby("project-picker-title"),
+    picker
+    .map(picker => picker_contents(locale, emit, picker, location))
+    .unwrap_or([]),
+  )
+}
+
+///|
+fn picker_contents(
+  locale : @i18n.Locale,
+  emit : @cmd.Emit[Msg],
+  picker : State,
+  location : @html.Html?,
+) -> Array[@html.Html] {
   let visible_entries = picker.visible_entries()
   let filter_active = !picker.path_filter().is_empty()
   let suggestion_active = picker.selected_path_suggestion() is Some(_)
@@ -111,63 +130,52 @@ pub fn view(
   } else {
     list_attrs
   }
-  @rui.dialog(
-    id="project-picker-dialog",
-    class="dialog-size-medium dialog-scroll-layout",
-    close_label=ui(locale, ClosePicker),
-    on_close=_ => emit(Close),
-    on_cancel=emit(Close),
-    attrs=@html.Attrs::build().aria_labelledby("project-picker-title"),
-    [
-      @rui.dialog_header([
-        @rui.dialog_title(
-          id="project-picker-title",
-          ui(locale, AddProjectTitle),
-        ),
-        @html.div(class="picker-subtitle", ui(locale, ChooseFolder)),
-      ]),
-      @html.div(
-        class="picker-content dialog-scroll-body dialog-content",
-        [
-          ..match location {
-            Some(control) => [control]
-            None => []
+  [
+    @rui.dialog_header([
+      @rui.dialog_title(id="project-picker-title", ui(locale, AddProjectTitle)),
+      @html.div(class="picker-subtitle", ui(locale, ChooseFolder)),
+    ]),
+    @html.div(
+      class="picker-content dialog-scroll-body dialog-content",
+      [
+        ..match location {
+          Some(control) => [control]
+          None => []
+        },
+        @html.div(class="picker-location-bar", [
+          match picker.path_draft {
+            Some(value) =>
+              path_editor(locale~, emit, picker, value, suggestion_active)
+            None => picker_breadcrumbs(locale~, emit, picker)
           },
-          @html.div(class="picker-location-bar", [
-            match picker.path_draft {
-              Some(value) =>
-                path_editor(locale~, emit, picker, value, suggestion_active)
-              None => picker_breadcrumbs(locale~, emit, picker)
-            },
-            @html.button(
-              class="picker-new-folder",
-              type_="button",
-              disabled=!can_create,
-              on_click=emit(BeginCreateFolder),
-              [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewFolder))],
-            ),
-          ]),
-          @html.div(class="picker-browser", [
-            @html.div(class="picker-list", attrs=list_attrs, [
-              @html.div(class="picker-list-heading", [
-                @html.span(ui(locale, NameLabel)),
-                @html.span(
-                  class="picker-list-count",
-                  if picker.loading {
-                    ui(locale, LoadingLabel)
-                  } else {
-                    folder_count_label
-                  },
-                ),
-              ]),
-              @html.div(class="picker-list-rows", rows),
+          @html.button(
+            class="picker-new-folder",
+            type_="button",
+            disabled=!can_create,
+            on_click=emit(BeginCreateFolder),
+            [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewFolder))],
+          ),
+        ]),
+        @html.div(class="picker-browser", [
+          @html.div(class="picker-list", attrs=list_attrs, [
+            @html.div(class="picker-list-heading", [
+              @html.span(ui(locale, NameLabel)),
+              @html.span(
+                class="picker-list-count",
+                if picker.loading {
+                  ui(locale, LoadingLabel)
+                } else {
+                  folder_count_label
+                },
+              ),
             ]),
+            @html.div(class="picker-list-rows", rows),
           ]),
-        ],
-      ),
-      picker_footer(locale~, emit, picker),
-    ],
-  )
+        ]),
+      ],
+    ),
+    picker_footer(locale~, emit, picker),
+  ]
 }
 
 ///|
@@ -349,7 +357,7 @@ fn picker_footer(
       @html.button(
         class="button secondary",
         type_="button",
-        on_click=emit(Close),
+        on_click=@dialog.close("project-picker-dialog"),
         ui(locale, CancelLabel),
       ),
       @html.button(

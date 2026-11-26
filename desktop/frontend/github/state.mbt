@@ -136,6 +136,7 @@ pub(all) enum Msg {
   CheckedOut(Int32, Result[@protocol.GithubCheckoutReply, String])
   ConfirmCheckout(@protocol.GithubCheckoutChanges)
   DismissCheckout
+  CheckoutDialogClosed
   ToggleCheckoutDetails
   CurrentLoaded(Int32, Result[@protocol.GithubCheckoutStatus, String])
   DetailLoaded(Int32, Result[@protocol.GithubPullRequestDetail, String])
@@ -251,6 +252,12 @@ pub fn reconcile(
   } else {
     (@cmd.none, next)
   }
+  let panel_cmd = if owner_changed &&
+    state.checkout is Some({ phase: Confirming, .. }) {
+    @cmd.batch([@dialog.close("github-checkout-dialog"), panel_cmd])
+  } else {
+    panel_cmd
+  }
   if next.checkout_busy() || review_busy {
     // Preserve the known PR during confirmation, but retire earlier reads.
     return (
@@ -357,9 +364,12 @@ pub fn update(
         !(changes is Ask) else {
         return (@cmd.none, state)
       }
-      request_checkout(emit, state, checkout, changes)
+      let (request, next) = request_checkout(emit, state, checkout, changes)
+      (@cmd.batch([@dialog.close("github-checkout-dialog"), request]), next)
     }
-    DismissCheckout => {
+    CheckoutDialogClosed if !(state.checkout is Some({ phase: Confirming, .. })) =>
+      (@cmd.none, state)
+    CheckoutDialogClosed | DismissCheckout => {
       guard !state.checking_out() else { return (@cmd.none, state) }
       let focus = match state.checkout {
         Some(checkout) => focus_checkout_action(checkout.number)

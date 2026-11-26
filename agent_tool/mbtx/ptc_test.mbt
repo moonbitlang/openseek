@@ -256,10 +256,9 @@ async test "PTC write and remove preserve existing permissions and deletion appr
       "allowed/source.mbt": "fn f() -> Int { 1 }",
     }).write_to(ws)
     @async.with_task_group(group => {
-      guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
-        is Ok(scope) else {
-        fail("scope")
-      }
+      let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+        "allowed",
+      ])
       let state = @agent_tool.FileStateMap()
       let asked : Array[String] = []
       let tools = @agent_tool.Tools([
@@ -334,10 +333,9 @@ async test "PTC write and remove preserve existing permissions and deletion appr
 async test "PTC write and remove approve individual scope escapes without lifting the script policy" {
   @vfs.with_tmpdir(ws => {
     @async.with_task_group(group => {
-      guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
-        is Ok(scope) else {
-        fail("scope")
-      }
+      let scope = @write_scope.WriteScope::create(root=ws, allowed_paths=[
+        "allowed",
+      ])
       let state = @agent_tool.FileStateMap()
       let asked : Array[String] = []
       let approval = @agent_runtime.ApprovalChannel(ask => {

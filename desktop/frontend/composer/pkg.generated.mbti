@@ -35,6 +35,8 @@ pub fn is_submit_shortcut(@dom.KeyboardEvent) -> Bool
 
 pub async fn stage_attachments(@interop.ChannelId, String, String, String, Array[@mention_context.MentionRef]) -> Unit
 
+pub fn worktree_archive_dialog(locale? : @i18n.Locale, id~ : String, WorktreeArchiveDialog?) -> @html.Html
+
 // Errors
 
 // Types and methods
@@ -283,7 +285,6 @@ pub(all) struct Input {
   identity : Identity
   draft : Draft
   goal : GoalInput
-  run : RunHeartbeat?
   turn_id : String?
   prediction_source : Int32?
   prediction : @openseek_protocol.PredictionRecord?
@@ -426,29 +427,6 @@ pub(all) enum ReplyContent {
 }
 
 #derive(Eq, @debug.Debug)
-pub(all) struct RunHeartbeat {
-  stage : RunStage
-  started_ms : Double?
-  tokens : Int32
-}
-pub fn RunHeartbeat::equal(Self, Self) -> Bool
-pub fn RunHeartbeat::not_equal(Self, Self) -> Bool
-pub fn RunHeartbeat::to_repr(Self) -> @debug.Repr
-
-#derive(Eq, @debug.Debug)
-pub(all) enum RunStage {
-  Starting
-  Thinking
-  AtStep(Int32)
-  Retrying(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
-  Working
-  Stopping
-}
-pub fn RunStage::equal(Self, Self) -> Bool
-pub fn RunStage::not_equal(Self, Self) -> Bool
-pub fn RunStage::to_repr(Self) -> @debug.Repr
-
-#derive(Eq, @debug.Debug)
 pub(all) enum RunningSubmit {
   Steer
   Queue
@@ -494,7 +472,6 @@ pub(all) struct WorktreeArchiveDialog {
   confirm : @cmd.Cmd
 }
 pub fn WorktreeArchiveDialog::message(locale? : @i18n.Locale, Self) -> String
-pub fn WorktreeArchiveDialog::render(locale? : @i18n.Locale, Self) -> @html.Html
 
 #derive(Eq, @debug.Debug)
 pub(all) enum WorktreeChoice {

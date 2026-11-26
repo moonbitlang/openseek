@@ -87,6 +87,10 @@ pub async fn configured_system_prompt(
   if agents_section is Some(section) {
     prompt <+ "\n\n\{section}"
   }
+  let memory_section = memory_prompt_section(cwd)
+  if memory_section is Some(section) {
+    prompt <+ "\n\n\{section}"
+  }
   // Workspace skills join the per-project tail after the environment
   // section: like the cwd they vary per project (and change when skills are
   // edited), so they must sit after all globally shared text to keep it
@@ -111,6 +115,118 @@ async fn agents_prompt_section(workspace_root : String) -> String? {
   let content = @utf8.decode(@fs.read_binary(path), ignore_bom=true)
   Some(
     "Project-specific instructions and guidelines:\n\n<project_instructions path=\"\{path}\">\n\{content}\n</project_instructions>",
+  )
+}
+
+///|
+/// Hard startup injection caps for `.openseek/memory/MEMORY.md`: whichever
+/// ceiling is reached first stops inclusion so durable memory cannot silently
+/// bloat every new turn's prompt.
+const MemoryMaxLines : Int32 = 200
+
+///|
+const MemoryMaxBytes : Int32 = 16_384
+
+///|
+priv struct TruncatedMemory {
+  body : String
+  truncated : Bool
+  shown_lines : Int32
+  used_bytes : Int32
+  total_lines : Int32
+  total_bytes : Int32
+}
+
+///|
+/// Truncate `content` to at most `max_lines` lines and `max_bytes` UTF-8 bytes
+/// without ever splitting a UTF-8 codepoint.
+fn truncate_memory(
+  content : String,
+  max_lines~ : Int32,
+  max_bytes~ : Int32,
+) -> TruncatedMemory {
+  let lines = [ for line in content.split("\n") => line.to_owned() ]
+  let total_lines = lines.length()
+  let total_bytes = @utf8.encode(content).length()
+  let out = StringBuilder()
+  let mut shown_lines = 0
+  let mut used_bytes = 0
+  let mut truncated = false
+  for line in lines {
+    if shown_lines >= max_lines {
+      truncated = true
+      break
+    }
+    let sep_bytes = if shown_lines > 0 { 1 } else { 0 }
+    let line_bytes = @utf8.encode(line).length()
+    if used_bytes + sep_bytes + line_bytes <= max_bytes {
+      if shown_lines > 0 {
+        out.write_char('\n')
+        used_bytes += 1
+      }
+      out.write_string(line)
+      used_bytes += line_bytes
+      shown_lines += 1
+    } else {
+      if shown_lines == 0 {
+        // First line alone exceeds budget: take as many whole chars as fit.
+        for ch in line {
+          let ch_bytes = @utf8.encode(ch.to_string()).length()
+          if used_bytes + ch_bytes > max_bytes {
+            break
+          }
+          out.write_char(ch)
+          used_bytes += ch_bytes
+        }
+        shown_lines = 1
+      }
+      truncated = true
+      break
+    }
+  }
+  {
+    body: out.to_string(),
+    truncated,
+    shown_lines,
+    used_bytes,
+    total_lines,
+    total_bytes,
+  }
+}
+
+///|
+/// Read the workspace's durable memory index (`.openseek/memory/MEMORY.md`),
+/// bounded to `MemoryMaxLines` lines and `MemoryMaxBytes` UTF-8 bytes.
+/// Missing files, directories, and blank files are omitted.
+async fn memory_prompt_section(workspace_root : String) -> String? {
+  let path = @workspace_path.join_child(
+    @workspace_path.join_child(
+      @workspace_path.join_child(workspace_root, ".openseek"),
+      "memory",
+    ),
+    "MEMORY.md",
+  )
+  guard @fs.exists(path) && @fs.kind(path) is Regular else { return None }
+  let content = @utf8.decode(@fs.read_binary(path), ignore_bom=true)
+  guard !content.trim().is_empty() else { return None }
+  let slice = truncate_memory(
+    content,
+    max_lines=MemoryMaxLines,
+    max_bytes=MemoryMaxBytes,
+  )
+  let tail = if slice.truncated {
+    "\n[truncated at \{slice.shown_lines} line(s), \{slice.used_bytes} UTF-8 bytes of \{slice.total_lines} line(s) / \{slice.total_bytes} bytes; read the full file on demand with @builtin/read.mbtx]"
+  } else {
+    ""
+  }
+  Some(
+    (
+      $|Project memory index (read linked files under `.openseek/memory/` such as `topics/*.md` or `skills/*/SKILL.md` on demand with `@builtin/read.mbtx`; verify recalled facts against current code before acting):
+      $|
+      $|<project_memory path="\{path}">
+      $|\{slice.body}\{tail}
+      $|</project_memory>
+    ),
   )
 }
 

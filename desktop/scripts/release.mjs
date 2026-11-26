@@ -417,14 +417,23 @@ export class Release {
     if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
   }
 
-  // The API serves this version as its one current Browser bundle: the same
-  // document at every page route, with its resources under /assets/, each
-  // compared with dist/browser.
+  // /cloud can rewrite the frontend module tag to load through a CDN.
+  // The versioned document and the current frontend asset expose the packaged bytes.
   async verifyConsole(bare) {
     const current = await this.fetchJson("/browser/releases/current.json", { auth: false });
     if (current?.version !== bare) throw new Error(`browser current.json version ${current?.version} is not ${bare}`);
+    const page = await this.fetch("/cloud", { auth: false });
+    if (!page.ok) throw new Error(`GET /cloud failed: HTTP ${page.status}`);
+    const html = await page.text();
+    const packaged = await readFile(join(this.dist, "browser/index.html"), "utf8");
+    if (html !== packaged) {
+      const direct = '<script type="module" src="/assets/frontend.js"></script>';
+      const normalized = html.replace(/<script type="module">[\s\S]*?<\/script>/g, script =>
+        script.includes("/assets/frontend.js") ? direct : script);
+      if (normalized !== packaged) throw new Error("GET /cloud did not serve the Browser entry page");
+    }
     for (const [file, path] of [
-      ["index.html", "/cloud"],
+      ["index.html", `/console/releases/v${bare}/index.html`],
       ["assets/frontend.js", "/assets/frontend.js"],
     ]) {
       const response = await this.fetch(path, { auth: false });

@@ -42,7 +42,7 @@ pub let app_language_set : Command[@protocol.UiLanguagePreference, @protocol.Emp
 
 pub let app_open_devtools : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
-pub let app_set_titlebar_theme : Command[@protocol.AppTitlebarThemePayload, @protocol.EmptyReply]
+pub let app_set_titlebar_style : Command[@protocol.AppTitlebarStylePayload, @protocol.AppTitlebarStyleReply]
 
 pub let app_system_appearance : Command[@protocol.EmptyPayload, @protocol.AppSystemAppearanceReply]
 
@@ -211,6 +211,8 @@ pub let github_drafts_set : Command[@protocol.GithubDrafts, @protocol.EmptyReply
 pub let github_list : Command[@protocol.GithubListPayload, @protocol.GithubListReply]
 
 pub let github_pull_request : Command[@protocol.GithubPullRequestPayload, @protocol.GithubPullRequestDetail]
+
+pub let github_pull_request_summaries : Command[@protocol.GithubPullRequestSummariesPayload, @protocol.GithubPullRequestSummariesReply]
 
 pub let github_pull_request_summary : Command[@protocol.GithubPullRequestSummaryPayload, @protocol.GithubPullRequestSummaryReply]
 

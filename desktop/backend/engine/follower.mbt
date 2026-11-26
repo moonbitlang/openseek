@@ -652,6 +652,7 @@ fn follower_test_config(
     key_env: "DEEPSEEK",
     api_url: None,
     model: "test",
+    context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1,

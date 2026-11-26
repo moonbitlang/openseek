@@ -212,9 +212,7 @@ fn WorktreeControl::render(
 }
 
 ///|
-/// The approval mode menu: "Request approval" while the person answers,
-/// "Auto-review" while the reviewer does. A change applies from the
-/// conversation's next start.
+/// The approval mode applies to the conversation's next engine start.
 fn ApprovalSelect::render(
   locale~ : @i18n.Locale = English,
   self : ApprovalSelect,
@@ -233,6 +231,9 @@ fn ApprovalSelect::render(
       ui(locale, AutoReviewDescription),
     ),
   ]
+  if identity.owner is Host(_) {
+    modes.push((@protocol.ApprovalYolo, "YOLO", ui(locale, YoloDescription)))
+  }
   let mut title = ui(locale, ApprovalLocked)
   if self.enabled {
     for mode in modes {
@@ -260,15 +261,10 @@ fn ApprovalSelect::render(
     open=self.open,
     toggle=action_emit(ApprovalMenuToggled(identity~)),
     dismiss=action_emit(SelectMenuDismissed(identity~)),
-    // The menu offers exactly the two wire values above.
     change=action_emit.map(value => {
       ApprovalSelected(
         identity~,
-        mode=if value == @protocol.ApprovalReview.wire() {
-          @protocol.ApprovalReview
-        } else {
-          @protocol.ApprovalAsk
-        },
+        mode=@protocol.OpenSeekApproval::parse(value).unwrap_or(self.mode),
       )
     }),
     title~,
@@ -826,41 +822,49 @@ pub fn dirty_paths_preview(
 }
 
 ///|
-pub fn WorktreeArchiveDialog::render(
+pub fn worktree_archive_dialog(
   locale~ : @i18n.Locale = English,
-  self : WorktreeArchiveDialog,
+  id~ : String,
+  prompt : WorktreeArchiveDialog?,
 ) -> @html.Html {
-  ignore(locale)
   @rui.dialog(
-    id="worktree-archive-dialog",
+    id~,
     class="dialog-size-small",
     show_close=false,
-    on_cancel=self.cancel,
-    attrs=@html.Attrs::build().aria_labelledby("worktree-archive-title"),
-    [
-      @rui.dialog_header(
-        @rui.dialog_title(
-          id="worktree-archive-title",
-          dynamic_text(
-            locale,
-            DArchiveQuestion(self.conversation_noun.to_string()),
+    on_close=_ => prompt.map(prompt => prompt.cancel).unwrap_or(@cmd.none),
+    attrs=@html.Attrs::build().aria_labelledby(id + "-title"),
+    if prompt is Some(self) {
+      [
+        @rui.dialog_header(
+          @rui.dialog_title(
+            id=id + "-title",
+            dynamic_text(
+              locale,
+              DArchiveQuestion(self.conversation_noun.to_string()),
+            ),
           ),
         ),
-      ),
-      @html.div(self.message(locale~)),
-      @rui.dialog_footer([
-        @html.button(
-          class="button secondary",
-          on_click=self.cancel,
-          ui(locale, KeepWorking),
+        @html.div(self.message(locale~)),
+        @html.form(
+          method_="dialog",
+          @rui.dialog_footer([
+            @html.button(
+              class="button secondary",
+              type_="submit",
+              ui(locale, KeepWorking),
+            ),
+            @html.button(
+              class="button primary",
+              type_="button",
+              on_click=self.confirm,
+              ui(locale, DiscardAndArchive),
+            ),
+          ]),
         ),
-        @html.button(
-          class="button primary",
-          on_click=self.confirm,
-          ui(locale, DiscardAndArchive),
-        ),
-      ]),
-    ],
+      ]
+    } else {
+      []
+    },
   )
 }
 
@@ -1046,73 +1050,6 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
       @html.div(class="composer-status composer-status-trailing", self.trailing),
     ]),
   ])
-}
-
-///|
-/// The open turn's heartbeat, docked directly above the textarea: what it is
-/// doing, how long it has been at it, and what it has spent.
-fn running_row(
-  locale~ : @i18n.Locale = English,
-  run : RunHeartbeat?,
-  clock_ms~ : Double,
-) -> @html.Html? {
-  ignore(locale)
-  guard run is Some(run) else { None }
-  Some(
-    @html.div(
-      class=if run.stage is Retrying(..) {
-        "composer-context-row composer-running error"
-      } else {
-        "composer-running"
-      },
-      [
-        @html.span(class="composer-running-mark", ""),
-        @html.span(class="composer-running-text", run.label(locale~, clock_ms~)),
-      ],
-    ),
-  )
-}
-
-///|
-/// The heartbeat as one line. Each half of the detail is reported only when
-/// genuinely known — an adopted run has no start this page witnessed, and a
-/// turn before its first usage report has no count — so both absent leaves
-/// the bare stage, which is still the one thing worth saying.
-fn RunHeartbeat::label(
-  locale~ : @i18n.Locale = English,
-  self : RunHeartbeat,
-  clock_ms~ : Double,
-) -> String {
-  let stage = match self.stage {
-    Starting => ui(locale, StartingLabel)
-    Thinking => ui(locale, ThinkingLabel)
-    AtStep(step) => dynamic_text(locale, DWorkingStep(step.to_string()))
-    Retrying(attempt~, max_attempts~, reason~) =>
-      dynamic_text(
-        locale,
-        DRetry(
-          attempt.to_string(),
-          max_attempts.to_string(),
-          reason.to_string(),
-        ),
-      )
-    Working => ui(locale, WorkingLabel)
-    Stopping => ui(locale, StoppingLabel)
-  }
-  let detail : Array[String] = []
-  if self.started_ms is Some(started) && clock_ms > started {
-    detail.push(@labels.duration(clock_ms - started))
-  }
-  if self.tokens > 0 {
-    detail.push(
-      dynamic_text(locale, DTokens(@labels.compact_count(self.tokens))),
-    )
-  }
-  if detail.is_empty() {
-    stage
-  } else {
-    "\{stage} (\{detail.join(" · ")})"
-  }
 }
 
 ///|

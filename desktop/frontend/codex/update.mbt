@@ -54,6 +54,21 @@ pub fn update(
 }
 
 ///|
+pub fn State::leave_confirmations(self : State) -> (@cmd.Cmd, State) {
+  (
+    @cmd.batch([
+      @dialog.close("codex-permission-dialog"),
+      @dialog.close("worktree-archive-dialog"),
+    ]),
+    {
+      ..self,
+      permission_picker: self.permission_picker.cancel_full_access(),
+      archive_confirm: None,
+    },
+  )
+}
+
+///|
 fn update_message(
   locale : @i18n.Locale,
   dispatch : @cmd.Emit[Msg],
@@ -90,7 +105,7 @@ fn update_message(
     ConfirmFullAccess =>
       if state.can_choose_permission() {
         (
-          @cmd.none,
+          @dialog.close("codex-permission-dialog"),
           {
             ..state,
             permission_picker: state.permission_picker.confirm_full_access(),
@@ -98,7 +113,7 @@ fn update_message(
         )
       } else {
         (
-          @cmd.none,
+          @dialog.close("codex-permission-dialog"),
           { ..state, permission_picker: state.permission_picker.close(), },
         )
       }
@@ -138,7 +153,11 @@ fn update_message(
     }
     ToggleGitDetails =>
       (
-        @cmd.none,
+        if state.permission_picker is CodexPermissionConfirmingFullAccess(_) {
+          @dialog.close("codex-permission-dialog")
+        } else {
+          @cmd.none
+        },
         {
           ..state,
           git_details_open: !state.git_details_open,
@@ -265,7 +284,10 @@ fn update_message(
       }
     ArchiveThread(thread_id) =>
       (
-        state.archive(dispatch, channel, thread_id, false),
+        @cmd.batch([
+          @dialog.close("worktree-archive-dialog"),
+          state.archive(dispatch, channel, thread_id, false),
+        ]),
         { ..state, archive_confirm: None, }.begin_foreground(
           CodexArchiveReply(thread_id),
         ),
@@ -290,7 +312,10 @@ fn update_message(
       match state.archive_confirm {
         Some(confirm) =>
           (
-            state.archive(dispatch, channel, confirm.thread_id, true),
+            @cmd.batch([
+              @dialog.close("worktree-archive-dialog"),
+              state.archive(dispatch, channel, confirm.thread_id, true),
+            ]),
             { ..state, archive_confirm: None, }.begin_foreground(
               CodexArchiveReply(confirm.thread_id),
             ),
@@ -581,13 +606,25 @@ fn update_message(
       let mut next = state
         .with_observed_steer_item(method_, params)
         .with_notification(method_, params, generation)
-      if !next.can_choose_permission() {
+      let close = if !next.can_choose_permission() {
+        let was_confirming = state.permission_picker
+          is CodexPermissionConfirmingFullAccess(_)
         next = { ..next, permission_picker: next.permission_picker.close(), }
+        if was_confirming {
+          @dialog.close("codex-permission-dialog")
+        } else {
+          @cmd.none
+        }
+      } else {
+        @cmd.none
       }
       if method_ == "skills/changed" {
         let invalidated = next.loading_context(true)
         return (
-          invalidated.load_skills(dispatch, channel, force_reload=false),
+          @cmd.batch([
+            close,
+            invalidated.load_skills(dispatch, channel, force_reload=false),
+          ]),
           invalidated,
         )
       }
@@ -615,7 +652,7 @@ fn update_message(
       } else {
         @cmd.none
       }
-      (cmd, next)
+      (@cmd.batch([close, cmd]), next)
     }
     ServerRequest(response_token~, request_id~, method_~, params~, generation~) =>
       (
@@ -1313,6 +1350,17 @@ test "Codex permission picker confirms full access and freezes while running" {
     open_external,
   )
   assert_eq(confirmed.permission_mode(), @protocol.FullAccess)
+  // Native form submission closes after the confirm click; close cleanup
+  // must not roll back the selected permission.
+  let (_, closed) = update(
+    dispatch,
+    CancelFullAccess,
+    confirmed,
+    @interop.ChannelId::Local,
+    open_external,
+  )
+  assert_eq(closed.permission_mode(), @protocol.FullAccess)
+  assert_true(closed.can_open_permission_menu())
 
   let running = State::from_thread_snapshot({
     "thread": {
@@ -1660,6 +1708,22 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
     _ => @cmd.none,
   )
   assert_true(cancelled.archive_confirm is None)
+  let (_, confirmed) = update(
+    dispatch,
+    ConfirmArchiveDiscard,
+    confirming,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, closed) = update(
+    dispatch,
+    CancelArchiveDiscard,
+    confirmed,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(closed.archive_confirm is None)
+  assert_true(closed.foreground is Some(CodexArchiveForeground("thread-1")))
   let rebuilt : CodexWorktree = {
     name: "wt-1",
     path: "/work/project/.worktrees/wt-1",

@@ -94,7 +94,7 @@ button.panel-toggle:not(:disabled):hover {
   flex: 0 0 auto;
   height: var(--topbar-height);
   padding: 0 var(--panel-toggle-reserved-width) 0 calc(var(--font-size-base) * 12 / 14);
-  border-bottom: 1px solid var(--color-seam);
+  box-shadow: var(--titlebar-section-divider);
   background: var(--color-bg-canvas);
 }
 
@@ -352,12 +352,6 @@ button.panel-toggle:not(:disabled):hover {
   transform: translateX(-50%);
   cursor: col-resize;
 }
-html.is-resizing-row {
-  cursor: row-resize;
-}
-html.is-resizing-col {
-  cursor: col-resize;
-}
 .file-panel-error.empty {
   display: none;
 }
@@ -378,24 +372,6 @@ html.is-resizing-col {
 }
 .content.panel-expanded .editor-resize-handle {
   display: none;
-}
-/* Resize handlers prevent selection at mousedown. Global user-select changes
-   make long transcripts expensive to resize even with offscreen rows skipped. */
-html.is-resizing {
-  cursor: col-resize;
-}
-
-/* Suppress viewer mouse hit testing during divider drags to avoid geometry
-   reads after size writes. Include descendants that re-enable pointer events,
-   but leave Desktop's divider handles interactive. */
-html:is(
-  .is-resizing,
-  .is-resizing-row,
-  .is-resizing-col,
-  .is-resizing-terminal,
-  .is-resizing-review
-) :is(.viewer-stack, .viewer-stack *) {
-  pointer-events: none !important;
 }
 
 /* ---------- dock: browser tabs, launcher, file picker ---------- */
@@ -1380,11 +1356,6 @@ button.review-section-header:hover,
 
 .review-split-handle.hidden {
   display: none;
-}
-
-html.is-resizing-review,
-html.is-resizing-review * {
-  cursor: row-resize;
 }
 
 .git-graph-header {
@@ -3598,7 +3569,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-inline-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 12; }
 .semantic-entry-editor-parent { position: relative; }
 .github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: var(--space-3) 0 var(--space-5); }
-.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-seam); border-radius: var(--radius-surface); overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
+.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-seam); border-radius: var(--radius-surface); overflow: hidden; font-family: var(--font-family-sans); font-size: var(--font-size-sm); line-height: 1.5; text-align: left; white-space: normal; }
 .github-review-thread + .github-review-thread { margin-top: var(--space-4); }
 .github-review-thread-location { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-5); color: var(--color-text-muted); font-size: var(--font-size-caption); background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-seam); }
 .github-review-thread.resolved .github-review-thread-location { border-bottom: 0; }
@@ -3619,7 +3590,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-thread-footer { padding: var(--space-5) var(--space-5); border-top: 1px solid var(--color-seam); background: var(--color-bg-subtle); }
 .github-review-composer { padding: var(--space-5); }
 .github-review-thread-footer .github-review-composer { padding: 0; }
-.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); color: var(--color-text); border: 1px solid var(--color-seam); border-radius: var(--radius-control); font: inherit; line-height: 1.5; }
+.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 2.5rem; resize: vertical; padding: var(--space-4) var(--space-5); background-color: var(--color-bg-canvas); color: var(--color-text); border: 1px solid var(--color-seam); border-radius: var(--radius-control); font: inherit; line-height: 1.5; }
 .github-review-input:focus { border-color: var(--color-focus-ring); outline: 1px solid var(--color-focus-ring); outline-offset: -1px; }
 .github-review-composer-actions { display: flex; justify-content: flex-end; gap: var(--space-4); padding-top: var(--space-5); }
 .github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: var(--space-2) var(--space-5); border: 1px solid var(--color-seam); border-radius: var(--radius-control); background: var(--color-bg-surface); cursor: pointer; font: inherit; }

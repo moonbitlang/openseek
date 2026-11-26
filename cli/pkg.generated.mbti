@@ -3,6 +3,7 @@ package "moonbitlang/openseek/cli"
 
 import {
   "moonbitlang/core/argparse",
+  "moonbitlang/openseek/deepseek",
 }
 
 // Values
@@ -11,6 +12,8 @@ pub fn agent_shared_options(global? : Bool) -> Array[@argparse.OptionArg]
 pub fn failure_message(StringView) -> StringView
 
 pub fn parse_positive_int(String, String) -> Int32 raise
+
+pub fn resolve_api_key(@deepseek.Model, @argparse.Matches) -> String?
 
 pub fn terminal_safe_line(String, limit? : Int32) -> String
 

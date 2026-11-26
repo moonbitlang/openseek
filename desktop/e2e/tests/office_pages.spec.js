@@ -52,7 +52,6 @@ test('PDF thumbnails paint real pages, navigate, follow scrolling, and rotate', 
   await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
   await expect(thumbnail(page, 2)).toHaveAttribute('data-painted', 'true');
   await expect.poll(() => thumbnail(page, 2).locator('canvas').evaluate(canvas => canvas.width > canvas.height)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Word thumbnails preserve SVG content and the live surface while navigating by click and keyboard', async ({ page }) => {
@@ -82,7 +81,6 @@ test('Word thumbnails preserve SVG content and the live surface while navigating
   await page.getByRole('button', { name: 'Hide page thumbnails', exact: true }).click();
   await expect(rail(page)).toBeHidden();
   expect(await page.evaluate(() => window.firstLiveWordPage === document.querySelector('#openseek-office-surface .word-page'))).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('long PDFs load nearby thumbnails and release the old navigator on document switches', async ({ page }) => {
@@ -105,7 +103,6 @@ test('long PDFs load nearby thumbnails and release the old navigator on document
   await openFile(app, 'book1.xlsx');
   await expect(page.locator('#openseek-office-pages')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Page thumbnails', exact: true })).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a narrow preview floats the page window without shrinking the live document', async ({ page }) => {
@@ -122,5 +119,4 @@ test('a narrow preview floats the page window without shrinking the live documen
   await page.getByRole('button', { name: 'Hide page thumbnails', exact: true }).click();
   await expect(page.locator('#openseek-office-pages')).toBeHidden();
   await expect(page.getByRole('spinbutton', { name: 'PDF page number', exact: true })).toHaveValue('3');
-  expect(app.pageErrors).toEqual([]);
 });

@@ -728,6 +728,12 @@ pub let github_pull_request_summary : Command[
 ] = Command("github.pull_request_summary")
 
 ///|
+pub let github_pull_request_summaries : Command[
+  @protocol.GithubPullRequestSummariesPayload,
+  @protocol.GithubPullRequestSummariesReply,
+] = Command("github.pull_request_summaries")
+
+///|
 pub let github_checkout : Command[
   @protocol.GithubCheckoutPayload,
   @protocol.GithubCheckoutReply,
@@ -878,11 +884,11 @@ pub let app_system_appearance : Command[
 ] = Command("app.system_appearance")
 
 ///|
-/// Set the native window theme without changing the system preference.
-pub let app_set_titlebar_theme : Command[
-  @protocol.AppTitlebarThemePayload,
-  @protocol.EmptyReply,
-] = Command("app.set_titlebar_theme")
+/// Apply the app header's style to this window, without changing the OS theme.
+pub let app_set_titlebar_style : Command[
+  @protocol.AppTitlebarStylePayload,
+  @protocol.AppTitlebarStyleReply,
+] = Command("app.set_titlebar_style")
 
 ///|
 /// Toggle this native desktop window between its maximized and restored

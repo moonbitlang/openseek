@@ -58,13 +58,12 @@ main {
   align-items: center;
   gap: var(--titlebar-control-gap);
   height: var(--topbar-height);
-  /* Balance the bottom divider to center controls on the full header. */
-  padding-block: 1px 0;
   padding-inline: var(--topbar-inline-padding);
   padding-inline-start: var(--main-titlebar-leading-inset);
   padding-inline-end: var(--main-titlebar-trailing-inset);
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
-  border-bottom: 1px solid var(--color-seam);
+  /* Paint the divider without moving the caption row's centerline. */
+  box-shadow: var(--titlebar-section-divider);
   background: var(--color-bg-canvas);
 }
 
@@ -108,7 +107,6 @@ main {
 
 .editor-tabsbar {
   gap: var(--titlebar-control-gap);
-  padding-block-start: 1px;
 }
 
 .topbar-title {

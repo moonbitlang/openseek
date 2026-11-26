@@ -19,6 +19,10 @@ fn default_api_url_for_model(model : @deepseek.Model) -> String {
     Kimi(_) => KimiDefaultApiUrl
     Glm(_) => GlmDefaultApiUrl
     Deepseek(_) => DeepSeekDefaultApiUrl
+    // A custom model requires an explicit endpoint from its launcher; this
+    // fallback is only reached by callers (such as unit tests) that inspect
+    // `Client::context_window` without sending a request.
+    Custom(_, ..) => DeepSeekDefaultApiUrl
   }
 }
 
@@ -78,7 +82,14 @@ fn encode_chat_request_for_endpoint(
 
 ///|
 fn supports_image_route(model : @deepseek.Model, api_url : String) -> Bool {
-  model is Deepseek(V4Flash) && api_url != OpenRouterChatCompletionsUrl
+  match model {
+    Deepseek(V4Flash) => api_url != OpenRouterChatCompletionsUrl
+    // The host resolves a user entry's own image capability and refuses a
+    // request that carries images past it, so the client cannot add a second,
+    // contradicting guess about an endpoint it has never seen.
+    Custom(_, ..) => true
+    _ => false
+  }
 }
 
 ///|
@@ -148,6 +159,12 @@ pub fn Client::Client(
     retry_backoff_ms,
     idle_timeout_ms,
   }
+}
+
+///|
+/// Context window in tokens for the model used by this client.
+pub fn Client::context_window(self : Client) -> Int32 {
+  self.model.context_window()
 }
 
 ///|

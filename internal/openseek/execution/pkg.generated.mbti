@@ -53,6 +53,7 @@ pub enum ApprovalPolicy {
   Ask
   Never
   Always
+  Yolo
   Review(ask_on_escalate~ : Bool)
 }
 

@@ -217,15 +217,14 @@ fn default_prompt_zh() -> String {
     #|
     #|`mbtx` 既通过 `@shell.Cmd` 执行命令，也用于读取和转换文件、解析 JSON、计算以及快速验证语言或 API 用法。工具说明定义实际执行的进程与隔离约束；上述示例提供可用语法。探索时，在同一轮发出多个独立的 `mbtx` 调用，每个小程序验证一个假设，以便一轮获得结果，且单个失败不会阻塞其他结果。
     #|
-    #|自己的源码修改必须用按行定位、可审阅的 `edit`/`multi_edit`/`write`，不要让脚本重写文件。职责本就是重写源码的工具（`moon fmt`、`moon info`、`moon test --update`、`git checkout`）仍可正常运行。
+    #|自己的源码修改必须用按行定位、可审阅的 `edit`/`multi_edit`/`write`，不要让脚本重写文件。职责本就是重写源码的工具（`moon fmt`、`moon test --update`、`git checkout`）仍可正常运行。
     #|
     #|### 常用 `moon` 子命令
     #|
-    #|- `moon check`：类型检查，获取编译器反馈；支持 `--target` 和 `--diagnostic-limit <N>`。检查成功时，也会更新已检查且首选后端被覆盖的包的 `.mbti` 文件。
+    #|- `moon check`：类型检查，获取编译器反馈；支持 `--target` 和 `--diagnostic-limit <N>`。检查成功时，也会更新已检查且首选后端被覆盖的包的 `.mbti` 文件。查看差异，确认公开接口的变化符合预期。
     #|- `moon test`：运行定向或完整测试；先运行普通 `moon test`，再考虑 `moon test --update`。例如 `moon test parser --filter "Parser::*" --diagnostic-limit 5`，过滤器支持 glob。验证本地包代码必须采用这种方式：编写黑盒 `_test.mbt` 测试，再用 `--filter` 运行，绝不要通过 `moon run -e` 探测本地包（见下文）。保留但不运行的测试用 `#skip("reason")`：仍做类型检查，只有 `--include-skipped` 或隐含该选项的 `-i <index>` 才会运行；普通 `moon test --filter` 不会运行它。仅需解析、不需类型检查或运行的代码用 `#cfg(false)`，以结构化方式代替注释整段代码。
     #|- `moon run`：运行可执行包或验证 CLI；包路径在 `--` 前，程序参数在后。例如 `moon run --target native cmd/tomljson -- input.toml`，其中输入文件由 `write` 工具放入工作区。
     #|- `moon cram test`：运行 `tests/cram` 下长期保留的 CLI 交互记录测试；用 `mooncram` 块记录稳定的帮助信息、示例、stdout/stderr 和退出结果。例如 `moon cram test tests/cram`。
-    #|- `moon info`：重新生成并检查 `.mbti` 接口文件。
     #|- `moon fmt`：完成前格式化 MoonBit 源码。例如 `moon fmt --check parser`。
     #|- `moon build`：检查构建产物或特定后端构建。例如 `moon build --target native cmd/tool --diagnostic-limit 5`。
     #|- `moon doc` 和 `moon explain`：文档与诊断帮助。
@@ -453,7 +452,7 @@ fn default_prompt_zh() -> String {
     #|## MoonBit 项目设置
     #|
     #|- 当前 MoonBit 模块使用 `moon.mod`。
-    #|- 先创建 `moon.mod` 再运行 `moon info`，否则 `moon` 可能向上找到无关的父模块。
+    #|- 先创建 `moon.mod` 再运行 `moon check`，否则 `moon` 可能向上找到无关的父模块。
     #|- `moon.mod` 是模块清单，保存模块 `name`、`version`、模块级依赖版本、`warnings` 和模块选项。
     #|- 包是含有 `moon.pkg` 的目录。同一个包中的文件共享扁平命名空间，文件名不会创建模块。
     #|- `moon.pkg` 是包清单，保存包导入、导入别名、test/wbtest 导入、`supported_targets` 和 `"is-main"` 等包选项。不要将包导入或别名放入 `moon.mod`，也不要将模块依赖版本放入 `moon.pkg`。
@@ -760,7 +759,7 @@ fn default_prompt_zh() -> String {
     #|## 生成文件产物
     #|
     #|用于会话展示的产物写入 `<会话 scratch>/artifact/`。使用 Environment 中给出的实际 scratch 路径，并通过脚本参数显式传入输出路径；修改产物时使用新文件名。
-    #|在最终回答需要的位置使用 `openseek-file` 代码块，内容为 `scratch/artifact/文件名`。普通引用显示文件卡片，使用 `openseek-file artifact` 标记可将 HTML/SVG 显示为交互页面；存储、引用和通用打包方式见 `<bundled-resources>/artifact/README.md`。
+    #|在最终回答需要的位置使用 `openseek-file` 代码块，内容为 `scratch/artifact/文件名`。普通引用显示文件卡片，使用 `openseek-file artifact` 标记可将 HTML/SVG 显示为交互页面；存储、引用和通用打包方式见 `<bundled-resources>/visualization/artifacts.md`。
     #|用户要求保存在项目中的文件使用指定的工作区路径。
     #|
     #|## 交互式回答
@@ -769,7 +768,7 @@ fn default_prompt_zh() -> String {
     #|
     #|让组件初始状态就能使用。对于探索类组件，给出有意义的初始结果。
     #|
-    #|开始前读取 `<bundled-resources>/artifact/README.md` 和起始项目源码，使用普通 MoonBit/Rabbita 源文件、本地状态和事件编写组件。指南说明了 `init.mbtx`、`write.mbtx` 批量编辑、显式 scratch 路径和 `build.mbtx` 打包流程。检查应用，运行相关模型测试，再用打包脚本返回的文件代码块引用成品。正文中的数值示例应与已测试的模型一致，并给出输入组合。
+    #|开始前读取 `<bundled-resources>/visualization/artifacts.md` 和起始项目源码，使用普通 MoonBit/Rabbita 源文件、本地状态和事件编写组件。指南说明了 `init.mbtx`、`write.mbtx` 批量编辑、显式 scratch 路径和 `build.mbtx` 打包流程。检查应用，运行相关模型测试，再用打包脚本返回的文件代码块引用成品。正文中的数值示例应与已测试的模型一致，并给出输入组合。
     #|
     #|同一个起始项目也展示了如何使用 mathplotlib 制作交互图表。
     #|

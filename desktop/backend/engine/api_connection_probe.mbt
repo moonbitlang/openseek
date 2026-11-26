@@ -13,7 +13,23 @@ async fn resolve_api_connection_probe(
   }
   let settings = load_engine_settings(manager.runtime_dir)
   let endpoint = resolved_endpoint(settings)
-  let model = @deepseek.Model::parse(settings.provider.default_model())
+  let model = match payload.model {
+    None => @deepseek.Model::parse(settings.provider.default_model())
+    Some(id) => {
+      guard settings.provider is Custom &&
+        find_custom_model(settings.models, id) is Some(_) else {
+        raise EngineError(
+          "Model \{id} is no longer saved. Add it again to test the connection.",
+        )
+      }
+      @deepseek.Model::parse(id) catch {
+        _ =>
+          raise EngineError(
+            "Model \{id} has no name to test. Add it again to test the connection.",
+          )
+      }
+    }
+  }
   Client(
     api_key=endpoint.api_key,
     api_url?=endpoint.api_url,
@@ -56,4 +72,60 @@ pub async fn test_api_connection(
       None
     },
   }
+}
+
+///|
+async test "per-model connection probe resolves saved custom models and refuses unknown ids" {
+  with_settings_dir((_dir, manager) => {
+    let _ = update_settings(
+      manager,
+      {
+        provider: Some("custom"),
+        providers: Some({
+          "custom": {
+            api_url: Some("https://gateway.example/v1"),
+            api_key: Some("sk-custom"),
+          },
+        }),
+      },
+      models=[
+        {
+          id: "gateway-chat",
+          label: None,
+          context_window: @protocol.DefaultCustomModelContextWindow,
+        },
+      ],
+    )
+    let payload : (String?) -> @protocol.ApiConnectionProbePayload = model => {
+      revision: manager.settings_revision,
+      model,
+    }
+    let probed = resolve_api_connection_probe(
+      manager,
+      payload(Some("gateway-chat")),
+    )
+    assert_eq(
+      probed.model,
+      Custom(
+        "gateway-chat",
+        context_window=@protocol.DefaultCustomModelContextWindow,
+      ),
+    )
+    assert_eq(probed.api_url, "https://gateway.example/v1/chat/completions")
+    let provider_default = resolve_api_connection_probe(manager, payload(None))
+    assert_eq(
+      provider_default.api_url,
+      "https://gateway.example/v1/chat/completions",
+    )
+    let refusal = try {
+      ignore(resolve_api_connection_probe(manager, payload(Some("gone"))))
+      ""
+    } catch {
+      EngineError(message) => message
+      _ => "unexpected error"
+    }
+    assert_eq(
+      refusal, "Model gone is no longer saved. Add it again to test the connection.",
+    )
+  })
 }

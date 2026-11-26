@@ -133,7 +133,6 @@ test('minimal images open by default and preserve manual collapse across updates
       await app.openSession();
     }
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const retired of [false, true]) test(`minimal image collapse survives preceding PTC insertion (retired=${retired})`, async ({ page }) => {
@@ -175,7 +174,6 @@ for (const retired of [false, true]) test(`minimal image collapse survives prece
   await expect(preview.locator('img')).toBeHidden();
   await preview.locator('summary').click();
   await expect(preview.locator('img')).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('minimal transcript groups live tools and leaves answered turns with their answer', { tag: '@motion' }, async ({ page }) => {
@@ -252,7 +250,6 @@ test('minimal transcript groups live tools and leaves answered turns with their 
   await expect(stream.locator('.assistant-message-actions .assistant-message-time')).toHaveCount(1);
   await expect(stream).not.toContainText(/REASONING_SENTINEL|PARAMETER_SENTINEL|OUTPUT_SENTINEL|SCRIPT_SENTINEL/);
   await expect(stream.locator('.tool-call-tabs, .activity-thinking')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const replayed of [false, true]) test(`minimal transcript clears jump to latest when the answered turn fits the viewport${replayed ? ' on first history expansion' : ''}`, async ({ page }) => {
@@ -288,7 +285,6 @@ for (const replayed of [false, true]) test(`minimal transcript clears jump to la
   await expect(page.locator('#stream .minimal-call')).toHaveCount(0);
   await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight)).toBe(0);
   await expect(jump).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('minimal edits keep summaries and states while detailed mode retains diffs', async ({ page }, testInfo) => {
@@ -349,7 +345,6 @@ test('minimal edits keep summaries and states while detailed mode retains diffs'
   app.append('terminal', { kind: 'finished', message: 'Finished reviewing the edits.' });
   await expect(stream.getByText('Finished reviewing the edits.', { exact: true })).toBeVisible();
   await expect(stream.locator('.minimal-call, .editor-diff-preview')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('minimal job waits name their targets while pending and disappear after success', async ({ page }) => {
@@ -405,7 +400,6 @@ test('minimal job waits name their targets while pending and disappear after suc
   await expect(stream).not.toContainText('Wait for job bg-3 to complete');
   await expect(singleWait).toHaveCount(0);
 
-  expect(app.pageErrors).toEqual([]);
 });
 
 // Keep both tool payload shapes. Git inventory variants cannot affect this

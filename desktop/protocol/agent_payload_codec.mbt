@@ -186,7 +186,7 @@ pub impl ToJson for Thinking with fn to_json(self) {
 pub impl FromJson for OpenSeekApproval with fn from_json(json, path) {
   guard json is String(value) &&
     OpenSeekApproval::parse(value) is Some(approval) else {
-    raise JsonDecodeError((path, "expected ask or review"))
+    raise JsonDecodeError((path, "expected ask, review, or yolo"))
   }
   approval
 }

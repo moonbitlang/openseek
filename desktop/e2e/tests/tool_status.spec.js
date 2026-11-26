@@ -43,7 +43,6 @@ test('Codex partial output and result-only calls retain pending status until com
     await expect(row.getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
     await expect(row.locator('.tool-status-spinner')).toHaveCount(0);
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('tool success and failure preserve each call’s selected inputs and independent status', { tag: '@motion' }, async ({ page }) => {
@@ -111,5 +110,4 @@ test('tool success and failure preserve each call’s selected inputs and indepe
   // The second result must not overwrite the first call's outcome or tab choice.
   await expect(calls.first().getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
   await expect(calls.first().getByRole('radio', { name: 'Original JSON', exact: true })).toBeChecked();
-  expect(app.pageErrors).toEqual([]);
 });

@@ -36,7 +36,7 @@ fn Conversation::clear_progress(self : Conversation) -> Conversation {
 ///|
 pub fn Conversation::run_heartbeat(
   self : Conversation,
-) -> @composer.RunHeartbeat? {
+) -> @transcript.RunHeartbeat? {
   let stopping = self.control.map_or(false, control => {
       control.status == Stopping
     }) ||
@@ -44,7 +44,12 @@ pub fn Conversation::run_heartbeat(
       input.operation is Stop && Some(input.task_id) == self.task
     })
   if stopping {
-    Some({ stage: @composer.Stopping, started_ms: None, tokens: 0, })
+    Some({
+      stage: @transcript.Stopping,
+      step: self.heartbeat.bind(run => run.step),
+      started_ms: self.heartbeat.bind(run => run.started_ms),
+      tokens: self.heartbeat.map_or(0, run => run.tokens),
+    })
   } else {
     self.heartbeat.map(heartbeat => {
       ..heartbeat,
@@ -118,16 +123,14 @@ fn Conversation::live_progress(
         reasoning_frontier: self.durable_frontier(),
         heartbeat: self.heartbeat.map(heartbeat => {
           ..heartbeat,
-          stage: match step {
-            Some(step) => @composer.AtStep(step)
-            None => @composer.Working
-          },
+          stage: @transcript.Working,
+          step,
         }),
       }
     StreamRetry(attempt~, max_attempts~, reason~) =>
       {
         ..self.clear_streams(),
-        retrying: Some(@composer.Retrying(attempt~, max_attempts~, reason~)),
+        retrying: Some(@transcript.Retrying(attempt~, max_attempts~, reason~)),
       }
     Usage(prompt_tokens~, completion_tokens~) =>
       {

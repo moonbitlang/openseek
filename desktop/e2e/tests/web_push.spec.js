@@ -99,7 +99,6 @@ test('turning notifications on registers the worker and the subscription with th
   await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
   expect(calls[2]).toMatchObject({ path: 'subscription', method: 'DELETE', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture' } });
   expect(await page.evaluate(() => window.__push.unsubscribed)).toBe(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a relay without push shows no notifications row', async ({ page }) => {
@@ -111,7 +110,6 @@ test('a relay without push shows no notifications row', async ({ page }) => {
   await openAccountSettings(page);
   await expect(page.getByRole('region', { name: 'Account', exact: true })).toBeVisible();
   await expect(toggle(page)).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a site already denied reads as blocked', async ({ page }) => {
@@ -124,7 +122,6 @@ test('a site already denied reads as blocked', async ({ page }) => {
   await expect(page.getByText('Notifications are blocked in browser settings', { exact: true })).toBeVisible();
   await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
   await expect(toggle(page)).toBeDisabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('denying the prompt blocks without subscribing', async ({ page }) => {
@@ -138,7 +135,6 @@ test('denying the prompt blocks without subscribing', async ({ page }) => {
   await expect(page.getByText('Notifications are blocked in browser settings', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__push.subscription)).toBeNull();
   expect(calls).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a subscribed browser registers again with the relay when the page loads', async ({ page }) => {
@@ -158,7 +154,6 @@ test('a subscribed browser registers again with the relay when the page loads', 
   await expect(toggle(page)).toHaveAttribute('aria-checked', 'true');
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0]).toMatchObject({ method: 'PUT', body: { endpoint: 'https://fcm.googleapis.com/fcm/send/kept' } });
-  expect(app.pageErrors).toEqual([]);
 });
 
 // sw.js asks an open page to show a clicked notification's link in place and
@@ -186,5 +181,4 @@ test('an open page shows a notification link in place and declines a non-applica
   await expect(page).toHaveURL(/\/device\/device-b\/chat$/);
   expect(await page.evaluate(() => window.__sameDocument)).toBe(true);
   expect(await ask('/sw.js')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });

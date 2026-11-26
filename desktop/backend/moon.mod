@@ -5,7 +5,7 @@ version = "0.1.5"
 import {
   "tonyfettes/url@0.3.5",
   "moonbitlang/jsonl@0.2.1",
-  "moonbitlang/openseek_protocol@0.4.2",
+  "moonbitlang/openseek_protocol@0.4.3",
   "moonbit-community/pty@0.4.4",
   "moonbit-community/flate@0.10.0",
   "moonbit-community/skills@0.2.0",
@@ -13,7 +13,7 @@ import {
   "moonbitlang/async@0.22.10",
   "moonbitlang/moonback@0.8.10",
   "tonyfettes/xlog@0.5.1",
-  "moonbitlang/openseek@0.7.6",
+  "moonbitlang/openseek@0.7.7",
   "openseek_desktop@0.1.5",
   "Yoorkin/multipart@0.2.2",
 }

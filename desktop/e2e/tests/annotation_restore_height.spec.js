@@ -55,5 +55,4 @@ test('a multiline PDF annotation retains its height and position after scrolling
     expect(geometry.top).toBeGreaterThanOrEqual(geometry.min - 1);
     expect(geometry.bottom).toBeLessThanOrEqual(geometry.max + 1);
   }
-  expect(app.pageErrors).toEqual([]);
 });

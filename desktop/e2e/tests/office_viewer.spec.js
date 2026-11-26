@@ -44,7 +44,6 @@ test('saved citations show full feedback and keep the separate prompt', async ({
     'Show the browser fixture and explain the changes.',
   ]);
   await expect(sent.locator('script')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 async function applicationStyles(page) {
@@ -122,7 +121,6 @@ test('the sales demonstration workbook opens both sheets and quotes calculated c
   await expect(detail).toBeVisible();
   await expect(detail.locator('td[data-cell="E5"]')).toHaveText('¥23,880.00');
   expect(await applicationStyles(page)).toEqual(outsideStyles);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('file tabs render real DOCX and XLSX packages through the Office surface', async ({ page }) => {
@@ -170,7 +168,6 @@ test('file tabs render real DOCX and XLSX packages through the Office surface', 
   await expect(page.locator('td[data-cell="E11"]')).toHaveText('43');
   await expect(page.locator('td.formula-pending')).toHaveCount(0);
   await expect(page.locator('.word-page')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Word selections preview, cancel and accumulate only after confirmation', async ({ page }) => {
@@ -250,7 +247,6 @@ test('Word selections preview, cancel and accumulate only after confirmation', a
   expect(task).toContain('/workspace/docs/report.docx');
   expect(task).toContain('Explain the selected Office text');
   expect([...task.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)]).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Excel ranges preview cell contents and retain separately confirmed context', async ({ page }) => {
@@ -311,7 +307,6 @@ test('Excel ranges preview cell contents and retain separately confirmed context
   expect(selectedCells.selection.range).toBe('A1:B1');
   expect(task).toContain('Inspect the selected cells');
   expect([...task.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)]).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
 });
 
 
@@ -372,7 +367,6 @@ test('Word comments stay beside their source paragraphs and quote only after con
   await expect(rail).not.toHaveAttribute('open');
   await expect.poll(async () => (await rail.boundingBox()).width).toBeLessThan(sidebar.width);
   await expect(cards.first()).toBeHidden();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Excel annotation hides outside either horizontal edge and restores its draft', async ({ page }) => {
@@ -435,7 +429,6 @@ test('Excel annotation hides outside either horizontal edge and restores its dra
     await input.press('Escape');
     await expect(input).toBeHidden();
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('PowerPoint opens every slide with searchable text, cropped images and page navigation', async ({ page }) => {
@@ -501,5 +494,4 @@ test('PowerPoint opens every slide with searchable text, cropped images and page
   expect(params).toContain('pptx');
   expect(params).toContain('office-region');
   expect(params).toContain('Inspect this slide');
-  expect(app.pageErrors).toEqual([]);
 });

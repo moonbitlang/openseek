@@ -190,6 +190,56 @@ test "Cloud preserves submitted input and startup failure when the native log is
 }
 
 ///|
+test "Cloud recovery preserves a terminal-only reply as process output for just its task" {
+  let document = native_document([
+    { "kind": "user", "payload": { "content": "First" } },
+    {
+      "kind": "terminal",
+      "payload": { "kind": "finished", "message": "First answer" },
+    },
+    { "kind": "user", "payload": { "content": "Second" } },
+    { "kind": "assistant", "payload": { "content": "Checking" } },
+    {
+      "kind": "terminal",
+      "payload": { "kind": "finished", "message": "Second answer" },
+    },
+  ])
+  let first : Record = {
+    task_id: "first",
+    kind: "user",
+    data: {},
+    created_at: 1,
+    engine_sequence: Some(1),
+  }
+  let second = { ..first, task_id: "second", engine_sequence: Some(3), }
+  let conversation = {
+    ..Conversation::empty(),
+    document,
+    records: [
+      first,
+      second,
+      {
+        ..second,
+        kind: "task_finished",
+        engine_sequence: None,
+        data: { "status": "interrupted", "reason": "service restarted" },
+      },
+    ],
+  }
+  assert_true(
+    conversation.items(English)
+    is [
+      { kind: User(..), .. },
+      { kind: Answer("First answer"), .. },
+      { kind: User(..), .. },
+      { kind: Assistant(prose=Some("Checking"), ..), .. },
+      { kind: Assistant(prose=Some("Second answer"), finished=false, ..), .. },
+      { kind: Stopped("cancelled: service restarted"), .. },
+    ],
+  )
+}
+
+///|
 test "Cloud supplements a failed service turn after native history and removes the supplement when records arrive" {
   let document = native_document([
     { "kind": "user", "payload": { "content": "Earlier" } },

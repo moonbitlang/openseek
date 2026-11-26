@@ -49,7 +49,6 @@ test('new-tab menu stays anchored to plus in split, expanded and narrow panels',
   await menu.getByRole('menuitem', { name: 'Search', exact: true }).click();
   await expect(menu).toBeHidden();
   await expect(page.locator('.editor-tab.active')).toContainText('Search');
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const [action, remaining, active] of [
@@ -72,7 +71,6 @@ for (const [action, remaining, active] of [
     await expect(page.locator('.editor-tab.active')).toContainText(active);
     await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
     await expect(page.getByRole('button', { name: 'Restore panel', exact: true })).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -105,7 +103,6 @@ test('tab menu replaces sidebar menus, preserves selection and supports keyboard
   await menu.getByRole('menuitem', { name: 'Close All', exact: true }).click();
   await expect(tabs).toHaveCount(0);
   await expect(page.locator('.dock-launcher')).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const entry of ['menu', 'toolbar']) {
@@ -127,7 +124,6 @@ for (const entry of ['menu', 'toolbar']) {
     await page.getByRole('option', { name: /alpha\.mbt/ }).click();
     await expect(page.locator('.editor-tab.active')).toContainText('alpha.mbt');
     await expect(restore).toHaveAttribute('aria-pressed', 'true');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -147,7 +143,6 @@ for (const gesture of ['right-click', 'keyboard']) {
     await page.keyboard.press('Escape');
     await page.locator('.tab-add').click();
     await expect(page.locator('.dock-menu')).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -170,7 +165,6 @@ test('open tab menu follows live locale changes', async ({ page }) => {
     await expect(menu.getByRole('menuitem')).toHaveText(items);
     await expect(menu.getByRole('menuitem').first()).toHaveAttribute('title', closeTitle);
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 // Exercise the real frontend visibility commands with a simulated Proton
@@ -178,32 +172,7 @@ test('open tab menu follows live locale changes', async ({ page }) => {
 test('tab menu hides and restores the native browser view through the host bridge', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
-  await page.exposeFunction('dockDesktopRequest', request => {
-    app.requests.push(request);
-    if (request.method === 'app.system_appearance') return { dark: false };
-    return app.replyFor(request);
-  });
-  await page.addInitScript(() => {
-    const listeners = new Map();
-    const events = { on(name, callback) {
-      const callbacks = listeners.get(name) || new Set();
-      listeners.set(name, callbacks);
-      callbacks.add(callback);
-      return () => callbacks.delete(callback);
-    } };
-    window.__MoonBit__ = {
-      getTitlebarArea: async () => null,
-      app: events, events,
-      openseek: new Proxy({}, { get: (_, method) => async params => {
-        if (method === 'host.connect') {
-          for (const callback of listeners.get('openseek.agent.connected') || []) {
-            callback({ payload: { protocol: 6 } });
-          }
-        }
-        return window.dockDesktopRequest({ method, params });
-      } }),
-    };
-  });
+  await app.installNative();
   await page.goto('/index.html');
   await app.openSession();
   await app.openReview();
@@ -256,5 +225,4 @@ test('tab menu hides and restores the native browser view through the host bridg
     await expect(menu).toBeHidden();
     await expect.poll(visible).toBe(true);
   }
-  expect(app.pageErrors).toEqual([]);
 });

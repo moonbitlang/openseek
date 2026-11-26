@@ -71,3 +71,67 @@ test "a pull request page's address names its pull request" {
     assert_true(github_pull_request_summary_identity(url) is None)
   }
 }
+
+///|
+test "batch PR summary decoder handles partial errors and URL aliases" {
+  let pr1 = "https://github.com/o/r/pull/1"
+  let pr1_files = "https://github.com/o/r/pull/1/files"
+  let pr2 = "https://github.com/o/r/pull/2"
+  let pr3 = "https://github.com/o/r/pull/3"
+  guard github_pull_request_summary_identity(pr1) is Some(id1) &&
+    github_pull_request_summary_identity(pr2) is Some(id2) &&
+    github_pull_request_summary_identity(pr3) is Some(id3) else {
+    fail("expected valid identities")
+  }
+  let targets : Array[(Array[String], GithubReviewIdentity)] = [
+    ([pr1, pr1_files], id1),
+    ([pr2], id2),
+    ([pr3], id3),
+  ]
+  let response : Json = {
+    "data": {
+      "pr0": {
+        "pullRequest": {
+          "number": 1,
+          "title": "First PR",
+          "state": "OPEN",
+          "isDraft": true,
+          "url": pr1,
+          "baseRefName": "main",
+          "additions": 10,
+          "deletions": 2,
+          "changedFiles": 3,
+        },
+      },
+      "pr1": null,
+      "pr2": {
+        "pullRequest": {
+          "number": 3,
+          "title": "Merged PR",
+          "state": "MERGED",
+          "isDraft": false,
+          "url": pr3,
+          "baseRefName": "main",
+          "additions": 5,
+          "deletions": 1,
+          "changedFiles": 1,
+        },
+      },
+    },
+    "errors": [
+      { "path": ["pr1"], "message": "Could not resolve to a PullRequest" },
+    ],
+  }
+  let results : Map[String, @protocol.GitPullRequest] = Map([])
+  decode_pull_request_summaries_batch(response, targets, results)
+  assert_eq(
+    results.get(pr1).map(pr => (pr.number, pr.state, pr.draft)),
+    Some((1, "open", true)),
+  )
+  assert_eq(results.get(pr1_files).map(pr => pr.number), Some(1))
+  assert_true(results.get(pr2) is None)
+  assert_eq(
+    results.get(pr3).map(pr => (pr.number, pr.state, pr.draft)),
+    Some((3, "merged", false)),
+  )
+}

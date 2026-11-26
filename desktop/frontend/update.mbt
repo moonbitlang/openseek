@@ -199,7 +199,14 @@ fn focus_channel(
   // refetch reply arrives too late for a chat that was already sent. Its
   // committed prompt default refills the Settings editor the same way.
   (
-    @cmd.batch([focus_cmd, unwatch_cmd, catalogs_cmd]),
+    @cmd.batch([
+      @dialog.close("api-setup-dialog"),
+      @dialog.close("codex-permission-dialog"),
+      @dialog.close("worktree-archive-dialog"),
+      focus_cmd,
+      unwatch_cmd,
+      catalogs_cmd,
+    ]),
     next.receive_default_prompt().align_new_chats_with_provider(channel),
   )
 }
@@ -1776,6 +1783,23 @@ fn update(
     model
   }
   let (cmd, model) = update_msg(dispatch, msg, model)
+  let view : @protocol.CloudHistoryView = if model.minimal_transcript_effective() {
+    Minimal
+  } else {
+    Detail
+  }
+  let (cmd, model) = if model.cloud.history_view != view {
+    let (cloud, refresh) = model.cloud.switch_history_view(
+      view,
+      model.cloud_identity().map(owner => owner.session()),
+      model.chat_navigation_generation,
+      model.account.map(account => account.token),
+      dispatch.map(message => CloudAction(message)),
+    )
+    (@cmd.batch([cmd, refresh]), { ..model, cloud, })
+  } else {
+    (cmd, model)
+  }
   let model = match model.management_dialog {
     Some(Settings(section)) if !section.available(model) =>
       {
@@ -1796,11 +1820,14 @@ fn update(
     model
   }
   let model = model.restore_message_approvals()
-  let model = if model.artifact_followup is Some(followup) &&
+  let (cmd, model) = if model.artifact_followup is Some(followup) &&
     model.transcript_slot().map(slot => slot.key()) != Some(followup.slot) {
-    { ..model, artifact_followup: None, }
+    (
+      @cmd.batch([cmd, @dialog.close("artifact-followup-dialog")]),
+      { ..model, artifact_followup: None, },
+    )
   } else {
-    model
+    (cmd, model)
   }
   let model = if navigates {
     { ..model, management_dialog: None, }
@@ -2328,6 +2355,7 @@ fn update_msg(
     return (@cmd.batch([focus, connect]), model)
   }
   match msg {
+    CustomModel(sub) => model.update_custom_model(dispatch, sub)
     Init => {
       // Both pages boot the same console; they differ only in where its
       // device comes from. A browser console asks the relay who is signed
@@ -2396,7 +2424,7 @@ fn update_msg(
         !model.cloud.retired.contains(session) else {
         return (@cmd.none, model)
       }
-      update_cloud(dispatch, @cloud.Open(session), {
+      let (command, next) = update_cloud(dispatch, @cloud.Open(session), {
         ..model,
         screen: Chat,
         selected_conversation: Some(CloudSelection(account~, session~)),
@@ -2408,6 +2436,14 @@ fn update_msg(
         select_menu: None,
         sidebar_open: model.sidebar_open && !model.narrow,
       })
+      (
+        @cmd.batch([
+          @dialog.close("project-picker-dialog"),
+          @dialog.close("api-setup-dialog"),
+          command,
+        ]),
+        next,
+      )
     }
     Console(SignOutClicked) => sign_out_account(dispatch, model)
     Console(SignOutDone(token~)) => {
@@ -2538,7 +2574,7 @@ fn update_msg(
         minimal_transcript,
         default_model,
         default_agent,
-        asking_conversations: conversation_approvals
+        conversation_approval_modes: conversation_approvals
         .map(parse_conversation_approvals)
         .unwrap_or([]),
         openseek_reasoning,
@@ -2551,7 +2587,7 @@ fn update_msg(
       let next = next.align_new_chats_with_provider(next.focused)
       (
         @cmd.batch([
-          theme.apply(model.system_dark, model.is_desktop, dispatch),
+          theme.apply(model.system_dark),
           apply_app_font_size(app_font_size),
           codex_cmd,
           codex_effort_cmd,
@@ -2845,7 +2881,8 @@ fn update_msg(
               return (@cmd.none, model)
             }
             let edit = match action {
-              @composer.ApprovalSelected(mode~, ..) => @cloud.SetApproval(mode)
+              @composer.ApprovalSelected(mode~, ..) =>
+                @cloud.SetApproval(mode.wire())
               @composer.ModelSelected(value~, ..) => {
                 guard ModelChoice::parse(value)
                   is Some(OpenSeekModel(Deepseek(engine_model))) else {
@@ -4426,6 +4463,7 @@ fn update_msg(
         followup_behavior: None,
         prompt_source: source,
         custom_prompt: text,
+        models: None,
       }
       (
         push_host_settings(
@@ -4473,11 +4511,7 @@ fn update_msg(
       (
         @cmd.batch([
           push,
-          if next.api_setup_open && !next.cloud_selected() {
-            @dialog.show("api-setup-dialog")
-          } else {
-            @cmd.none
-          },
+          next.api_setup_dialog(model.focused, was_open=model.api_setup_open),
         ]),
         next,
       )
@@ -4834,7 +4868,10 @@ fn update_msg(
     ConfirmUpdateRestart =>
       if model.update_ux is ConfirmingRestart(version~) {
         (
-          apply_update(dispatch),
+          @cmd.batch([
+            @dialog.close("update-restart-dialog"),
+            apply_update(dispatch),
+          ]),
           { ..model, update_ux: RestartingForUpdate(version~), },
         )
       } else {
@@ -4895,7 +4932,7 @@ fn update_msg(
     OpenLocalApiSettings => {
       let (cmd, focused) = focus_channel(dispatch, model, Local)
       (
-        cmd,
+        @cmd.batch([cmd, @dialog.close("api-setup-dialog")]),
         {
           ..focused,
           management_dialog: Some(Settings(Engine)),
@@ -4907,7 +4944,7 @@ fn update_msg(
     }
     OpenSetup =>
       (
-        @cmd.none,
+        @dialog.close("api-setup-dialog"),
         {
           ..model,
           management_dialog: Some(Settings(General)),
@@ -4924,7 +4961,7 @@ fn update_msg(
         open_external=url => open_external_link(dispatch, url),
       )
       (
-        cmd,
+        @cmd.batch([cmd, @dialog.close("api-setup-dialog")]),
         {
           ..model,
           connectors,
@@ -4945,7 +4982,7 @@ fn update_msg(
     }
     SettingsSectionSelected(section) =>
       (
-        @cmd.none,
+        @dialog.close("api-setup-dialog"),
         {
           ..model,
           management_dialog: Some(Settings(section)),
@@ -4955,6 +4992,7 @@ fn update_msg(
       )
     CloseManagementDialog => (@cmd.none, { ..model, management_dialog: None, })
     Navigation(message) => update_navigation(dispatch, message, model)
+    DismissApiSetup if !model.api_setup_open => (@cmd.none, model)
     DismissApiSetup =>
       (
         @cmd.none,
@@ -5153,7 +5191,8 @@ fn update_msg(
         (cmd, { ..model, narrow, sidebar_open: !narrow, })
       }
     }
-    TestApiConnection => model.test_api_connection(dispatch)
+    TestApiConnection(model_id) =>
+      model.test_api_connection(dispatch, model_id~)
     ApiConnectionProbed(attempt, reply) => {
       guard model.api_connection_probe is Some(probe) &&
         probe.attempt == attempt &&
@@ -5195,14 +5234,21 @@ fn update_msg(
               }),
               setup_api_key: "",
             }
+            let next = next.settle_api_setup()
             (
-              push_host_settings(
-                dispatch,
-                model.focused,
-                api_key_settings_patch(provider, api_key),
-                model.focused_connection_generation(),
-              ),
-              next.settle_api_setup(),
+              @cmd.batch([
+                push_host_settings(
+                  dispatch,
+                  model.focused,
+                  api_key_settings_patch(provider, api_key),
+                  model.focused_connection_generation(),
+                ),
+                next.api_setup_dialog(
+                  model.focused,
+                  was_open=model.api_setup_open,
+                ),
+              ]),
+              next,
             )
           }
         }
@@ -5845,20 +5891,26 @@ fn update_msg(
           // the worktree's uncommitted changes. Same generation dance as
           // the plain archive click.
           guard model.device_state(confirm.channel) is Some(dev) else {
-            return (@cmd.none, { ..model, archive_confirm: None, })
+            return (
+              @dialog.close("chat-worktree-archive-dialog"),
+              { ..model, archive_confirm: None, },
+            )
           }
           let sessions_request_generation = dev.sessions_request_generation + 1
           let archived_request_generation = dev.archived_request_generation + 1
           (
-            archive_session(
-              dispatch,
-              confirm.channel,
-              confirm.session,
-              dev.connection_generation,
-              sessions_request_generation,
-              archived_request_generation,
-              force=true,
-            ),
+            @cmd.batch([
+              @dialog.close("chat-worktree-archive-dialog"),
+              archive_session(
+                dispatch,
+                confirm.channel,
+                confirm.session,
+                dev.connection_generation,
+                sessions_request_generation,
+                archived_request_generation,
+                force=true,
+              ),
+            ]),
             {
               ..model.replace_device({
                 ..dev,
@@ -6040,6 +6092,10 @@ fn update_msg(
         update(dispatch, PickProject(model.focused), model)
       }
     ProjectPicker(msg) => {
+      // SSH closes the native picker while keeping its browse state to resume.
+      if msg is @project_picker.Close && model.project_picker is None {
+        return (@cmd.none, model)
+      }
       // A suspended picker still owns its outstanding browse reply. Retain
       // that reply so cancelling SSH returns to a usable directory listing.
       if model.project_picker is None &&
@@ -6518,7 +6574,7 @@ fn update_msg(
         System =>
           (
             @cmd.batch([
-              System.apply(dark, model.is_desktop, dispatch),
+              System.apply(dark),
               browser_set_theme_for_pages(dispatch, model, dark),
             ]),
             model,
@@ -6541,7 +6597,7 @@ fn update_msg(
       } else {
         (
           @cmd.batch([
-            theme.apply(model.system_dark, model.is_desktop, dispatch),
+            theme.apply(model.system_dark),
             browser_set_theme_for_pages(
               dispatch,
               model,
@@ -7256,7 +7312,17 @@ fn update_msg(
         msg,
         model.changes,
       )
-      (cmd, { ..model, changes, })
+      let mut next = { ..model, changes, }
+      if msg is (Listed(_, ..) | Removed(_, _, _)) &&
+        changes.conversation is Some(conversation) &&
+        changes.phase is (Loaded(artifacts) | Reloading(artifacts)) &&
+        next.device_state(conversation.channel) is Some(dev) {
+        let urls = extract_pull_request_urls(artifacts)
+        next = next.replace_device(
+          dev.with_session_pull_requests(conversation.session, urls),
+        )
+      }
+      (cmd, next)
     }
     Github(msg) => {
       let completed = msg is @github.CheckedOut(epoch, _) &&
@@ -8152,6 +8218,7 @@ fn update_device_msg(
         archived_request_generation,
         projects_request_generation,
         archive_overrides: [],
+        session_pull_requests: {},
         project_catalog: None,
         // Worktree notifications are not replayed across a connection gap.
         // Keep every workspace blocked until this connection returns a fresh
@@ -8170,6 +8237,9 @@ fn update_device_msg(
         host_settings: HostSettingsMirror::loading(),
       })
       let model = if channel == model.focused {
+        if model.api_setup_open {
+          commands.push(@dialog.close("api-setup-dialog"))
+        }
         { ..model.reset_api_setup(), conversations, }
       } else {
         { ..model, conversations, }
@@ -8345,7 +8415,7 @@ fn update_device_msg(
         } else {
           next
         }
-        (next.api_setup_dialog(channel), next)
+        (next.api_setup_dialog(channel, was_open=model.api_setup_open), next)
       }
     }
     HostSettingsApplied(settings, connection_generation~) => {
@@ -8361,7 +8431,7 @@ fn update_device_msg(
       } else {
         next.flush_host_settings(channel)
       }
-      (next.api_setup_dialog(channel), next)
+      (next.api_setup_dialog(channel, was_open=model.api_setup_open), next)
     }
     HostSettingsSaveFailed(message, connection_generation~) => {
       guard connection_generation == dev.connection_generation else {
@@ -8375,7 +8445,10 @@ fn update_device_msg(
         dispatch,
         SaveSettings(message.to_string()),
       )
-      let commands = [notice, next.api_setup_dialog(channel)]
+      let commands = [
+        notice,
+        next.api_setup_dialog(channel, was_open=model.api_setup_open),
+      ]
       if settled {
         // No successful reply may follow to correct the optimistic form.
         // An authoritative get (same-revision statuses are accepted) restores
@@ -8771,6 +8844,18 @@ fn update_device_msg(
           }
         }
       }
+      let pr_urls = collect_session_pull_requests(
+        items,
+        dev.session_pull_requests,
+      )
+      let (pr_cmd, next) = batch_lookup_pull_requests(
+        dispatch,
+        channel,
+        pr_urls,
+        force=false,
+        next,
+      )
+      commands.push(pr_cmd)
       (@cmd.batch(commands), next)
     }
     ProjectsLoaded(
@@ -9090,12 +9175,20 @@ fn update_device_msg(
           !rows.any(row => row.sessions.contains(confirm.session)) => None
         other => other
       }
+      let close = if next.archive_confirm is Some(_) && archive_confirm is None {
+        @dialog.close("chat-worktree-archive-dialog")
+      } else {
+        @cmd.none
+      }
       let next = { ..next, conversations, archive_confirm, }
       // `worktree.create` commits and broadcasts the owner row before the
       // initiating frontend receives its turn reply. Apply the same accepted
       // snapshot transition as reconnect, so every frontend displaying this
       // Codex task moves its native roots together.
-      next.apply_codex_worktree_snapshot(dispatch, channel, workspace, rows)
+      let (command, next) = next.apply_codex_worktree_snapshot(
+        dispatch, channel, workspace, rows,
+      )
+      (@cmd.batch([close, command]), next)
     }
     WorktreeCreated(workspace~, name~, session~) => {
       // The chain's checkout exists: bind the composing conversation, so
@@ -9119,7 +9212,7 @@ fn update_device_msg(
       // changes; stage the discard-confirmation dialog, whose confirm
       // retries with force.
       (
-        @dialog.show("worktree-archive-dialog"),
+        @dialog.show("chat-worktree-archive-dialog"),
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
     DeleteStopped(key~, checkout~) =>
@@ -9525,6 +9618,7 @@ fn update_device_msg(
           workspace_name: "",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         }
         for live in dev.sessions {
           if key.matches(live) {
@@ -9829,6 +9923,26 @@ fn update_device_msg(
         return probe_pull_request(dispatch, model, channel, conv, current)
       }
       let model = model.replace_conversation(conv)
+      let model = if pull_request is Some(pr) {
+        let (_, changes) = @session_changes.update(
+          dispatch.map(msg => Changes(msg)),
+          RecordSummary({
+            number: pr.number,
+            title: pr.title,
+            state: match pr.state {
+              PullRequestOpen if pr.draft => Draft
+              PullRequestOpen => Open
+              PullRequestMerged => Merged
+              PullRequestClosed => Closed
+            },
+            url: pr.url,
+          }),
+          model.changes,
+        )
+        { ..model, changes, }
+      } else {
+        model
+      }
       // This answer may have named a base nobody knew when the diffstat beside
       // it was measured — the first pull request a session sees, or one that
       // has been retargeted since. Until it is measured again the popover
@@ -10315,13 +10429,36 @@ fn update_device_msg(
       (@cmd.none, { ..model, conversations: settled, })
     }
     ArtifactsChanged(session) => {
+      let key : @interop.ConversationKey = { channel, session, }
+      let owned_by_overview = model.changes.conversation == Some(key)
       let (cmd, changes) = @session_changes.update(
         dispatch.map(msg => Changes(msg)),
-        Changed({ channel, session, }),
+        Changed(key),
         model.changes,
       )
-      (cmd, { ..model, changes, })
+      // When the overview is already watching this conversation, its own
+      // `Listed` reply updates the sidebar too; otherwise sync any session
+      // shown in the sidebar so its PR badge stays live without extra RPCs.
+      let known_in_sidebar = dev.sessions.any(item => item.id == session) ||
+        model.find_conversation(channel, session) is Some(_)
+      let sync_cmd = if !owned_by_overview && known_in_sidebar {
+        sync_session_artifacts_cmd(dispatch, channel, session)
+      } else {
+        @cmd.none
+      }
+      (@cmd.batch([cmd, sync_cmd]), { ..model, changes, })
     }
+    SessionArtifactsSynced(session~, result) =>
+      match result {
+        Ok(artifacts) => {
+          let urls = extract_pull_request_urls(artifacts.artifacts)
+          let next = model.replace_device(
+            dev.with_session_pull_requests(session, urls),
+          )
+          batch_lookup_pull_requests(dispatch, channel, urls, force=false, next)
+        }
+        Err(_) => (@cmd.none, model)
+      }
     JobsChanged(session) => {
       let (jobs_cmd, model) = if model.jobs.owner is Some(owner) &&
         owner.channel == channel &&
@@ -11130,6 +11267,7 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
           workspace_name: "work",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         } : @transcript.SessionListItem)
     }),
   })
@@ -12026,16 +12164,7 @@ test "the run heartbeat projects the phase it is derived from" {
   let stage_of = (conv : Conversation) => {
     conv.run_heartbeat().map(run => run.stage)
   }
-  // A silent model call is the whole point of the row: nothing else on screen
-  // moves between the step event and the first answer delta.
-  assert_eq(stage_of(running_conversation()), Some(Thinking))
-  assert_eq(
-    stage_of({
-      ..running_conversation(),
-      run: Open(run_id="r7", stage=AtStep(Some(3))),
-    }),
-    Some(AtStep(3)),
-  )
+  assert_eq(stage_of(running_conversation()), Some(Working))
   assert_eq(
     stage_of({
       ..running_conversation(),
@@ -12075,7 +12204,12 @@ test "the run heartbeat carries only the facts the page actually has" {
   }
   assert_eq(
     full.run_heartbeat(),
-    Some({ stage: Thinking, started_ms: Some(1_000.0), tokens: 12_345, }),
+    Some({
+      stage: Working,
+      step: None,
+      started_ms: Some(1_000.0),
+      tokens: 12_345,
+    }),
   )
   // A run adopted from a reconnect has no start this page witnessed. The
   // composer omits the span rather than dating it from when we noticed.
@@ -12086,20 +12220,33 @@ test "the run heartbeat carries only the facts the page actually has" {
 }
 
 ///|
-test "a step event is what moves the heartbeat's stage" {
+test "the local transcript heartbeat distinguishes a step from live reasoning" {
   let running = running_model()
-  assert_eq(
-    running.active().run_heartbeat().map(run => run.stage),
-    Some(Thinking),
+  assert_true(
+    running.local_transcript_run(running.active())
+    is Some({ stage: Working, step: None, .. }),
   )
   let (_, stepped) = update_dev(
     test_dispatch(),
     Engine(Some("r7"), @wire.AgentStep(step=2), session="desktop-test"),
     running,
   )
-  assert_eq(
-    stepped.active().run_heartbeat().map(run => run.stage),
-    Some(AtStep(2)),
+  assert_true(
+    stepped.local_transcript_run(stepped.active())
+    is Some({ stage: Working, step: Some(2), .. }),
+  )
+  let (_, reasoning) = update_dev(
+    test_dispatch(),
+    Engine(
+      Some("r7"),
+      @wire.ReasoningDelta(content="thinking"),
+      session="desktop-test",
+    ),
+    stepped,
+  )
+  assert_true(
+    reasoning.local_transcript_run(reasoning.active())
+    is Some({ stage: Thinking, step: Some(2), .. }),
   )
 }
 
@@ -12226,7 +12373,8 @@ test "a stream retry clears previews and shows the retry until a delta lands" {
   )
   assert_eq(streaming.active().turn.live.response, Some("again"))
   assert_true(
-    streaming.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
+    streaming.active().run_heartbeat()
+    is Some({ stage: Working, step: Some(2), .. }),
   )
 }
 
@@ -12279,7 +12427,8 @@ test "a retry notice ends at the model's next progress, not at unrelated events"
     still,
   )
   assert_true(
-    resumed.active().run_heartbeat() is Some({ stage: AtStep(2), .. }),
+    resumed.active().run_heartbeat()
+    is Some({ stage: Working, step: Some(2), .. }),
   )
 }
 
@@ -12601,6 +12750,7 @@ test "sessions loaded replaces the sidebar list" {
       workspace_name: "",
       updated_at_ms: None,
       model_settings: None,
+      pull_requests: [],
     },
   ]
   let (_, once) = update(dispatch, sessions_loaded(items), test_model())
@@ -12652,6 +12802,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
           workspace_name: "foreign",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
       ],
       request_generation=committed.dev().sessions_request_generation,
@@ -12774,6 +12925,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
         workspace_name: "work",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
       {
         id: "desktop-listed-only",
@@ -12782,6 +12934,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
         workspace_name: "work",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -12840,6 +12993,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
         workspace_name: "work",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -12922,6 +13076,7 @@ test "a background session list updates only its channel's same-id workspace" {
             workspace_name: "remote-new",
             updated_at_ms: None,
             model_settings: None,
+            pull_requests: [],
           },
         ],
         connection_generation=0,
@@ -12984,6 +13139,7 @@ test "session list assigns a Started-first conversation to its durable workspace
         workspace_name: "started-first",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ]),
     started,
@@ -13730,6 +13886,7 @@ test "a restored session keeps the placement its listing named" {
         workspace_name: "work",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ]),
     test_model(),
@@ -13879,6 +14036,7 @@ test "reselecting a synced active session reloads idle external writes" {
         workspace_name: "",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -14387,6 +14545,7 @@ test "session loaded swaps the active conversation onto the stored session" {
           workspace_name: "work",
           updated_at_ms: None,
           model_settings: None,
+          pull_requests: [],
         },
       ],
     })
@@ -17035,6 +17194,7 @@ test "Codex threads share the Projects section's project rows" {
         workspace_name: "work",
         updated_at_ms: Some(3_000_000.0),
         model_settings: None,
+        pull_requests: [],
       },
       {
         id: "desktop-older",
@@ -17043,6 +17203,7 @@ test "Codex threads share the Projects section's project rows" {
         workspace_name: "work",
         updated_at_ms: Some(1_000_000.0),
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -17110,6 +17271,7 @@ fn host_settings(
   has_openrouter_key~ : Bool = false,
   has_custom_key~ : Bool = false,
   custom_api_url~ : String = "",
+  models~ : Array[@protocol.CustomModel] = [],
 ) -> HostSettings {
   HostSettings::from_status({
     revision,
@@ -17123,6 +17285,7 @@ fn host_settings(
     followup_behavior: "steer",
     prompt_source: "builtin_moonbit_guide",
     custom_prompt: "",
+    models,
   })
 }
 
@@ -17368,6 +17531,252 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   assert_true(running.default_model is Glm(G53))
   assert_true(running.active().engine_model is Deepseek(V4Pro))
   assert_true(running.display_status() is Running)
+}
+
+///|
+fn model_with_custom_entries() -> Model {
+  let entries : Array[@protocol.CustomModel] = [
+    {
+      id: "gemini-4-hydrogen",
+      label: Some("Gemini 4 Hydrogen"),
+      context_window: @protocol.DefaultCustomModelContextWindow,
+    },
+    {
+      id: "gemini-4-neon",
+      label: None,
+      context_window: @protocol.DefaultCustomModelContextWindow,
+    },
+  ]
+  test_model().with_host_settings(mirror => {
+    let current = mirror.current.unwrap_or(host_settings(provider="deepseek"))
+    { ..mirror, current: Some({ ..current, models: entries, }), }
+  })
+}
+
+///|
+test "switching to and from the custom provider aligns fresh chats and guards unserved models" {
+  let dispatch = test_dispatch()
+  let custom_ready = model_with_custom_entries().with_host_endpoint(
+    custom_api_url="https://openrouter.ai/api/v1",
+    custom_key_saved=true,
+  )
+  // Switching to Custom aligns a fresh chat to the first saved entry.
+  let (_, switched) = update(dispatch, ProviderChanged("custom"), custom_ready)
+  assert_true(switched.default_model is Custom("gemini-4-hydrogen", ..))
+  assert_true(switched.active().engine_model is Custom("gemini-4-hydrogen", ..))
+  assert_eq(
+    switched.openseek_model_chip(switched.active()).groups[0].options.map(o => {
+      o.label
+    }),
+    ["Gemini 4 Hydrogen", "gemini-4-neon"],
+  )
+  // A begun chat keeps its model visible, marked unserved, with Send disabled.
+  let (_, begun_switched) = update(
+    dispatch,
+    ProviderChanged("custom"),
+    custom_ready.replace_conversation(running_conversation()),
+  )
+  assert_true(begun_switched.active().engine_model is Deepseek(V4Pro))
+  assert_eq(
+    begun_switched.openseek_model_chip(begun_switched.active()).groups[0].options.map(o => {
+        o.label
+      },
+    ),
+    ["Gemini 4 Hydrogen", "gemini-4-neon", "DeepSeek Pro (not served here)"],
+  )
+  let unserved = switched.replace_conversation({
+    ..test_conversation(),
+    engine_model: Deepseek(V4Pro),
+  })
+  let unserved_input = unserved.composer_input()
+  guard unserved_input.presentation.primary_action is Send(available~) else {
+    fail("expected Send action")
+  }
+  assert_false(available)
+  assert_false(unserved_input.presentation.images_enabled)
+  // Switching back to DeepSeek stops a custom entry from running on a begun chat,
+  // while aligning a fresh chat to DeepSeek's default.
+  let on_entry = switched.replace_conversation({
+    ..running_conversation(),
+    engine_model: Custom(
+      "gemini-4-hydrogen",
+      context_window=@protocol.DefaultCustomModelContextWindow,
+    ),
+  })
+  let (_, back_to_ds) = update(dispatch, ProviderChanged("deepseek"), on_entry)
+  assert_eq(
+    back_to_ds.openseek_model_chip(back_to_ds.active()).groups[0].options.map(o => {
+      o.label
+    }),
+    ["DeepSeek Pro", "DeepSeek Flash", "Gemini 4 Hydrogen (not served here)"],
+  )
+  let (_, fresh_ds) = update(
+    dispatch,
+    ProviderChanged("deepseek"),
+    switched.replace_conversation({
+      ..test_conversation(),
+      engine_model: Custom(
+        "gemini-4-hydrogen",
+        context_window=@protocol.DefaultCustomModelContextWindow,
+      ),
+    }),
+  )
+  assert_true(fresh_ds.active().engine_model is Deepseek(V4Flash))
+  // A custom endpoint with no saved model disables both Send and the model menu.
+  let empty = test_model().with_host_endpoint(
+    provider=Custom,
+    custom_api_url="https://openrouter.ai/api/v1",
+    custom_key_saved=true,
+  )
+  guard empty.composer_input().presentation.primary_action is Send(available~) else {
+    fail("expected Send action")
+  }
+  assert_false(available)
+  assert_true(empty.openseek_model_chip(empty.active()).disabled)
+}
+
+///|
+test "deleting and re-adding custom models aligns fresh chats without rewriting started ones" {
+  let dispatch = test_dispatch()
+  let (_, switched) = update(
+    dispatch,
+    ProviderChanged("custom"),
+    model_with_custom_entries().with_host_endpoint(
+      custom_api_url="https://openrouter.ai/api/v1",
+      custom_key_saved=true,
+    ),
+  )
+  let with_started = switched.replace_conversation({
+    ..running_conversation(),
+    session_id: "started-custom",
+    engine_model: Custom(
+      "gemini-4-hydrogen",
+      context_window=@protocol.DefaultCustomModelContextWindow,
+    ),
+  })
+  let base_settings = with_started.host_settings().unwrap()
+  let status : @protocol.SettingsStatusPayload = {
+    revision: base_settings.revision + 1,
+    provider: "custom",
+    providers: {
+      "custom": {
+        api_url: Some("https://openrouter.ai/api/v1/chat/completions"),
+        has_api_key: true,
+      },
+    },
+    models: [
+      {
+        id: "gemini-4-neon",
+        label: None,
+        context_window: @protocol.DefaultCustomModelContextWindow,
+      },
+    ],
+    followup_behavior: "steer",
+    prompt_source: "builtin_moonbit_guide",
+    custom_prompt: "",
+  }
+  let (_, after_delete) = update_dev(
+    dispatch,
+    HostSettingsApplied(
+      HostSettings::from_status(status),
+      connection_generation=with_started.focused_connection_generation(),
+    ),
+    with_started,
+  )
+  assert_true(after_delete.default_model is Custom("gemini-4-neon", ..))
+  assert_true(
+    after_delete.find_conversation(Local, "desktop-test").unwrap().engine_model
+    is Custom("gemini-4-neon", ..),
+  )
+  assert_true(
+    after_delete.find_conversation(Local, "started-custom").unwrap().engine_model
+    is Custom("gemini-4-hydrogen", ..),
+  )
+  let (_, emptied) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      HostSettings::from_status({
+        ..status,
+        revision: status.revision + 1,
+        models: [],
+      }),
+      connection_generation=None,
+    ),
+    after_delete,
+  )
+  assert_true(emptied.default_model is Deepseek(V4Flash))
+  let (_, readded) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      HostSettings::from_status({
+        ..status,
+        revision: status.revision + 2,
+        models: [
+          {
+            id: "gemini-4-argon",
+            label: None,
+            context_window: @protocol.DefaultCustomModelContextWindow,
+          },
+        ],
+      }),
+      connection_generation=None,
+    ),
+    emptied,
+  )
+  assert_true(readded.default_model is Custom("gemini-4-argon", ..))
+  assert_true(
+    readded.find_conversation(Local, "desktop-test").unwrap().engine_model
+    is Custom("gemini-4-argon", ..),
+  )
+}
+
+///|
+test "a built-in id saved under Custom runs with built-in controls and custom label" {
+  let with_ds_flash = test_model()
+    .with_host_settings(mirror => {
+      let current = mirror.current.unwrap_or(host_settings(provider="custom"))
+      {
+        ..mirror,
+        current: Some({
+          ..current,
+          models: [
+            {
+              id: "deepseek-flash",
+              label: Some("Custom DS Flash"),
+              context_window: 131_072,
+            },
+          ],
+        }),
+      }
+    })
+    .with_host_endpoint(
+      provider=Custom,
+      custom_api_url="https://gateway.example/v1",
+      custom_key_saved=true,
+    )
+    .replace_conversation({
+      ..test_conversation(),
+      engine_model: Deepseek(V4Flash),
+    })
+  let input = with_ds_flash.composer_input()
+  guard input.presentation.primary_action is Send(available~) else {
+    fail("expected Send action")
+  }
+  assert_true(available)
+  assert_true(input.presentation.images_enabled)
+  assert_true(
+    with_ds_flash.openseek_reasoning_chip(with_ds_flash.active()) is Some(_),
+  )
+  assert_eq(
+    with_ds_flash.selected_model_name(Deepseek(V4Flash)),
+    "Custom DS Flash",
+  )
+  let (_, official) = update(
+    test_dispatch(),
+    ProviderChanged("deepseek"),
+    with_ds_flash,
+  )
+  assert_eq(official.selected_model_name(Deepseek(V4Flash)), "DeepSeek Flash")
 }
 
 ///|
@@ -18567,6 +18976,7 @@ fn archived_item(
     workspace_name: "work",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   }
 }
 
@@ -18581,6 +18991,7 @@ fn placed_archived_item(id : String) -> @transcript.SessionListItem {
     workspace_name: "work",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   }
 }
 
@@ -19963,6 +20374,7 @@ test "an older same-connection live list cannot replace a newer reply" {
     workspace_name: "",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   }
   let current = { ..old, title: Some("current title"), }
   let model = test_model().with_dev(dev => {
@@ -19993,6 +20405,7 @@ test "an older same-connection archived list cannot replace a newer reply" {
     workspace_name: "",
     updated_at_ms: None,
     model_settings: None,
+    pull_requests: [],
   }
   let current = { ..old, title: Some("current title"), }
   let model = test_model().with_dev(dev => {
@@ -23222,6 +23635,7 @@ test "a late commit cannot resurrect a locally known archived session" {
         workspace_name: "",
         updated_at_ms: None,
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })

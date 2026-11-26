@@ -29,15 +29,13 @@ for (const mode of ['Text', 'Code']) {
       })),
     });
     // Both providers can finish with useful rows and a diagnostic.
-    const replyFor = app.replyFor.bind(app);
     let scanFailed = false;
-    app.replyFor = request => {
-      const reply = replyFor(request);
-      if (scanFailed && ['fs.search_text', 'fs.search_semantic'].includes(request.method)) {
-        return { ...reply, error_code: 'search_failed', error_message: 'One file could not be read.' };
-      }
-      return reply;
-    };
+    app.onRpc(method => method === 'fs.search_text' || method === 'fs.search_semantic', (_request, next) => {
+      const reply = next();
+      return scanFailed
+        ? { ...reply, error_code: 'search_failed', error_message: 'One file could not be read.' }
+        : reply;
+    });
     await app.install();
     await app.goto();
     await app.openSession();
@@ -109,26 +107,21 @@ for (const mode of ['Text', 'Code']) {
     await page.locator('.workspace-search').getByRole('button', { name: 'Refresh', exact: true }).click();
     await expect(results.getByRole('alert')).toContainText('One file could not be read.');
     await expectVisibleRows();
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
 test('code search repairs a pattern in one click', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  const replyFor = app.replyFor.bind(app);
   let repairRequest;
   let resolveRepairReply;
   let signalRepairRequest;
   const repairReply = new Promise(resolve => { resolveRepairReply = resolve; });
   const repairRequestStarted = new Promise(resolve => { signalRepairRequest = resolve; });
-  app.replyFor = request => {
-    if (request.method === 'pattern.repair') {
-      repairRequest = request.params;
-      signalRepairRequest();
-      return repairReply;
-    }
-    return replyFor(request);
-  };
+  app.onRpc('pattern.repair', request => {
+    repairRequest = request.params;
+    signalRepairRequest();
+    return repairReply;
+  });
   await app.install();
   await app.goto();
   await app.openSession();
@@ -173,5 +166,4 @@ test('code search repairs a pattern in one click', async ({ page }) => {
     .at(-1)?.params?.patterns?.[0]).toBe('inspect($_)');
   await expect(page.getByRole('textbox', { name: 'Pattern repair instruction' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use pattern' })).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });

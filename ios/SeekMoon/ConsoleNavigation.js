@@ -193,7 +193,7 @@
         const group = reachable || behindWeb ? cloud : null;
         const viewport = window.visualViewport;
         const anchor = mobile.nativeMenu && group && !button.disabled &&
-            consoleViewportFits() && !viewport?.offsetTop && !viewport?.offsetLeft ? button : null;
+            consoleViewportFits() && (behindWeb || (!viewport?.offsetTop && !viewport?.offsetLeft)) ? button : null;
         if (anchor !== nativeAnchor) {
             if (nativeAnchor) {
                 nativeAnchor.removeAttribute('data-ios-native-menu');

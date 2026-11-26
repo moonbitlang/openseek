@@ -67,7 +67,15 @@ button {
 }
 
 input,
-textarea,
+textarea {
+  background-color: transparent;
+}
+
+::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
+}
+
 .input-surface,
 .field-surface {
   background-color: var(--color-bg-canvas);
@@ -112,11 +120,6 @@ textarea,
   padding: 0.75em 0.75em;
   border-radius: var(--radius-control);
   font-size: var(--font-size-md);
-
-  &::placeholder {
-    color: var(--color-text-muted);
-    opacity: 1;
-  }
 
   &:disabled {
     cursor: default;
@@ -381,20 +384,39 @@ html {
   initial-value: 0;
 }
 
-:is(
-  .sidebar-resize-handle,
-  .editor-resize-handle,
-  .tree-resize-handle,
-  .terminal-resize-handle,
-  .review-split-handle
-):hover,
-.review-split-handle:focus-visible,
-html.is-resizing :is(.sidebar-resize-handle, .editor-resize-handle),
-html:is(.is-resizing-row, .is-resizing-col) .tree-resize-handle,
-html.is-resizing-terminal .terminal-resize-handle,
-html.is-resizing-review .review-split-handle {
+.resize-handle:is(:hover, [data-resizing]),
+.review-split-handle:focus-visible {
   background: linear-gradient(var(--color-accent), var(--color-accent)) center /
     var(--resize-handle-line-size, 2px 100%) no-repeat;
+}
+
+/* Resize handlers prevent selection at mousedown. Global user-select changes
+   make long transcripts expensive to resize even with offscreen rows skipped. */
+html[data-resizing="col"] {
+  cursor: col-resize;
+}
+
+html[data-resizing="row"] {
+  cursor: row-resize;
+}
+
+/* Suppress viewer mouse hit testing during divider drags to avoid geometry
+   reads after size writes. Include descendants that re-enable pointer events,
+   but leave Desktop's divider handles interactive. */
+html[data-resizing] :is(.viewer-stack, .viewer-stack *) {
+  pointer-events: none !important;
+}
+
+/* Share the CSS row size with Proton. The length registration exposes the
+   resolved font-relative value to the titlebar subscription through CSSOM. */
+@property --app-header-height {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 49px;
+}
+
+:root {
+  --app-header-height: calc(var(--font-size-base) * 46 / 14);
 }
 
 .app {
@@ -434,8 +456,8 @@ html.is-resizing-review .review-split-handle {
     var(--panel-toggle-inline-inset) + var(--titlebar-control-size) +
       var(--titlebar-control-gap)
   );
-  --app-header-height: calc(var(--font-size-base) * 46 / 14);
   --topbar-height: max(var(--app-header-height), var(--native-titlebar-height, 0px));
+  --titlebar-section-divider: inset 0 -1px var(--color-seam);
   --sidebar-toggle-inline-inset: max(
     calc(var(--topbar-inline-padding) - var(--titlebar-control-gap)),
     var(--native-titlebar-left, 0px)
@@ -470,7 +492,26 @@ html.is-resizing-review .review-split-handle {
   transition-delay: var(--drawer-duration);
 }
 
-/* Proton's overlay titlebar lets the page palette paint the native chrome.
+/* Windows uses Proton's actual row height after DIP and zoom rounding. */
+html.native-titlebar-custom .app {
+  --topbar-height: var(--native-titlebar-height);
+  --titlebar-section-divider: none;
+}
+
+/* CEF is clipped out of the caption buttons. Draw one divider at the first
+   row below their rectangle, where the page can paint the whole width. */
+html.native-titlebar-custom .app::after {
+  content: "";
+  position: fixed;
+  inset-block-start: var(--topbar-height);
+  inset-inline: 0;
+  block-size: 1px;
+  background: var(--color-seam);
+  pointer-events: none;
+  z-index: var(--z-titlebar-control);
+}
+
+/* Proton's overlay titlebar extends the page into window chrome.
    Empty chrome drags the native window; every interactive descendant opts
    back out. Keep these declarations in CSS so newly rendered headers and
    controls receive them without a JavaScript scan. */

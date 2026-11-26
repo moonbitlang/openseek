@@ -89,5 +89,4 @@ test('the terminal uses the panel width on first open and after resizing', async
         screen && screen.width >= host.width - 64;
     }), { message: 'the host label must not constrain the emulator container' }).toBe(true);
   }
-  expect(app.pageErrors).toEqual([]);
 });

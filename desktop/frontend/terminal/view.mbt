@@ -55,7 +55,7 @@ fn panel_view(
   let resize_handle = @html.div(
     attrs=@html.Attrs::build()
       .id(TerminalResizeHandleId)
-      .class("terminal-resize-handle"),
+      .class("resize-handle terminal-resize-handle"),
     ([] : Array[@html.Html]),
   )
   let items : Array[@html.Html] = [

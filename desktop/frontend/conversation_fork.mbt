@@ -108,6 +108,7 @@ fn Model::finish_fork(
           model: pending.engine_model.to_string(),
           thinking: pending.reasoning,
         }),
+        pull_requests: [],
       })
       let mut model = model
         .replace_device({ ..dev, sessions, })

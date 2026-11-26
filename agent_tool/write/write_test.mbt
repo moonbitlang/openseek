@@ -116,10 +116,7 @@ async test "write records an overwrite of a pre-existing file as Modified" {
 async test "a write scope confines write to its allowed paths" {
   @vfs.with_tmpdir(prefix="openseek-write-scope-", dir => {
     @vfs.FileSystem({ "lib/keep.txt": "k\n" }).write_to(dir)
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
-      is Ok(scope) else {
-      fail("expected the scope to build")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
     let tool = @write.definition(workspace_root=dir, write_scope=scope)
     guard run_write(tool, { "path": "lib/new.txt", "content": "n\n" })
       is Respond(admitted) else {
@@ -246,7 +243,6 @@ async test "write rejects generated mbti files" {
     let result = execute({ "path": path, "content": "new interface" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("run moon info"))
     assert_eq(@fs.read_text(path), "old interface")
   })
 }

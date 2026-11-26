@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend/transcript"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "moonbitlang/openseek/deepseek",
@@ -20,6 +21,8 @@ pub fn decode_engine_event(@openseek_protocol.Event) -> EngineEvent?
 pub fn file_target(@common.Uri?, @common.Uri?, String, Bool, String) -> (@common.Uri, String)?
 
 pub fn goal_marker(String) -> GoalMarker?
+
+pub fn live_run_status(RunHeartbeat?, reasoning~ : Bool, compacting~ : Bool, awaiting_approval~ : Bool, awaiting_answer~ : Bool) -> RunHeartbeat?
 
 pub fn program_calls(@json.Json?, String, origin? : TraceOrigin) -> Array[ToolCall]
 
@@ -105,6 +108,26 @@ pub(all) enum ItemKind {
 pub fn ItemKind::equal(Self, Self) -> Bool
 pub fn ItemKind::not_equal(Self, Self) -> Bool
 
+#derive(Eq, @debug.Debug)
+pub(all) struct RunHeartbeat {
+  stage : RunStage
+  step : Int32?
+  started_ms : Double?
+  tokens : Int32
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) enum RunStage {
+  Starting
+  Thinking
+  Compacting
+  AwaitingApproval
+  AwaitingAnswer
+  Retrying(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
+  Working
+  Stopping
+}
+
 #derive(Eq)
 pub(all) struct SessionListItem {
   id : String
@@ -113,6 +136,7 @@ pub(all) struct SessionListItem {
   workspace_name : String
   updated_at_ms : Double?
   model_settings : @protocol.SessionModelSettings?
+  pull_requests : Array[String]
 }
 pub fn SessionListItem::equal(Self, Self) -> Bool
 pub fn SessionListItem::not_equal(Self, Self) -> Bool

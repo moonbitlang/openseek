@@ -8,7 +8,10 @@ fn config_from_matches(matches : @argparse.Matches) -> @harness.Config raise {
   guard min_successes <= runs else { fail("--min-successes must be <= --runs") }
   Config(
     api_key=@cli.value(matches, "api-key"),
-    model=@deepseek.Model::parse(@cli.value(matches, "model")),
+    model=@deepseek.Model::parse(
+      @cli.value(matches, "model"),
+      context_window?=@options.context_window(),
+    ),
     runs~,
     concurrency=@cli.parse_positive_int(
       @cli.value(matches, "concurrency"),

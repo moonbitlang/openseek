@@ -12,7 +12,10 @@ fn config_from_matches(matches : @argparse.Matches) -> @harness.Config raise {
   let api_key = @cli.value(matches, "api-key")
   Config(
     api_key~,
-    model=@deepseek.Model::parse(@cli.value(matches, "model")),
+    model=@deepseek.Model::parse(
+      @cli.value(matches, "model"),
+      context_window?=@options.context_window(),
+    ),
     problem_id="toml_parser_cli",
     runs~,
     concurrency=@cli.parse_positive_int(

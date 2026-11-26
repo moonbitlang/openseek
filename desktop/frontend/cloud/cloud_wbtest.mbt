@@ -79,7 +79,7 @@ fn live_test_session() -> Session {
     updated_at: None,
     generating: false,
     archived: false,
-    approval: ApprovalAsk,
+    approval: "ask",
     model: @deepseek.V4Flash,
     thinking: @protocol.ThinkingHigh,
   }

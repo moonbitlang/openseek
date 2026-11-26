@@ -80,7 +80,6 @@ test('blank Cloud keeps confirmed files and image bytes in memory until first Se
   await expect(page.locator('#transcript .user-image')).toHaveAttribute('src', imageURL);
   expect(cloud.imports.every(upload => /^Bearer ts_fixture-/.test(upload.headers.authorization))).toBe(true);
   expect(cloud.imports.every(upload => upload.headers.cookie === undefined)).toBe(true);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('existing Cloud documents use Upload confirmation and retain bytes after a failed import', async ({ page }) => {
@@ -103,6 +102,5 @@ test('existing Cloud documents use Upload confirmation and retain bytes after a 
   await expect.poll(() => messages(cloud).length).toBe(1);
   expect(JSON.parse(messages(cloud)[0].body).command.content).toContain('.openseek/attachments/fixture-2/report.pdf');
   expect(creations(cloud)).toHaveLength(0);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 

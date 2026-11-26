@@ -94,5 +94,4 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   await expect(panel).toBeHidden();
   await page.getByRole('button', { name: 'Show overview', exact: true }).click();
   await expect(panel).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });

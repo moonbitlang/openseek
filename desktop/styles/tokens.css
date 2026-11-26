@@ -34,8 +34,8 @@
   /* Typography */
   --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
-  --font-family-sans: ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-family-sans: "Google Sans", "Noto Sans SC", ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* Keep this root default in sync with DefaultEditorFontSize in
      desktop/frontend/fileeditor/editor_panel.mbt (the pre-settings fallback). */
   --font-size-base: 15px;
@@ -90,6 +90,7 @@
     var(--dark-text-secondary)
   );
   --color-text-muted: light-dark(var(--light-text-muted), var(--dark-text-muted));
+  --color-text-placeholder: color-mix(in srgb, var(--color-text-muted) 50%, var(--color-bg-canvas));
   --color-text-inline-code: light-dark(
     var(--light-text-inline-code),
     var(--dark-text-inline-code)
@@ -129,6 +130,7 @@
     var(--dark-danger-border)
   );
   --color-warning: light-dark(var(--light-warning), var(--dark-warning));
+  --color-pr-merged: light-dark(#8250df, #a371f7);
 
   --color-focus-ring: color-mix(
     in srgb,

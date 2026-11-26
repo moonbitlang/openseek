@@ -118,14 +118,6 @@
   font-display: block;
 }
 
-@font-face {
-  font-family: "Noto Sans SC";
-  src: url("./fonts/NotoSansSC-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: block;
-}
-
 .office-viewer-surface {
   position: relative;
   min-height: 100%;
@@ -216,6 +208,7 @@
   flex: 0 0 54px;
   width: 54px;
   min-width: 0;
+  background-color: var(--color-bg-canvas);
   text-align: center;
 }
 .pdf-page-total,
@@ -226,6 +219,7 @@
 #pdf-password-dialog input {
   width: 100%;
   padding: var(--space-4);
+  background-color: var(--color-bg-canvas);
   color: inherit;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
@@ -600,9 +594,12 @@
   .word-page svg text[font-family="Liberation Mono"] {
   font-family: "Courier New", "Liberation Mono" !important;
 }
+.word-page svg text[font-family="Noto Sans SC"] {
+  font-family: "Noto Sans SC", sans-serif;
+}
 .office-viewer-surface.prefer-system-fonts
   .word-page svg text[font-family="Noto Sans SC"] {
-  font-family: "Microsoft YaHei", "SimSun", "Noto Sans SC" !important;
+  font-family: "Microsoft YaHei", "SimSun", "Noto Sans SC", sans-serif !important;
 }
 
 /* The file panel already owns the document title and context actions. Keep

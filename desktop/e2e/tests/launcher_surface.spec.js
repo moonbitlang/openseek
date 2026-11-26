@@ -49,7 +49,6 @@ test('new-tab popup supports keyboard navigation and dismissal', async ({ page }
   await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
   await expect(menu).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Restore panel', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 // Ordinary and expanded panels are covered by dock_tab_actions.spec.js.
@@ -74,5 +73,4 @@ test('new-tab popup fits a short narrow viewport', async ({ page }) => {
   expect(await menu.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await menu.getByRole('menuitem', { name: 'Jobs', exact: true }).click();
   await expect(page.locator('.jobs-panel')).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });

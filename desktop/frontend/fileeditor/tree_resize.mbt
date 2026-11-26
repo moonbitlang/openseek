@@ -13,14 +13,6 @@
 const TreeResizeHandleId = "tree-resize-handle"
 
 ///|
-/// The classes toggled on the document element for the duration of a drag —
-/// the tree-panel twins of `ResizingClass`, one per dock axis.
-const RowResizingClass = "is-resizing-row"
-
-///|
-const ColResizingClass = "is-resizing-col"
-
-///|
 /// The bottom-docked tree never shrinks below this. Mirrors the CSS `clamp`
 /// floor.
 const MinTreeHeight = 96
@@ -52,7 +44,7 @@ fn tree_docked_right() -> Bool {
 let tree_resize_installed : Ref[Bool] = Ref(false)
 
 ///|
-let tree_resizing : Ref[Bool] = Ref(false)
+let tree_resizing : Ref[@dom.Element?] = Ref(None)
 
 ///|
 /// Install the drag listeners once the handle is in the DOM; same shape as
@@ -67,11 +59,9 @@ fn request_tree_resize_mount() -> @cmd.Cmd {
         is Some(handle) else {
         return
       }
-      @interop.add_capture_listener(
-        @js.Value::cast_from(handle),
-        "mousedown",
-        start_tree_resize,
-      )
+      @interop.add_capture_listener(@js.Value::cast_from(handle), "mousedown", event => {
+        start_tree_resize(handle, event)
+      })
       let document : @js.Value = @js.globalThis.get_with_string("document")
       @interop.add_capture_listener(document, "mousemove", on_tree_resize_move)
       @interop.add_capture_listener(document, "mouseup", _ => {
@@ -84,17 +74,18 @@ fn request_tree_resize_mount() -> @cmd.Cmd {
 }
 
 ///|
-fn start_tree_resize(event : @dom.Event) -> Unit {
+fn start_tree_resize(handle : @dom.Element, event : @dom.Event) -> Unit {
   guard event.to_mouse_event() is Some(mouse) && mouse.get_button() == 0 else {
     return
   }
   event.prevent_default()
-  tree_resizing.val = true
-  set_root_class(
+  begin_drag(
+    tree_resizing,
+    handle,
     if tree_docked_right() {
-      ColResizingClass
+      "col"
     } else {
-      RowResizingClass
+      "row"
     },
   )
 }
@@ -103,7 +94,7 @@ fn start_tree_resize(event : @dom.Event) -> Unit {
 /// Track the cursor. The panel is docked to the editor body's bottom or
 /// right edge, so its size is the gap from the cursor to that edge.
 fn on_tree_resize_move(event : @dom.Event) -> Unit {
-  guard tree_resizing.val &&
+  guard tree_resizing.val is Some(_) &&
     event.to_mouse_event() is Some(mouse) &&
     @dom.document().query_selector(".editor-body").to_option() is Some(body) else {
     return

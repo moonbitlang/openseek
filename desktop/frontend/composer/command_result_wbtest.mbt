@@ -21,6 +21,7 @@ test "standalone command results preserve both providers' newer drafts" {
     })
     let (pending, _) = Model(input).command_result(
       Ready(input, "command", "result"),
+      Msg::test_emit(),
       emit,
     )
     assert_true(
@@ -29,17 +30,20 @@ test "standalone command results preserve both providers' newer drafts" {
     assert_eq(pending.active(input).draft, input.draft)
     let (rejected, _) = pending.command_result(
       Settled(owner, "command", false),
+      Msg::test_emit(),
       emit,
     )
     assert_eq(rejected.active(input).draft.task, "result\n\nlater writing")
     assert_eq(rejected.active(input).draft.images, input.draft.images)
     let (repeated, _) = rejected.command_result(
       Settled(owner, "command", false),
+      Msg::test_emit(),
       emit,
     )
     assert_eq(repeated.active(input).draft, rejected.active(input).draft)
     let (admitted, _) = repeated.command_result(
       Settled(owner, "command", true),
+      Msg::test_emit(),
       emit,
     )
     assert_eq(admitted.active(input).draft, input.draft)
@@ -58,17 +62,20 @@ test "blocked results stay recoverable and restoring a command never overwrites 
   }
   let (held, _) = Model(input).command_result(
     Ready(input, "command", "output"),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   assert_eq(held.active(input).draft.task, "output\n\nnewer draft")
   let (kept, _) = held.command_result(
     Restore(input, "!original"),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   assert_eq(kept.active(input).draft.task, "output\n\nnewer draft")
   let empty = Input::fixture("")
   let (restored, _) = Model(empty).command_result(
     Restore(empty, "!original"),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   assert_eq(restored.active(empty).draft.task, "!original")
@@ -87,19 +94,23 @@ test "background command results and late admission remain scoped to their own e
   }
   let (pending, _) = Model(first).command_result(
     Ready(first, "one", "first result"),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   let pending = pending.with_entry(Entry(second))
   let (pending, _) = pending.command_result(
     Ready(first, "two", "second result"),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   let (held, _) = pending.command_result(
     Settled(first.identity.owner, "one", false),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   let (held, _) = held.command_result(
     Settled(first.identity.owner, "two", false),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   assert_eq(
@@ -109,6 +120,7 @@ test "background command results and late admission remain scoped to their own e
   assert_eq(held.active(second).draft.task, "draft B")
   let (accepted, _) = held.command_result(
     Settled(first.identity.owner, "one", true),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   assert_eq(accepted.active(first).draft.task, "second result\n\ndraft A")
@@ -118,6 +130,7 @@ test "background command results and late admission remain scoped to their own e
   })
   let (accepted, _) = edited.command_result(
     Settled(first.identity.owner, "two", true),
+    Msg::test_emit(),
     Action::test_emit(),
   )
   assert_eq(accepted.active(first).draft.task, "edited result")
@@ -150,7 +163,7 @@ test "command results follow the selected queue choice without consuming editor 
   })
   let (pending, _) = Model(input)
     .with_entry(entry)
-    .command_result(Ready(input, "one", "output"), emit)
+    .command_result(Ready(input, "one", "output"), Msg::test_emit(), emit)
   assert_true(actions is [CommandResultSubmitted(choice=Some(QueueNext), ..)])
   assert_eq(pending.active(input).image_reads, 1)
   assert_eq(pending.active(input).draft.task, "later draft")

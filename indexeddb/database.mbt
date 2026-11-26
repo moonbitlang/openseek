@@ -159,6 +159,17 @@ pub fn Index::get_all(self : Index, key? : Key) -> Request raise IndexedDBError 
 }
 
 ///|
+/// Read primary keys for an index key without loading the stored values.
+pub fn Index::get_all_keys(
+  self : Index,
+  key : Key,
+) -> Request raise IndexedDBError {
+  {
+    raw: (() => self.get_all_keys_ffi(key.json().stringify())) |> catch_js_error,
+  }
+}
+
+///|
 /// Delete matching records in the index's read/write transaction.
 pub fn Index::delete_all(
   self : Index,

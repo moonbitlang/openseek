@@ -22,6 +22,8 @@ pub async fn pull_request(@protocol.GithubPullRequestPayload) -> @protocol.Githu
 
 pub async fn pull_request_checks_batch(Array[String]) -> Map[String, PullRequestCheckSnapshot]
 
+pub async fn pull_request_summaries(@protocol.GithubPullRequestSummariesPayload) -> @protocol.GithubPullRequestSummariesReply
+
 pub async fn pull_request_summary(@protocol.GithubPullRequestSummaryPayload) -> @protocol.GithubPullRequestSummaryReply
 
 pub async fn read_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts

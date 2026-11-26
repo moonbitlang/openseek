@@ -397,12 +397,6 @@ priv struct Model {
     @interop.ConversationIdentity,
     Array[@mention_context.ReviewChanges],
   )?
-  // The clock the running row's elapsed span is measured against, advanced by
-  // `ClockTicked` and only while a turn is open. Component state rather than
-  // the application's: a value that changes every second belongs to the one
-  // subtree that displays it, or every other component's input is reprojected
-  // once a second to redraw a single line.
-  clock_ms : Double
 }
 
 ///|
@@ -411,7 +405,6 @@ fn Model::Model(input : Input) -> Model {
     entries: [Entry(input)],
     applied_changes: input.entry_changes.length(),
     review_context_snapshot: None,
-    clock_ms: @interop.now_ms(),
   }
 }
 
@@ -503,7 +496,6 @@ priv enum Msg {
   CompletionPump
   // A second passed while a turn was open. Carries nothing: the handler reads
   // the clock, and the message exists only to advance the span on screen.
-  ClockTicked
   // Up (-1) or Down (+1) through the conversation's earlier prompts.
   HistoryMoved(Int32)
   ChangesToggled
@@ -532,6 +524,7 @@ priv enum Msg {
   GoalCancelled
   SubmitRequested
   RetryFeedback
+  FeedbackConfirmationExpired(String)
   QuoteReplied(QuoteReply)
   CommandResultReceived(CommandResult)
   FollowupMenuToggled
@@ -860,7 +853,17 @@ fn Model::update(
   let entry = self.active(input)
   let self = self.with_entry(entry)
   match msg {
-    CommandResultReceived(result) => self.command_result(result, action_emit)
+    CommandResultReceived(result) =>
+      self.command_result(result, emit, action_emit)
+    FeedbackConfirmationExpired(request) => {
+      guard self.entries
+        .iter()
+        .find_first(entry => entry.feedback == Some(Submitted(request)))
+        is Some(target) else {
+        return (self, @cmd.none)
+      }
+      (self.with_entry({ ..target, feedback: None, }), @cmd.none)
+    }
     PredictionAccepted => {
       guard entry.prediction_text(input) is Some(text) else {
         return (self, @cmd.none)
@@ -1103,7 +1106,7 @@ fn Model::update(
     }
     TextChanged(value) => {
       let (next, command) = entry.edited(input, value, action_emit)
-      let next = if entry.feedback is Some(Submitted | Failed(_, held=None)) {
+      let next = if entry.feedback is Some(Submitted(_) | Failed(_, held=None)) {
         { ..next, feedback: None, }
       } else {
         next
@@ -1419,18 +1422,6 @@ fn Model::update(
         emit,
         action_emit,
       )
-    // The tick runs whether or not a turn is open (see `subscriptions`), so
-    // this is where an idle one is discarded: the clock only moves while
-    // there is a span to measure, leaving the model equal to itself and
-    // nothing to re-render.
-    ClockTicked => {
-      let clock_ms = if input.run is Some(_) {
-        @interop.now_ms()
-      } else {
-        self.clock_ms
-      }
-      ({ ..self.with_entry(entry), clock_ms, }, @cmd.none)
-    }
     CompletionPump => {
       // Committing the reconciled entry above is this tick's real work: the
       // subscription diff after every update re-derives the declared lookups
@@ -1478,20 +1469,9 @@ fn Model::subscriptions(
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @sub.Sub {
-  // The heartbeat tick is permanent, deliberately: a component's
-  // subscriptions are re-derived only when that component processes a
-  // message, never when its input alone changes (`handle_subs` runs at
-  // construction and inside `on_update`). A tick declared only while
-  // `input.run` is set would therefore never be installed for the case this
-  // row exists for — submit, then wait without touching the composer, where
-  // no further message ever arrives. Worse, the submit cannot install it
-  // either: `on_update` refreshes subscriptions *before* running the command
-  // that tells the root to open the run, so it still reads `run: None`.
-  //
-  // `ClockTicked` is what stays conditional instead: an idle tick leaves the
-  // model equal to itself, so it costs a comparison and no render.
   @sub.batch([
-    @sub.every(1000, emit(ClockTicked)),
+    // Owner changes can come from parent input alone, without a composer message.
+    @sub.every(1000, emit(EntriesChanged)),
     self.editing_subscriptions(input, emit),
     changes_dismiss_subscription(self.active(input), emit),
     followup_back_subscription(self.active(input), emit),
@@ -1606,9 +1586,7 @@ pub fn component(
     subscriptions=(state, input, emit) => state.subscriptions(input, emit),
   )
   let html = state.view3(input, locale, (state, input, locale) => {
-    state
-    .active(input)
-    .view(locale~, emit, action_emit, input, clock_ms=state.clock_ms)
+    state.active(input).view(locale~, emit, action_emit, input)
   })
   (
     html,

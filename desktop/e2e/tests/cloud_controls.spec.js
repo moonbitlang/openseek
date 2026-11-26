@@ -24,19 +24,26 @@ async function running(page) {
 test('Cloud Stop waits for termination and preserves the editable draft', async ({ page }) => {
   const app = await running(page);
   const task = app.controlState(sessionA).task_id;
+  await app.publishControl(sessionA, { approval: { id: 'approval-1', tool_name: 'shell', detail: 'run make check' } });
+  const heartbeat = page.locator('#stream > .transcript-run-status:last-child');
+  const dots = heartbeat.locator('.transcript-run-dots > span:visible');
+  await expect(heartbeat).toHaveText('Waiting for your approval…');
+  await expect(app.rowContainer(sessionA).getByRole('status')).toHaveAccessibleName('Needs your input');
+  await expect(dots).toHaveCount(3);
+  await expect(dots.first()).toHaveCSS('animation-name', 'none');
   await page.locator('#task').fill('Keep this next draft');
   await page.locator('#stop').click();
   await expect.poll(() => controls(app, 'stop')).toEqual([{ task_id: task, command: 'cancel' }]);
   await expect(page.locator('#stop')).toBeDisabled();
-  await expect(page.locator('.composer')).toContainText('Stopping…');
+  await expect(heartbeat).toHaveText('Stopping…');
   await expect(page.locator('#task')).toBeEnabled();
   await page.locator('#task').fill('Still editable while stopping');
   // The engine can complete normally in a cancellation race. Its actual
   // terminal status, rather than the accepted Stop, determines the result.
   await app.finishTask(sessionA, 'completed');
   await expect(page.locator('#stop')).toHaveCount(0);
+  await expect(heartbeat).toHaveCount(0);
   await expect(page.locator('#task')).toHaveValue('Still editable while stopping');
-  expect(app.device.pageErrors).toEqual([]);
 });
 
 for (const state of ['running', 'paused']) {

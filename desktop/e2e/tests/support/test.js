@@ -18,6 +18,14 @@ export const test = base.extend({
     }
     await use(context);
   },
+  page: async ({ page }, use, testInfo) => {
+    const pageErrors = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    await use(page);
+    if (!testInfo.tags.includes('@allow-pageerror')) {
+      expect(pageErrors, 'Unexpected uncaught page errors').toEqual([]);
+    }
+  },
 });
 
 export { expect };

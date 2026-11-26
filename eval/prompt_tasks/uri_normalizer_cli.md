@@ -34,7 +34,7 @@ Validation expectations before finishing:
 
 - Run `moon check --target native`.
 - Run `moon test --target native`.
-- Run `moon info` and `moon fmt`.
+- Run `moon fmt`.
 - Run at least these CLI probes:
   - `normalize` of `http://a/b/c/../g` → `http://a/b/g` (dot-segments).
   - `normalize` of `HTTP://Example.COM/` → `http://example.com/` (case).

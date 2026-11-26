@@ -27,12 +27,20 @@ pub(all) enum GlmVariant {
 }
 
 ///|
-/// Supported chat models grouped by provider.
+/// Supported chat models grouped by provider, plus `Custom` for any other
+/// OpenAI-compatible model the user configured.
+///
+/// An id is opaque: the engine forwards it as the request's `model` and never
+/// interprets it. What the engine still needs to know about a model — its
+/// context window, whether its endpoint takes images, how a thinking field is
+/// encoded — is answered per case below, so a new family is a code change and
+/// a new *model within* an existing family is data.
 #derive(Eq, Debug)
 pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
   Glm(GlmVariant)
+  Custom(String, context_window~ : Int32)
 }
 
 ///|
@@ -69,25 +77,58 @@ pub impl Show for Model with fn to_string(self : Model) -> String {
     Deepseek(variant) => "\{variant}"
     Kimi(variant) => "\{variant}"
     Glm(variant) => "\{variant}"
+    Custom(id, ..) => id
   }
 }
 
 ///|
 /// Parses a wire model name into a typed model.
-pub fn Model::parse(input : String) -> Model raise {
-  match input {
+///
+/// A name this build does not know becomes `Custom`: the user configures that
+/// endpoint and this id, so a typo is the endpoint's to report rather than this
+/// parser's to reject. The optional window applies to custom IDs. A blank
+/// name is still refused — no endpoint serves it.
+pub fn Model::parse(
+  input : String,
+  context_window~ : Int32 = DefaultCustomContextWindow,
+) -> Model raise {
+  match input.trim() {
     "deepseek-flash" | "deepseek-v4-flash" => Deepseek(V4Flash)
     "deepseek-v4-pro" => Deepseek(V4Pro)
     "kimi-k2.7-code" => Kimi(K27Code)
     "kimi-k2.7-code-highspeed" => Kimi(K27CodeHighSpeed)
     "glm-5.3" => Glm(G53)
     "glm-5.3-flash" => Glm(G53Flash)
-    other => fail("unknown model: \{other}")
+    "" => fail("a model needs a name")
+    other => Custom(other.to_owned(), context_window~)
   }
 }
 
 ///|
-/// Context window served by the official API, in tokens.
+/// The context window for a custom ID when no window has been configured.
+const DefaultCustomContextWindow : Int32 = 1_000_000
+
+///|
+/// The environment variable that carries a custom model's API key. A custom
+/// model has no provider family, so its credential travels in the generic
+/// variable the CLI's `--api-key` option reads.
+pub const CustomApiKeyEnv : String = "OPENSEEK_API_KEY"
+
+///|
+/// The environment variable that carries this model's API key to an engine.
+/// The one place the family-to-variable mapping lives, so a run cannot put a
+/// key where its child will not look for it.
+pub fn Model::api_key_env(self : Model) -> String {
+  match self {
+    Kimi(_) => "KIMI"
+    Glm(_) => "GLM"
+    Custom(_, ..) => CustomApiKeyEnv
+    Deepseek(_) => "DEEPSEEK"
+  }
+}
+
+///|
+/// Model context window in tokens.
 ///
 /// Every DeepSeek variant serves 1M context ("1M context is now the default
 /// across all official DeepSeek services", api-docs.deepseek.com news260424);
@@ -100,6 +141,7 @@ pub fn Model::context_window(self : Model) -> Int32 {
     Deepseek(V4Flash | V4Pro) => 1_000_000
     Kimi(K27Code | K27CodeHighSpeed) => 262_144
     Glm(G53 | G53Flash) => 1_000_000
+    Custom(_, context_window~) => context_window
   }
 }
 

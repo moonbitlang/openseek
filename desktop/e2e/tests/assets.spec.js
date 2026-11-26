@@ -35,5 +35,4 @@ test('packaged assets stay under /assets/ across navigation and reload: host bas
     expect(new URL(asset.url).pathname).toMatch(/^\/assets\//);
     expect(asset.status).toBe(200);
   }
-  expect(app.pageErrors).toEqual([]);
 });

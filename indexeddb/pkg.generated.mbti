@@ -24,6 +24,7 @@ pub fn Database::transaction(Self, Array[String], Mode) -> Transaction raise Ind
 pub type Index
 pub fn Index::delete_all(Self, key? : Key) -> Request raise IndexedDBError
 pub fn Index::get_all(Self, key? : Key) -> Request raise IndexedDBError
+pub fn Index::get_all_keys(Self, Key) -> Request raise IndexedDBError
 
 pub(all) enum Key {
   String(String)

@@ -6,14 +6,23 @@ alongside the official documentation in `share/doc/moonbit/`.
 this resource root's absolute path.
 
 - `read.mbtx` reads text files with numbered lines and per-file ranges (see below).
+- `ls.mbtx` lists directories and glob patterns (`src/**/*.mbt`) as
+  `COUNT PATH` lines: line counts, `NB` byte sizes for binary or large files,
+  `-` for directories. `-R`/`--depth N` recurse past build and dependency
+  directories (`--all` includes them), `-g GLOB` filters as in rg, and output
+  is bounded to 40000 bytes. See
+  [Listing files with `ls.mbtx`](../../tests/cram/ls-workflow.md).
 - `rg.mbtx` searches text with `moonx cli/rg`, the MoonBit port of ripgrep:
   its arguments go to rg unchanged (ripgrep flags and Rust regex, not POSIX
   grep; a PATH is required), output is `path:line:text` bounded to 40000
   bytes, and no match exits zero with a note.
+- `ide.mbtx` runs `moon ide` with its arguments unchanged (`doc`, `outline`,
+  `peek-def`, `find-references`, `hover`, `workspace-symbols`), bounding
+  output to 40000 bytes.
 - `check.mbtx` runs `moon check`.
 - `test.mbtx` runs `moon test` without updating snapshots.
 - `check-test.mbtx` runs check then test, stopping on the first failure.
-- `info-fmt.mbtx` runs info then fmt, modifying generated interfaces and formatting.
+- `fmt.mbtx` runs `moon fmt`, formatting MoonBit sources.
 - `check-json.mbtx` relays `moon check --output-json` diagnostics without filtering.
 - `fix-deprecations.mbtx` (needs `ptc=true`) fixes deprecation warnings whose
   message names a bare replacement (`use \`len\` instead`), one guarded `edit`
@@ -87,6 +96,12 @@ other colons. Paths with spaces are single args without shell quoting.
   extension points for a new contributor.
 - `simplify.mbtx` sweeps the repository's MoonBit packages for safe, obvious
   simplifications and opens one pull request per changed package (see below).
+- `dream.mbtx` consolidates high-signal lessons (user corrections, error-to-fix
+  recoveries, and repeated workflows) from recorded OpenSeek sessions into the
+  bounded `.openseek/memory/MEMORY.md` pointer index, `.openseek/memory/topics/`,
+  and reusable `.openseek/memory/skills/<slug>/SKILL.md` playbooks (discovered
+  via pointers in `MEMORY.md` without colliding with user-installed skills),
+  tracking progress in `.openseek/dream-state.json`.
 
 Run these in a session that can start subagents; they start them through the
 host with `@tools.call("subagent", ...)`:
@@ -105,6 +120,10 @@ host with `@tools.call("subagent", ...)`:
 
 ```json
 {"description":"Simplify the project","filename":"@builtin/simplify.mbtx","args":["--max-prs","2","--","pattern matching"]}
+```
+
+```json
+{"description":"Consolidate session memories and skills","filename":"@builtin/dream.mbtx"}
 ```
 
 `review.mbtx` launches one `review` child (100-step ceiling). With no

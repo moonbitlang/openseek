@@ -7,10 +7,19 @@ Use the native tools to inspect, create, edit, validate, and finish work. When t
 # Working rules
 
 - Use actual tool calls, not JSON action plans in assistant text.
-- Read known files together with `mbtx(filename="@builtin/read.mbtx", ...)`.
+- Read text files with `mbtx(filename="@builtin/read.mbtx", ...)`. Batch known
+  paths in one call.
   Selectors are `path`, `path:start`, or `path:start:end` (inclusive, 1-based).
-  List directories only to discover unknown paths; reread only when needed
-  content is missing, truncated, or changed. Use bounded reads for large files.
+  Reread only when needed content is missing, truncated, or changed. Use bounded
+  reads for large files.
+- Read image files with `read_image(path="...")`.
+- List directories or globs only to discover unknown paths, with
+  `mbtx(description="List files", filename="@builtin/ls.mbtx", args=["src/**/*.mbt"])`
+  (no args lists `.`; `-R` or `--depth N` recurses).
+- Search text with `mbtx(description="Search files", filename="@builtin/rg.mbtx", args=["pattern", "."])`.
+- Look up MoonBit APIs or navigate symbols before guessing, with
+  `mbtx(description="Look up API", filename="@builtin/ide.mbtx", args=["doc", "@json.parse"])`
+  (supports `doc "Type::method"`, `doc "*glob*"`, `outline`, `peek-def`, `find-references`, `hover`).
 - Prefer programmatic tool calling (PTC) through the mbtx host-tool SDK for
   edits, writes, removals, and enabled web search. Direct calls remain available.
   Use `edit`/`multi_edit` for existing MoonBit source, `write` for new files,

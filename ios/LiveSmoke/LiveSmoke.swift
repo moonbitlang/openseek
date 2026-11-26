@@ -38,7 +38,7 @@ final class LiveSmoke: XCTestCase {
         keepScreenshot(app, name: "Keyboard dismissed")
     }
 
-    @MainActor func testHostedConsoleEntry() {
+    @MainActor func testPackagedConsoleEntry() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.moonbit.seekmoon.ios.prototype")
         app.launch()
@@ -149,6 +149,11 @@ final class LiveSmoke: XCTestCase {
             chat.tap()
             XCTAssertTrue(close.waitForNonExistence(timeout: 5))
             XCTAssertTrue(navigation.waitForExistence(timeout: 10))
+            // The menu button can already be visible for the previous empty chat.
+            // Wait for the selected conversation to render before opening its actions.
+            let message = app.webViews.buttons.matching(NSPredicate(format: "label IN %@",
+                ["Copy user message", "复制用户消息"])).firstMatch
+            XCTAssertTrue(message.waitForExistence(timeout: 25), "Use a recent chat with a message for the export check.")
             navigation.press(forDuration: 0.8)
             let export = app.buttons.matching(NSPredicate(format: "label IN %@", ["Export", "Export conversation", "导出", "导出对话"])).firstMatch
             XCTAssertTrue(export.waitForExistence(timeout: 5))

@@ -69,17 +69,15 @@ test('selected image-only input reaches Codex and remains visible in history', a
   await expect(page.locator('.composer-image')).toHaveCount(0);
   await expect(page.locator('.user-image')).toHaveAttribute('src', `data:image/png;base64,${png}`);
   await expect.poll(() => page.locator('.user-image').evaluate(img => img.naturalWidth)).toBe(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('paste and drop preserve image bytes, allow removal and steer a running task', async ({ page }) => {
   const app = new CodexImagesHarness(page);
   const startReply = Promise.withResolvers();
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = async request => {
-    if (request.method === 'codex.turn.start') await startReply.promise;
-    return replyFor(request);
-  };
+  app.onRpc('codex.turn.start', async (_request, next) => {
+    await startReply.promise;
+    return next();
+  });
   await app.openCodex();
   expect(await app.transfer('paste')).toBe(true);
   expect(await app.transfer('drop', { name: 'dropped.png' })).toBe(true);
@@ -108,7 +106,6 @@ test('paste and drop preserve image bytes, allow removal and steer a running tas
   expect(steer.input).toEqual([{ type: 'image', url: `data:image/png;base64,${png}` }]);
   expect(steer.expectedTurnId).toBe('image-turn');
   await expect(page.locator('.composer-image')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('failed sends preserve attachments and invalid selections preserve the prior draft', async ({ page }, testInfo) => {
@@ -131,7 +128,6 @@ test('failed sends preserve attachments and invalid selections preserve the prio
   await expect(page.getByText('Image send failed', { exact: false }).first()).toBeVisible();
   await expect(page.locator('.composer-image')).toHaveCount(2);
   await expect(page.locator('#send')).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('slow file reads disable send and report read errors without losing text', async ({ page }) => {
@@ -151,23 +147,21 @@ test('slow file reads disable send and report read errors without losing text', 
   await expect(page.locator('#task')).toHaveValue('Keep this text');
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
   await expect(page.locator('#send')).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Codex remote image URLs retain their position between text parts', async ({ page }) => {
   const remoteUrl = 'https://images.example.test/picture.png';
   await page.route(remoteUrl, route => route.fulfill({ contentType: 'image/png', body: image.buffer }));
   const app = new CodexImagesHarness(page);
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'codex.turn.start'
-    ? { turn: { id: 'remote-image-turn', status: 'completed', items: [{
+  app.onRpc('codex.turn.start', () => ({
+    turn: { id: 'remote-image-turn', status: 'completed', items: [{
       id: 'remote-image-user', type: 'userMessage', content: [
         { type: 'text', text: 'Before remote picture' },
         { type: 'image', url: remoteUrl },
         { type: 'text', text: 'After remote picture' },
       ],
-    }] } }
-    : replyFor(request);
+    }] },
+  }));
   await app.openCodex();
   await page.locator('#task').fill('Before remote picture');
   await page.locator('#send').click();
@@ -177,7 +171,6 @@ test('Codex remote image URLs retain their position between text parts', async (
   expect(await user.locator('.msg-content, .user-images').evaluateAll(nodes =>
     nodes.map(node => node.querySelector('img') ? 'image' : node.textContent),
   )).toEqual(['Before remote picture', 'image', 'After remote picture']);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('canceling the file picker removes its input and permits another selection', async ({ page }) => {
@@ -192,5 +185,4 @@ test('canceling the file picker removes its input and permits another selection'
   await app.select(image);
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await expect(page.locator('input[type="file"]')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });

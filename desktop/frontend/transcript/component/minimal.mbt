@@ -421,7 +421,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
               MinimalCall::from_tool(
                 locale~,
                 call,
-                wait_label?=pending_job_wait_label(call, descriptions~),
+                wait_label?=pending_job_wait_label(locale~, call, descriptions~),
               ),
             ),
           )

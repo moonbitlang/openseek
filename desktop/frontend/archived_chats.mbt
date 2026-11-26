@@ -65,7 +65,6 @@ fn Model::archived_chat_groups(self : Model) -> Array[@archived_chats.Group] {
         title: item.id,
         label: session_item_label(item),
         nested: false,
-        subrun: false,
         active: false,
         loading: false,
         load_failed: false,
@@ -73,13 +72,13 @@ fn Model::archived_chat_groups(self : Model) -> Array[@archived_chats.Group] {
         openable: true,
         rename: None,
         run_mark: @conversation.NoRunMark,
+        pull_request: None,
         trailing: [
           @conversation.Restore(title=shell_text(self.locale, RestoreHint)),
           @conversation.Delete(
             title=shell_text(self.locale, DeleteArchivedHint),
           ),
         ],
-        children: [],
       })
     }
     // Codex state mirrors the focused device only.

@@ -45,7 +45,6 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // under policy; it was never a boundary around what the snippet may start.
   ("moon", ["run"]),
   ("moon", ["fmt"]),
-  ("moon", ["info"]),
   ("moon", ["add"]),
   ("moon", ["remove"]),
   ("moon", ["update"]),
@@ -415,7 +414,7 @@ fn wasm_policy_document(
 ) -> Json {
   // A snippet never writes source directly. It does not need to: the file
   // tools make the edits, and the commands whose job is to rewrite source
-  // (`moon fmt`, `moon info`, `git checkout`) are child processes, which no `fs`
+  // (`moon fmt`, `git checkout`) are child processes, which no `fs`
   // rule here reaches.
   //
   // Every plain root must be an EXISTING path: moonrun canonicalizes each one

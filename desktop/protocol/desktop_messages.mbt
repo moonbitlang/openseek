@@ -52,6 +52,8 @@ pub(all) enum OpenSeekApproval {
   /// A reviewer subagent answers against the user's own messages; what it
   /// cannot settle comes to the person as an ordinary question.
   ApprovalReview
+  /// Automatically grant each tool permission request.
+  ApprovalYolo
 }
 
 ///|
@@ -60,14 +62,16 @@ pub fn OpenSeekApproval::wire(self : OpenSeekApproval) -> String {
   match self {
     ApprovalAsk => "ask"
     ApprovalReview => "review"
+    ApprovalYolo => "yolo"
   }
 }
 
 ///|
-fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
+pub fn OpenSeekApproval::parse(value : String) -> OpenSeekApproval? {
   match value {
     "ask" => Some(ApprovalAsk)
     "review" => Some(ApprovalReview)
+    "yolo" => Some(ApprovalYolo)
     _ => None
   }
 }
@@ -309,6 +313,8 @@ pub(all) struct SettingsSetPayload {
   followup_behavior : String?
   prompt_source : String?
   custom_prompt : String?
+  // Complete replacement list of saved custom models, in display order.
+  models : Array[CustomModel]?
 }
 
 ///|
@@ -322,6 +328,9 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
     followup_behavior: object.optional_string("followup_behavior"),
     prompt_source: object.optional_string("prompt_source"),
     custom_prompt: object.optional_string("custom_prompt"),
+    models: object
+    .optional_json("models")
+    .map(value => @json.from_json(value, path=path.add_key("models"))),
   }
 }
 
@@ -342,6 +351,9 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   }
   if self.custom_prompt is Some(value) {
     fields["custom_prompt"] = Json(value)
+  }
+  if self.models is Some(value) {
+    fields["models"] = Json(value)
   }
   Json(fields)
 }
@@ -1214,9 +1226,18 @@ pub(all) struct BrowserThemePayload {
 }
 
 ///|
+/// Desired app header style, measured in CSS pixels. Window-local only.
 #derive(Debug, Eq)
-pub(all) struct AppTitlebarThemePayload {
+pub(all) struct AppTitlebarStylePayload {
   dark : Bool
+  height : Double
+  background_color : String
+  symbol_color : String
+}
+
+///|
+pub(all) struct AppTitlebarStyleReply {
+  custom_overlay : Bool
 }
 
 ///|
@@ -1577,21 +1598,29 @@ pub impl ToJson for ProviderStatus with fn to_json(self) {
 }
 
 ///|
-/// Saved settings revision to test.
+/// Saved settings revision to test, with an optional saved custom model id.
 #derive(Debug, Eq)
 pub(all) struct ApiConnectionProbePayload {
   revision : Int32
+  model : String?
 }
 
 ///|
 pub impl FromJson for ApiConnectionProbePayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "API connection probe payload")
-  { revision: object.required_int("revision"), }
+  {
+    revision: object.required_int("revision"),
+    model: object.optional_string("model"),
+  }
 }
 
 ///|
 pub impl ToJson for ApiConnectionProbePayload with fn to_json(self) {
-  { "revision": Json(self.revision) }
+  let fields : Map[String, Json] = { "revision": Json(self.revision) }
+  if self.model is Some(model) {
+    fields["model"] = Json(model)
+  }
+  Json(fields)
 }
 
 ///|
@@ -1615,6 +1644,67 @@ pub impl ToJson for ApiConnectionProbeReply with fn to_json(self) {
 }
 
 ///|
+/// Shared bounds and defaults for saved custom model entries.
+pub const DefaultCustomModelContextWindow : Int32 = 1_000_000
+
+///|
+pub const MinCustomModelContextWindow : Int32 = 1_024
+
+///|
+pub const MaxCustomModelContextWindow : Int32 = 10_000_000
+
+///|
+pub const MaxCustomModels : Int32 = 50
+
+///|
+/// One saved custom model served by the Custom URL provider slot.
+#derive(Debug, Eq)
+pub(all) struct CustomModel {
+  id : String
+  label : String?
+  context_window : Int32
+}
+
+///|
+pub impl FromJson for CustomModel with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "custom model")
+  let id = object.required_string("id").trim().to_owned()
+  guard !id.is_empty() else {
+    raise JsonDecodeError((path.add_key("id"), "expected non-empty model id"))
+  }
+  let label = match object.optional_string("label") {
+    Some(value) => {
+      let trimmed = value.trim().to_owned()
+      if trimmed.is_empty() {
+        None
+      } else {
+        Some(trimmed)
+      }
+    }
+    None => None
+  }
+  {
+    id,
+    label,
+    context_window: object
+    .optional_int("context_window")
+    .unwrap_or(DefaultCustomModelContextWindow),
+  }
+}
+
+///|
+pub impl ToJson for CustomModel with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "id": Json(self.id),
+    "context_window": Json(self.context_window),
+  }
+  if self.label is Some(value) {
+    fields["label"] = Json(value)
+  }
+  Json(fields)
+}
+
+///|
 #derive(Debug, Eq)
 pub(all) struct SettingsStatusPayload {
   revision : Int32
@@ -1623,6 +1713,9 @@ pub(all) struct SettingsStatusPayload {
   followup_behavior : String
   prompt_source : String
   custom_prompt : String
+  // The user's own model entries, in saved order. Omitted while empty, so a
+  // host that configured nothing keeps the payload a client already knew.
+  models : Array[CustomModel]
 }
 
 ///|
@@ -1638,19 +1731,27 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
     followup_behavior: object.required_string("followup_behavior"),
     prompt_source: object.required_string("prompt_source"),
     custom_prompt: object.required_string("custom_prompt"),
+    models: match object.optional_json("models") {
+      Some(value) => @json.from_json(value, path=path.add_key("models"))
+      None => []
+    },
   }
 }
 
 ///|
 pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
-  Json::object({
+  let fields : Map[String, Json] = {
     "revision": Json(self.revision),
     "provider": Json(self.provider),
     "providers": Json(self.providers.map((_name, entry) => entry.to_json())),
     "followup_behavior": Json(self.followup_behavior),
     "prompt_source": Json(self.prompt_source),
     "custom_prompt": Json(self.custom_prompt),
-  })
+  }
+  if !self.models.is_empty() {
+    fields["models"] = Json(self.models)
+  }
+  Json(fields)
 }
 
 ///|
@@ -1659,7 +1760,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 14
+pub const HostProtocolRevision : Int32 = 15
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads
@@ -2852,26 +2953,6 @@ pub extend WorktreeRemovePayload with Eq::{equal, not_equal}
 pub extend WorktreeRemovePayload with ToJson::{to_json}
 
 ///|
-#deprecated("Use `Debug::to_repr` via the trait or `Repr(value)` instead", skip_current_package=true)
-#doc(hidden)
-pub extend AppTitlebarThemePayload with Debug::{to_repr}
-
-///|
-#deprecated("Use `FromJson::from_json` via the trait instead", skip_current_package=true)
-#doc(hidden)
-pub extend AppTitlebarThemePayload with FromJson::{from_json}
-
-///|
-#deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
-#doc(hidden)
-pub extend AppTitlebarThemePayload with Eq::{equal, not_equal}
-
-///|
-#deprecated("Use `ToJson::to_json` via the trait instead", skip_current_package=true)
-#doc(hidden)
-pub extend AppTitlebarThemePayload with ToJson::{to_json}
-
-///|
 pub extend BrowserThemePayload with Debug::{to_repr}
 
 ///|
@@ -3730,21 +3811,38 @@ pub impl ToJson for BrowserThemePayload with fn to_json(self) {
 }
 
 ///|
-pub impl FromJson for AppTitlebarThemePayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "AppTitlebarThemePayload")
+pub impl FromJson for AppTitlebarStylePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "AppTitlebarStylePayload")
   {
-    dark: @json.from_json(
-      object.required_json("dark"),
-      path=path.add_key("dark"),
+    dark: object.required_bool("dark"),
+    height: @json.from_json(
+      object.required_json("height"),
+      path=path.add_key("height"),
     ),
+    background_color: object.required_string("background_color"),
+    symbol_color: object.required_string("symbol_color"),
   }
 }
 
 ///|
-pub impl ToJson for AppTitlebarThemePayload with fn to_json(self) {
-  let fields : Map[String, Json] = Map([])
-  fields["dark"] = Json(self.dark)
-  Json(fields)
+pub impl ToJson for AppTitlebarStylePayload with fn to_json(self) {
+  {
+    "dark": Json(self.dark),
+    "height": Json(self.height),
+    "background_color": Json(self.background_color),
+    "symbol_color": Json(self.symbol_color),
+  }
+}
+
+///|
+pub impl FromJson for AppTitlebarStyleReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "AppTitlebarStyleReply")
+  { custom_overlay: object.required_bool("custom_overlay"), }
+}
+
+///|
+pub impl ToJson for AppTitlebarStyleReply with fn to_json(self) {
+  { "custom_overlay": Json(self.custom_overlay) }
 }
 
 ///|

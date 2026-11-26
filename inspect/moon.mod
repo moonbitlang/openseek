@@ -3,7 +3,7 @@ name = "moonbitlang/inspect"
 version = "0.1.0"
 
 import {
-  "moonbitlang/openseek@0.7.6",
+  "moonbitlang/openseek@0.7.7",
 }
 
 readme = "README.md"

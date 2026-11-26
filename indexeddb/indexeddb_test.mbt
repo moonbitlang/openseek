@@ -66,11 +66,12 @@ async test "schema upgrades retain data and compound indexes isolate deletion" {
     _ => false
   }
   assert_true(cannot_delete)
-  let records = read
-    .store("records")
-    .index("by_account")
-    .get_all(key=Array([String("one"), String("a")]))
+  let by_account = read.store("records").index("by_account")
+  let account : @indexeddb.Key = Array([String("one"), String("a")])
+  let records = by_account.get_all(key=account)
+  let keys = by_account.get_all_keys(account)
   read.wait()
+  assert_eq(keys.result(), Some([1, 2]))
   assert_eq(
     records.result(),
     Some([

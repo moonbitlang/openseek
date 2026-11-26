@@ -42,7 +42,6 @@ test('Excel search and feedback retain source addresses beyond the old preview w
   await expect.poll(() => page.locator('td[data-cell]').count()).toBeLessThan(3000);
   await page.locator('td[data-cell="IW1201"]').click();
   await expect(page.locator('.office-selection-preview')).toHaveAttribute('title', /Sparse!IW1201/);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('typed Excel feedback resolves its source again when virtual rows return', async ({ page }) => {
@@ -61,5 +60,4 @@ test('typed Excel feedback resolves its source again when virtual rows return', 
   await expect(feedback.locator('textarea')).toBeVisible();
   await expect(feedback.locator('textarea')).toHaveValue('Inspect this sparse row');
   await expect(feedback).toHaveAttribute('title', /Sparse!A1200/);
-  expect(app.pageErrors).toEqual([]);
 });

@@ -54,7 +54,6 @@ test('Excel copies real selected values as TSV and literal Markdown without atta
   await expect(page.locator('.excel-copy-controls')).toBeVisible();
   await page.getByRole('tab', { name: 'Long', exact: true }).click();
   await expect(page.locator('.excel-copy-controls')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Excel table copy retains merged coverage and a trailing empty row', async ({ page, context }) => {
@@ -69,7 +68,6 @@ test('Excel table copy retains merged coverage and a trailing empty row', async 
   await page.getByRole('button', { name: 'Copy table', exact: true }).press('Escape');
   await expect(page.locator('.excel-copy-controls')).toHaveCount(0);
   await expect(page.locator('.office-cell-selected')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Excel copy controls remain usable in a narrow pane', async ({ page }) => {
@@ -83,7 +81,6 @@ test('Excel copy controls remain usable in a narrow pane', async ({ page }) => {
     expect(rect.x).toBeGreaterThanOrEqual(0);
     expect(rect.x + rect.width).toBeLessThanOrEqual(1000);
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Excel copy reports clipboard failure and can retry', async ({ page }) => {
@@ -109,5 +106,4 @@ test('Excel copy reports clipboard failure and can retry', async ({ page }) => {
   await button.click();
   await expect(page.locator('.excel-copy-feedback')).toHaveText('Copied');
   expect(await page.evaluate(() => window.excelCopies)).toEqual(['商品']);
-  expect(app.pageErrors).toEqual([]);
 });

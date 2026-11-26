@@ -242,6 +242,9 @@ pub(all) struct SessionListEntry {
   /// The model the session last ran on, from its `model.json`; `None` when
   /// the session has not recorded one.
   model_settings : SessionModelSettings?
+  /// Attached pull request URLs from `artifacts.json` in insertion order,
+  /// deduplicated. Empty when the session has none or the sidecar is unreadable.
+  pull_requests : Array[String]
 }
 
 ///|
@@ -290,10 +293,22 @@ pub impl FromJson for SessionListEntry with fn from_json(json, path) {
     Some(value) => Some(@json.from_json(value)) catch { _ => None }
     _ => None
   }
+  let pull_requests : Array[String] = match fields.get("pull_requests") {
+    Some(Array(entries)) => {
+      let urls : Array[String] = []
+      for entry in entries {
+        if entry is String(url) && !url.is_blank() && !urls.contains(url) {
+          urls.push(url)
+        }
+      }
+      urls
+    }
+    _ => []
+  }
   guard fields.get("id") is Some(String(id)) else {
     raise JsonDecodeError((path, "session list entry needs a string id"))
   }
-  { id, title, updated_at_ms, model_settings, }
+  { id, title, updated_at_ms, model_settings, pull_requests, }
 }
 
 ///|
@@ -3618,6 +3633,9 @@ pub impl ToJson for SessionListEntry with fn to_json(self) {
   }
   if self.model_settings is Some(value) {
     fields["model_settings"] = ToJson::to_json(value)
+  }
+  if !self.pull_requests.is_empty() {
+    fields["pull_requests"] = Json(self.pull_requests)
   }
   Json(fields)
 }

@@ -77,7 +77,6 @@ for (const minimal of [false, true]) {
     await page.setViewportSize({ width: 760, height: 850 });
     const sizes = await sources.evaluate(element => ({ scroll: element.scrollWidth, client: element.clientWidth }));
     expect(sizes.scroll).toBeLessThanOrEqual(sizes.client + 1);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -119,7 +118,6 @@ test('streaming citations resolve when definitions arrive and survive message co
   await expect(live).toHaveCount(0);
   await expect(page.locator('#transcript .citation')).toHaveText(['1', '1']);
   await expect(page.locator('#transcript .citation-source')).toHaveCount(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('citation actions stay message-local and code, unused definitions, and unsafe URLs stay inert', async ({ page }) => {
@@ -152,5 +150,4 @@ test('citation actions stay message-local and code, unused definitions, and unsa
     await messages.nth(index).locator('.citation[data-citation="1"] button').click();
     await expect.poll(() => app.requests.filter(r => r.method === 'host.open_path').map(r => r.params.path)).toContain(path);
   }
-  expect(app.pageErrors).toEqual([]);
 });

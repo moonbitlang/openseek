@@ -87,6 +87,7 @@ priv enum ShellMessage {
   SetGoal
   UltraReview
   SimplifyProject
+  DreamConsolidate
   ContinuePrompt
   GoalPlaceholder
   EditQueuePlaceholder
@@ -661,6 +662,16 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "尋找安全的簡化並為每個套件建立一個提取請求（耗用大量 token）"
     (Japanese, SimplifyProject) =>
       "安全な簡略化を探し、パッケージごとにプルリクエストを作成（トークンを大量に消費）"
+    (English, DreamConsolidate) =>
+      "Consolidate recent sessions into project memory (MEMORY.md) and reusable skills"
+    (Spanish, DreamConsolidate) =>
+      "Consolidar sesiones recientes en la memoria del proyecto (MEMORY.md) y skills reutilizables"
+    (SimplifiedChinese, DreamConsolidate) =>
+      "整理历史会话，自动沉淀并精简项目记忆（MEMORY.md）与可复用技能（Skills）"
+    (TraditionalChinese, DreamConsolidate) =>
+      "整理歷史會話，自動沉澱並精簡專案記憶（MEMORY.md）與可複用技能（Skills）"
+    (Japanese, DreamConsolidate) =>
+      "最近のセッションを整理し、プロジェクトメモリ（MEMORY.md）や再利用可能なスキルに定着"
     (English, ContinuePrompt) =>
       "Continue the task from the checkpoint summary. Do not redo finished work; take the next step."
     (Spanish, ContinuePrompt) =>

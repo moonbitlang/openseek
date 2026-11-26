@@ -23,6 +23,30 @@ test "pending job wait labels expose targets and clear on result" {
 }
 
 ///|
+test "pending waits prefer projected job descriptions per ID in request order" {
+  let args : Json = {
+    "job_ids": ["bg-3", "bg-1", "bg-2", "bg-3"],
+    "job_descriptions": { "bg-1": " ", "bg-3": "构建文档" },
+  }
+  let wait : @transcript.ToolCall = {
+    call_id: "wait",
+    children: [],
+    name: "job_wait",
+    arguments: Some(args.stringify()),
+    outcome: Pending(output=None),
+  }
+  assert_eq(
+    pending_job_wait_label(locale=SimplifiedChinese, wait, descriptions={
+      "bg-1": "运行测试",
+      "bg-3": "旧名称",
+    }),
+    Some(
+      "等待以下任一任务完成：\"构建文档\"、\"运行测试\"、bg-2",
+    ),
+  )
+}
+
+///|
 test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
   let start : @transcript.ToolCall = {
     call_id: "start",

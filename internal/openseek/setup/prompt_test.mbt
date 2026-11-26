@@ -256,3 +256,45 @@ async test "skills directories are advertised, shadowed by the user-level librar
     ])
   })
 }
+
+///|
+async test "configured system prompt injects MEMORY.md after AGENTS.md and before Skills" {
+  @vfs.with_tmpdir(prefix="openseek-memory-order-", root => {
+    @fs.write_text(
+      "\{root}/AGENTS.md",
+      "repo rules",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.mkdir("\{root}/.openseek/memory", recursive=true)
+    @fs.write_text(
+      "\{root}/.openseek/memory/MEMORY.md",
+      "- Prefer native tests first (topics/testing.md)",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.mkdir("\{root}/.openseek/skills/demo", recursive=true)
+    @fs.write_text(
+      "\{root}/.openseek/skills/demo/SKILL.md",
+      "---\nname: demo\ndescription: Demo skill\n---\nsteps\n",
+      create_mode=CreateOrTruncate,
+    )
+    let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_GLOBAL_SKILLS_DIR": "\{root}/no-global-skills",
+    })
+    let prompt = @setup.configured_system_prompt(
+      parsed,
+      Deepseek(V4Flash),
+      workspace_root=root,
+    )
+    guard prompt.find("<project_instructions") is Some(agents_pos) else {
+      fail("missing AGENTS.md section")
+    }
+    guard prompt.find("<project_memory") is Some(memory_pos) else {
+      fail("missing MEMORY.md section")
+    }
+    guard prompt.find("## Skills") is Some(skills_pos) else {
+      fail("missing Skills section")
+    }
+    assert_true(agents_pos < memory_pos && memory_pos < skills_pos)
+  })
+}

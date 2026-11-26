@@ -482,7 +482,6 @@ async test "multi_edit rejects generated mbti files before writing" {
       ],
     })
     assert_true(output.is_error)
-    assert_true(output.content.contains("run moon info"))
     assert_eq(@fs.read_text(path), original)
   })
 }
@@ -664,10 +663,7 @@ async test "a write scope rejects the whole batch on one out-of-scope path" {
     @vfs.FileSystem({ "lib/a.txt": "aa\n", "other/b.txt": "bb\n" }).write_to(
       dir,
     )
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
-      is Ok(scope) else {
-      fail("expected the scope to build")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
     let output = run_multi_edit_in_workspace(
       dir,
       {

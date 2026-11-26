@@ -13,11 +13,14 @@ MoonBit.
   comment, comes before the opening `---`.
 - Import every package it uses separately, core packages included and by
   their real path: `moonbitlang/core/encoding/base64`, not
-  `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
+  `moonbitlang/core/base64` — `@builtin/ide.mbtx` with `args=["doc", "@base64"]` prints the path.
 - Use `fn main`. The entry point infers async and error effects. Import
   `moonbitlang/core/async` only when using its APIs, such as `@async.sleep`.
 - Declare async helpers with `async fn` and write async calls directly.
 - Use `println` (no `print`).
+
+A successful `moon check` updates `pkg.generated.mbti` for checked local
+packages whose preferred backend is included. Review the diff for public API changes.
 
 A minimal `moon check` script:
 
@@ -39,7 +42,9 @@ For a nonzero exit, import `"moonbitlang/core/env"` and call `@env.exit(1)`.
 
 ## Shell EDSL with moonbitlang/core/async/shell
 
-Use `@shell.Cmd` to run an external program and capture its output.
+Use `@shell.Cmd` to run an external program and capture its output. Pass
+`stdin=Text(s)`, `stdin=FromFile(path)`, or `stdin=Binary(bytes)` as labeled
+arguments to `@shell.Cmd` (there is no `.stdin(...)` builder method).
 
 Shell utilities can be expressed in MoonBit, including on Windows:
 
@@ -69,10 +74,11 @@ An example of using rg in `mbtx`:
 
 [share/examples/command_output.mbtx](../share/examples/command_output.mbtx)
 
-Use `moon ide doc @moonbitlang/core/async/shell` for a package API overview.
-Use `moon ide doc '@moonbitlang/core/async/shell.<Type>'` for a specific type's
+Use `@builtin/ide.mbtx` with `args=["doc", "@moonbitlang/core/async/shell"]`
+for a package API overview, or
+`args=["doc", "@moonbitlang/core/async/shell.<Type>"]` for a specific type's
 definition and documentation, as in
-`moon ide doc @moonbitlang/core/async/shell.Stdin`.
+`args=["doc", "@moonbitlang/core/async/shell.Stdin"]`.
 
 For compiler feedback, stream the line-delimited JSON from one `moon check`
 rather than collecting it and parsing it afterward:

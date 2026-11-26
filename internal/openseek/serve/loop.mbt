@@ -73,7 +73,10 @@ async fn run_serve(
   let (model, thinking, api_url) = @setup.session_agent_settings(
     matches, recorded,
   )
-  guard model.api_key(matches.values) is Some(api_key) else {
+  if model is Custom(_, ..) && api_url is None {
+    fail("an --api-url is required for custom model \{model}")
+  }
+  guard @cli.resolve_api_key(model, matches) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)

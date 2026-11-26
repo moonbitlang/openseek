@@ -120,6 +120,13 @@ extern "js" fn Index::get_all_ffi(self : Index, key : String) -> RawRequest =
   #| (index, key) => { key = JSON.parse(key); return index.getAll(key === null ? undefined : IDBKeyRange.only(key)); }
 
 ///|
+extern "js" fn Index::get_all_keys_ffi(
+  self : Index,
+  key : String,
+) -> RawRequest =
+  #| (index, key) => index.getAllKeys(JSON.parse(key))
+
+///|
 extern "js" fn Index::read_only_ffi(self : Index) -> Bool =
   #| index => index.objectStore.transaction.mode === 'readonly'
 

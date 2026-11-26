@@ -28,7 +28,6 @@ for (const [name, options] of [
     expect(page.url()).toBe(originalURL);
     expect(app.requests.filter(request =>
       request.method === 'shell.open_external' || request.method === 'browser.open')).toEqual([]);
-    expect(app.pageErrors).toEqual([]);
     await popup.close();
   });
 }

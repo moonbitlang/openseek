@@ -11,7 +11,7 @@ fn integrated_cloud_model() -> Model {
         updated_at: Some(100),
         generating: false,
         archived: false,
-        approval: ApprovalAsk,
+        approval: "ask",
         model: @deepseek.V4Flash,
         thinking: @protocol.ThinkingHigh,
       },
@@ -260,6 +260,7 @@ test "Chats use the shared section with existing ordering and create action" {
         workspace_name: "Unnamed workspace",
         updated_at_ms: Some(200),
         model_settings: None,
+        pull_requests: [],
       },
       {
         id: "local-b",
@@ -268,6 +269,7 @@ test "Chats use the shared section with existing ordering and create action" {
         workspace_name: "Unnamed workspace",
         updated_at_ms: Some(400),
         model_settings: None,
+        pull_requests: [],
       },
     ],
   })
@@ -282,7 +284,7 @@ test "Chats use the shared section with existing ordering and create action" {
           updated_at: Some(100),
           generating: false,
           archived: false,
-          approval: ApprovalAsk,
+          approval: "ask",
           model: @deepseek.V4Flash,
           thinking: @protocol.ThinkingHigh,
         },
@@ -292,7 +294,7 @@ test "Chats use the shared section with existing ordering and create action" {
           updated_at: Some(300),
           generating: false,
           archived: false,
-          approval: ApprovalAsk,
+          approval: "ask",
           model: @deepseek.V4Flash,
           thinking: @protocol.ThinkingHigh,
         },
@@ -343,7 +345,7 @@ test "Cloud uses the existing composer and transcript without a host workspace" 
   assert_true(input.shell_available)
   assert_true(input.presentation.images_enabled)
   assert_eq(input.slash_commands.map(command => command.command), [
-    "compact", "goal", "ultrareview", "simplify", "feedback",
+    "compact", "goal", "ultrareview", "simplify", "dream", "feedback",
   ])
   assert_true(
     input.slash_commands == test_model().composer_input().slash_commands,

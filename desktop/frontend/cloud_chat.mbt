@@ -526,15 +526,6 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         None
       },
     ),
-    run: if conversation.sending || conversation.generating {
-      Some(
-        conversation
-        .run_heartbeat()
-        .unwrap_or({ stage: @composer.Working, started_ms: None, tokens: 0, }),
-      )
-    } else {
-      None
-    },
     shell_available: conversation.queue_edit is None &&
     self.cloud.can_compose(owner.session()),
     prediction: if conversation.shell_commands.is_empty() {
@@ -647,11 +638,8 @@ fn Model::cloud_chat_rows(
         title: item.title.unwrap_or(shell_text(self.locale, NewChatLabel)),
         label: item.title.unwrap_or(shell_text(self.locale, NewChatLabel)),
         nested: false,
-        subrun: false,
         active,
-        loading: conversation.map_or(false, conversation => {
-          conversation.loading || conversation.history_older_request is Some(_)
-        }),
+        loading: active && conversation is Some({ loading: true, .. }),
         load_failed: conversation.map_or(false, conversation => {
           conversation.history_required && conversation.notice is Some(_)
         }),
@@ -681,7 +669,7 @@ fn Model::cloud_chat_rows(
         } else {
           []
         },
-        children: [],
+        pull_request: None,
         run_mark: @conversation.RunMark::for_task(
           running=item.generating ||
             conversation.map_or(false, conversation => {

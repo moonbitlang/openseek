@@ -16,31 +16,26 @@ async function rename(page, cloud, title) {
 
 const patches = cloud => cloud.requests.filter(request => request.method === 'PATCH');
 
-{
-  const desktop = false;
-
-  test(`${desktop ? 'desktop' : 'browser'} Cloud renames through the shared field and keeps its manual title after sending and reload`, async ({ page }) => {
-    const cloud = new CloudHarness(page, { desktop });
-    await cloud.install();
-    await cloud.goto();
-    await cloud.open();
-    const field = await rename(page, cloud, '  Release planning  ');
-    await field.press('Enter');
-    await expect(field).toHaveCount(0);
-    await expect(cloud.row(sessionA)).toHaveText('Release planning');
-    await expect(page.locator('main h1')).toHaveText('Release planning');
-    expect(patches(cloud).map(request => JSON.parse(request.body))).toEqual([{ title: 'Release planning' }]);
-    expect(patches(cloud)[0].path).toBe(`/v1/sessions/${sessionA}`);
-    expect(patches(cloud)[0].headers.authorization).toBe('Bearer ts_fixture-123');
-    await page.locator('#task').fill('Continue the plan');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(page.locator('#transcript')).toContainText('calculation complete');
-    await expect(page.locator('main h1')).toHaveText('Release planning');
-    await page.reload();
-    await page.getByRole('button', { name: 'Chat', exact: true }).click();
-    await cloud.open();
-    await expect(page.locator('main h1')).toHaveText('Release planning');
-    expect(cloud.device.pageErrors).toEqual([]);
-  });
-}
+test('browser Cloud renames through the shared field and keeps its manual title after sending and reload', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  await cloud.install();
+  await cloud.goto();
+  await cloud.open();
+  const field = await rename(page, cloud, '  Release planning  ');
+  await field.press('Enter');
+  await expect(field).toHaveCount(0);
+  await expect(cloud.row(sessionA)).toHaveText('Release planning');
+  await expect(page.locator('main h1')).toHaveText('Release planning');
+  expect(patches(cloud).map(request => JSON.parse(request.body))).toEqual([{ title: 'Release planning' }]);
+  expect(patches(cloud)[0].path).toBe(`/v1/sessions/${sessionA}`);
+  expect(patches(cloud)[0].headers.authorization).toBe('Bearer ts_fixture-123');
+  await page.locator('#task').fill('Continue the plan');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('#transcript')).toContainText('calculation complete');
+  await expect(page.locator('main h1')).toHaveText('Release planning');
+  await page.reload();
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await cloud.open();
+  await expect(page.locator('main h1')).toHaveText('Release planning');
+});
 

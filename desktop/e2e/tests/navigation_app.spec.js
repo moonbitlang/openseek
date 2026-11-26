@@ -54,5 +54,4 @@ test('dialogs remain reachable in narrow and native titlebars', async ({ page })
   expect(mode.x).toBeGreaterThanOrEqual(toggle.x + toggle.width);
   const sidebar = await page.locator('aside').boundingBox();
   expect(mode.x + mode.width).toBeLessThanOrEqual(sidebar.x + sidebar.width);
-  expect(app.pageErrors).toEqual([]);
 });

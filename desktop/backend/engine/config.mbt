@@ -25,6 +25,9 @@ priv struct RunConfig {
   // default for the model's provider.
   api_url : String?
   model : String
+  // The window the run plans against when the model is a saved custom entry;
+  // None leaves the engine's built-in table in charge.
+  context_window : Int32?
   thinking : @protocol.Thinking
   // Complete base system prompt used only when creating a new session.
   system_prompt : String?
@@ -78,6 +81,40 @@ fn configured_api_key(
 }
 
 ///|
+/// The context window a saved custom model entry specifies, or `None` when
+/// the engine's built-in table should decide.
+fn configured_context_window(
+  settings : EngineSettings,
+  model : String,
+) -> Int32? {
+  match settings.provider {
+    Custom =>
+      find_custom_model(settings.models, model).map(e => e.context_window)
+    _ => None
+  }
+}
+
+///|
+/// Set the run's API key variable and optional context window in a child
+/// environment, clearing ambient custom overrides so they cannot leak into
+/// built-in runs.
+fn apply_model_env(
+  env : Map[String, String],
+  key_env~ : String,
+  api_key~ : String,
+  context_window~ : Int32?,
+) -> Unit {
+  env[key_env] = api_key
+  if key_env != @deepseek.CustomApiKeyEnv {
+    env.remove(@deepseek.CustomApiKeyEnv)
+  }
+  match context_window {
+    Some(window) => env["OPENSEEK_CONTEXT_WINDOW"] = window.to_string()
+    None => env.remove("OPENSEEK_CONTEXT_WINDOW")
+  }
+}
+
+///|
 /// The model runs fall back to when neither the request nor `OPENSEEK_MODEL`
 /// names one: each official provider's flagship, and DeepSeek's for a custom
 /// endpoint (any wire name works there, but the engine still needs one).
@@ -91,19 +128,16 @@ fn ApiProvider::default_model(self : ApiProvider) -> String {
 ///|
 /// The environment variable the engine resolves for one model wire name.
 fn model_key_env(model : String) -> String {
-  if model.has_prefix("glm-") {
-    "GLM"
-  } else if model.has_prefix("kimi-") {
-    "KIMI"
-  } else {
-    "DEEPSEEK"
+  match parse_model_opt(model) {
+    Some(parsed) => parsed.api_key_env()
+    None => @deepseek.CustomApiKeyEnv
   }
 }
 
 ///|
 /// The environment variable that carries the run's API key to the engine.
 /// The engine resolves its chat key from a provider-specific variable chosen
-/// by the model (`Model::api_key`): `DEEPSEEK`, `KIMI`, or `GLM`. Official
+/// by the model: `DEEPSEEK`, `KIMI`, or `GLM` for built-in models. Official
 /// providers reject a model from another provider before a child process can
 /// inherit that model's ambient credential. A custom endpoint's key instead
 /// follows the model's variable, or the engine would never find it; the
@@ -180,7 +214,7 @@ async fn run_config(
     mcp_config?,
   )
   if !payload.images.is_empty() && !config.supports_images() {
-    raise EngineError("Images require a DeepSeek image-capable endpoint")
+    raise EngineError("this model's endpoint does not accept images")
   }
   { ..config, content, }
 }
@@ -276,6 +310,7 @@ async fn serve_config(
     key_env: key_env_for(settings.provider, model),
     api_url: endpoint.api_url,
     model,
+    context_window: configured_context_window(settings, model),
     thinking: RunConfig::configured_thinking(thinking),
     system_prompt,
     // Absent is ask: what every request meant before the field existed.
@@ -307,6 +342,7 @@ fn engine_fingerprint(config : RunConfig) -> String {
     config.key_env,
     config.api_url.unwrap_or(""),
     config.model,
+    config.context_window.map(w => w.to_string()).unwrap_or(""),
     config.thinking.wire(),
     // `--approval` is fixed for the process's lifetime.
     config.approval.wire(),
@@ -329,6 +365,7 @@ test "a different endpoint cannot reuse a live engine process" {
     key_env: "DEEPSEEK",
     api_url: None,
     model: "deepseek-v4-pro",
+    context_window: None,
     thinking: ThinkingMax,
     approval: ApprovalAsk,
     max_steps: 1000,
@@ -391,6 +428,16 @@ test "a different endpoint cannot reuse a live engine process" {
   assert_true(
     engine_fingerprint(base) !=
     engine_fingerprint({ ..base, cwd: Some(Path("/w/.worktrees/x")), }),
+  )
+  // context_window is exported once as OPENSEEK_CONTEXT_WINDOW when the
+  // process starts, so lowering or raising it must spawn a fresh process.
+  assert_true(
+    engine_fingerprint(base) !=
+    engine_fingerprint({ ..base, context_window: Some(131_072), }),
+  )
+  assert_true(
+    engine_fingerprint({ ..base, context_window: Some(1_000_000), }) !=
+    engine_fingerprint({ ..base, context_window: Some(131_072), }),
   )
 }
 
@@ -630,6 +677,10 @@ fn prompt_content(
 
 ///|
 fn RunConfig::supports_images(self : RunConfig) -> Bool {
-  self.model is ("deepseek-flash" | "deepseek-v4-flash") &&
-  self.api_url != Some("https://openrouter.ai/api/v1/chat/completions")
+  match parse_model_opt(self.model) {
+    Some(Custom(_)) => true
+    _ =>
+      self.model is ("deepseek-flash" | "deepseek-v4-flash") &&
+      self.api_url != Some(OpenRouterChatCompletionsUrl)
+  }
 }

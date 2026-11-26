@@ -91,6 +91,7 @@ fn State::load(
       load_latest_history(
         token,
         id,
+        self.history_view,
         conversation.history_etag,
         self.epoch,
         request,
@@ -127,10 +128,64 @@ fn State::reread_turn(
   (
     { ..next, sequence: request, },
     run(emit, () => {
-      TurnLoaded(self.epoch, id, request, load_turn_history(token, id, offset)) catch {
+      TurnLoaded(
+        self.epoch,
+        id,
+        request,
+        load_turn_history(token, id, self.history_view, offset),
+      ) catch {
         @cloud_client.RequestError(error) =>
           TurnFailed(self.epoch, id, request, error)
         _ => TurnFailed(self.epoch, id, request, Unreachable)
+      }
+    }),
+  )
+}
+
+///|
+fn State::load_older(
+  self : State,
+  id : String,
+  navigation : Int32,
+  token : String?,
+  emit : @cmd.Emit[Msg],
+  through? : Int32,
+) -> (State, @cmd.Cmd) {
+  guard self.conversations.get(id) is Some(conv) &&
+    conv.history_older_request is None else {
+    return (self, @cmd.none)
+  }
+  let window = conv.history_window.reattach()
+  let state = if window.lo < conv.history_window.lo {
+    self.replace(id, conv.with_history_window(window))
+  } else {
+    self
+  }
+  if through is None && window.lo < conv.history_window.lo {
+    return (state, @cmd.none)
+  }
+  guard window.older_offset() is Some(offset) &&
+    through.map_or(true, lo => offset >= lo) &&
+    token is Some(token) else {
+    return (state, @cmd.none)
+  }
+  let request = state.sequence + 1
+  let next = state.replace(id, {
+    ..state.conversations[id],
+    history_older_request: Some((request, offset, navigation)),
+  })
+  (
+    { ..next, sequence: request, },
+    run(emit, () => {
+      OlderLoaded(
+        state.epoch,
+        id,
+        request,
+        load_turn_history(token, id, state.history_view, offset),
+      ) catch {
+        @cloud_client.RequestError(error) =>
+          OlderFailed(state.epoch, id, request, error)
+        _ => OlderFailed(state.epoch, id, request, Unreachable)
       }
     }),
   )
@@ -287,13 +342,13 @@ pub fn State::can_choose_settings(self : State, id : String) -> Bool {
 
 ///|
 /// The mode the session's next engine starts with, including a draft's choice.
-pub fn State::approval(self : State, id : String) -> @protocol.OpenSeekApproval {
+pub fn State::approval(self : State, id : String) -> String {
   if self.creation is Some({ id: draft, approval, .. }) && draft == id {
     return approval
   }
   match self.sessions.iter().find_first(session => session.id == id) {
     Some(session) => session.approval
-    None => ApprovalAsk
+    None => "ask"
   }
 }
 
@@ -497,6 +552,7 @@ pub fn update(
       let cache_catalog = user_id is Some(_) && token is Some(_)
       let next = {
         ..State::empty(),
+        history_view: state.history_view,
         client_tools,
         user_id,
         epoch: state.epoch + 1,
@@ -598,7 +654,7 @@ pub fn update(
             updated_at: None,
             generating: false,
             archived: false,
-            approval: ApprovalAsk,
+            approval: "ask",
             model: V4Flash,
             thinking: ThinkingHigh,
           })
@@ -627,7 +683,7 @@ pub fn update(
           id,
           request,
           navigation,
-          approval: ApprovalReview,
+          approval: "review",
           model: V4Flash,
           thinking: ThinkingHigh,
         }),
@@ -1169,7 +1225,7 @@ pub fn update(
         id,
         if history is Some(history) && !conversation.history_cached {
           let cached = conversation
-            .with_latest_page(history)
+            .with_latest_page(history, state.history_view)
             .with_prediction(history.prediction)
           {
             ..cached.restore_goal(cached.document),
@@ -1189,37 +1245,8 @@ pub fn update(
       (next, command, None)
     }
     LoadOlder(id) => {
-      guard state.conversations.get(id) is Some(conversation) &&
-        conversation.older_history_offset() is Some(offset) else {
-        return (state, @cmd.none, None)
-      }
-      let window = conversation.history_window.reattach()
-      if window != conversation.history_window {
-        let next = conversation.with_history_window(window)
-        return (state.replace(id, next), @cmd.none, None)
-      }
-      guard token is Some(token) else { return (state, @cmd.none, None) }
-      let request = state.sequence + 1
-      let next = state.replace(id, {
-        ..conversation,
-        history_older_request: Some((request, offset, navigation)),
-      })
-      (
-        { ..next, sequence: request, },
-        run(emit, () => {
-          OlderLoaded(
-            state.epoch,
-            id,
-            request,
-            load_turn_history(token, id, offset),
-          ) catch {
-            @cloud_client.RequestError(error) =>
-              OlderFailed(state.epoch, id, request, error)
-            _ => OlderFailed(state.epoch, id, request, Unreachable)
-          }
-        }),
-        None,
-      )
+      let (next, command) = state.load_older(id, navigation, token, emit)
+      (next, command, None)
     }
     OlderLoaded(epoch, id, request, history) => {
       guard epoch == state.epoch &&
@@ -1230,9 +1257,13 @@ pub fn update(
       }
       let conversation = { ..conversation, history_older_request: None, }
       let next = if owner == navigation && history.offset == Some(offset) {
-        conversation.with_older_page({ ..history, generating: false, }, request)
+        conversation.with_older_page(
+          { ..history, generating: false, },
+          state.history_view,
+          request,
+        )
       } else {
-        conversation
+        { ..conversation, history_restore_range: None, }
       }
       (state.replace(id, next), @cmd.none, None)
     }
@@ -1248,6 +1279,7 @@ pub fn update(
       let settled = conversation.with_turn_page(
         offset,
         { ..history, generating: false, },
+        state.history_view,
         request,
       )
       let next = state.replace(id, { ..settled, history_turn_request: None, })
@@ -1288,6 +1320,7 @@ pub fn update(
       let next = state.replace(id, {
         ..conversation,
         history_older_request: None,
+        history_restore_range: None,
       })
       let (next, command) = if error is Unauthorized {
         next.failed(error)
@@ -1299,6 +1332,7 @@ pub fn update(
     Loaded(epoch, id, request, history) => {
       let conversation = state.conversations[id].with_latest_page(
         history,
+        state.history_view,
         request~,
       )
       let accepted = conversation.pending is Some(submission) &&
@@ -1422,7 +1456,11 @@ pub fn update(
           turn,
           state.cache_mutation(
             token,
-            Write(session=id, page=history.cache_page()),
+            Write(
+              session=id,
+              view=state.history_view,
+              page=history.cache_page(),
+            ),
           ),
         ]),
         None,
@@ -1437,12 +1475,14 @@ pub fn update(
             request,
             page.session,
             page.messages,
+            minimal_page=state.history_view is Minimal,
           )
         None =>
           conversation.acknowledge_assistants(
             request,
             conversation.document,
             conversation.records,
+            minimal_page=state.history_view is Minimal,
           )
       }
       let next = state.replace(id, {
@@ -1575,7 +1615,8 @@ pub fn update(
           reasoning_frontier: conversation.durable_frontier(),
           notification_answer: None,
           heartbeat: Some({
-            stage: @composer.Thinking,
+            stage: @transcript.Working,
+            step: None,
             started_ms: None,
             tokens: 0,
           }),
@@ -1757,6 +1798,31 @@ pub fn update(
         None,
       )
     }
+  }
+  // Switching representations reloads the turns already on screen, once the
+  // new latest page establishes its offset. Ordinary pagination remains lazy.
+  let (next, command) = match msg {
+    Loaded(_, id, _, _)
+    | HistoryUnchanged(_, id, _, _)
+    | OlderLoaded(_, id, _, _) => {
+      let conv = next.conversations[id]
+      match conv.history_restore_range {
+        Some((owner, lo)) if owner == navigation && conv.history_window.lo > lo => {
+          let (next, older) = next.load_older(
+            id,
+            navigation,
+            token,
+            emit,
+            through=lo,
+          )
+          (next, @cmd.batch([command, older]))
+        }
+        Some(_) =>
+          (next.replace(id, { ..conv, history_restore_range: None, }), command)
+        None => (next, command)
+      }
+    }
+    _ => (next, command)
   }
   guard follow_up is Some(id) &&
     next.conversations.get(id) is Some(conversation) &&

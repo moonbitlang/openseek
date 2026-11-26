@@ -27,8 +27,8 @@ OpenSeek terminal UI.
 Options:
   -h, --help                                                   Show help information.
   --continue                                                   Resume the most recently active session in --session-root.
-  --api-key <api-key>                                          API key for the selected chat provider. [default: ]
-  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. [env: OPENSEEK_MODEL] [default: deepseek-flash]
+  --api-key <api-key>                                          API key for the selected chat provider. [env: OPENSEEK_API_KEY] [default: ]
+  --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, glm-5.3-flash, or any model id configured in Settings. [env: OPENSEEK_MODEL] [default: deepseek-flash]
   --api-url <api-url>                                          OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
   --retry-attempts <retry-attempts>                            Total tries per model request before giving up on a retryable failure (429, 5xx, or a transport error); 1 disables retrying. Omit for the client default. [env: OPENSEEK_RETRY_ATTEMPTS]
   --retry-backoff-ms <retry-backoff-ms>                        Delay before the first model-request retry; it doubles per attempt, capped at 60s. Omit for the client default. [env: OPENSEEK_RETRY_BACKOFF_MS]
@@ -125,7 +125,7 @@ $ sh <<'EOF'
 exit-non-zero
 error: moonbit-community/tty/internal/sidecar.SidecarError.SidecarError
 stdout-empty
-moonbitlang/openseek@0.7.6 --help
+moonbitlang/openseek@0.7.7 --help
 ```
 
 Without `moonx` on `PATH` (no MoonBit toolchain), the preflight says so.
@@ -135,7 +135,7 @@ $ sh <<'EOF'
 > ui=$(command -v openseek_tui.exe)
 > env -i PATH=/usr/bin:/bin DEEPSEEK=test-key "$ui"
 > EOF
-error: engine 'moonx moonbitlang/openseek@0.7.6' is not usable: `moonx` was not found on PATH.
+error: engine 'moonx moonbitlang/openseek@0.7.7' is not usable: `moonx` was not found on PATH.
 The default engine runs through moonx, part of the MoonBit toolchain; its first launch downloads the pinned openseek release, so it needs network access to mooncakes.io.
 Install MoonBit, or pass --engine <path> to an openseek binary.
 [1]
@@ -147,16 +147,16 @@ offline), the tail of its output is quoted so the cause is visible.
 ```mooncram
 $ sh <<'EOF'
 > bin=$(mktemp -d)
-> printf '#!/bin/sh\necho "fetching moonbitlang/openseek@0.7.6"\necho "error: failed to download from mooncakes.io" >&2\nexit 1\n' > "$bin/moonx"
+> printf '#!/bin/sh\necho "fetching moonbitlang/openseek@0.7.7"\necho "error: failed to download from mooncakes.io" >&2\nexit 1\n' > "$bin/moonx"
 > chmod +x "$bin/moonx"
 > PATH="$bin:$PATH" env DEEPSEEK=test-key openseek_tui.exe
 > status=$?
 > rm -rf "$bin"
 > exit $status
 > EOF
-error: engine 'moonx moonbitlang/openseek@0.7.6' is not usable: `--help` exited with code 1.
+error: engine 'moonx moonbitlang/openseek@0.7.7' is not usable: `--help` exited with code 1.
 Its output ended with:
-  fetching moonbitlang/openseek@0.7.6
+  fetching moonbitlang/openseek@0.7.7
   error: failed to download from mooncakes.io
 The default engine runs through moonx, part of the MoonBit toolchain; its first launch downloads the pinned openseek release, so it needs network access to mooncakes.io.
 Install MoonBit, or pass --engine <path> to an openseek binary.

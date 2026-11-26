@@ -136,27 +136,35 @@ pub async fn load_or_new_session(
 /// The model, thinking mode, and endpoint a run on a durable session uses.
 /// What the session recorded (`SessionStore::model`) stands in for whichever
 /// of `--model` and `--thinking` the user did not configure, by flag or by
-/// environment, so resuming a session keeps the model it ran on; a
-/// configured value wins and becomes the session's from this run on.
+/// environment. When the same model is selected, reuse its recorded window
+/// unless the launcher supplies a new custom window.
 pub fn session_agent_settings(
   matches : @argparse.Matches,
   recorded : @store.SessionModel?,
 ) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise {
   let (model, thinking, api_url) = @options.agent_settings(matches)
-  guard recorded is Some(recorded) else { return (model, thinking, api_url) }
-  (
-    if matches.sources.get("model") is Some(Argv | Env) {
-      model
-    } else {
-      recorded.model
-    },
-    if matches.sources.get("thinking") is Some(Argv | Env) {
-      thinking
-    } else {
-      recorded.thinking
-    },
-    api_url,
-  )
+  let model = if recorded is Some(saved) &&
+    (
+      !(matches.sources.get("model") is Some(Argv | Env)) ||
+      saved.model.to_string() == model.to_string()
+    ) {
+    saved.model
+  } else {
+    model
+  }
+  let model = if model is Custom(id, ..) &&
+    @options.context_window() is Some(context_window) {
+    @deepseek.Custom(id, context_window~)
+  } else {
+    model
+  }
+  let thinking = if recorded is Some(saved) &&
+    !(matches.sources.get("thinking") is Some(Argv | Env)) {
+    saved.thinking
+  } else {
+    thinking
+  }
+  (model, thinking, api_url)
 }
 
 ///|

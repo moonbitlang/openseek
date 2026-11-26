@@ -69,60 +69,63 @@ pub fn checkout_dialog(
   state : State,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  guard state.checkout is Some({ phase: Confirming, number, updating, .. }) else {
-    return @html.nothing
-  }
+  let checkout = state.checkout.filter(checkout => checkout.phase is Confirming)
   @rui.dialog(
     id="github-checkout-dialog",
     class="dialog-size-small",
     show_close=false,
-    on_cancel=emit(DismissCheckout),
+    on_close=_ => emit(CheckoutDialogClosed),
     attrs=@html.Attrs::build().aria_label(
-      if updating {
-        ui(locale, UncommittedBeforeUpdate(number))
-      } else {
-        ui(locale, UncommittedBeforeCheckout(number))
+      match checkout {
+        Some({ number, updating: true, .. }) =>
+          ui(locale, UncommittedBeforeUpdate(number))
+        Some({ number, .. }) => ui(locale, UncommittedBeforeCheckout(number))
+        None => ui(locale, UncommittedChanges)
       },
     ),
-    [
-      @rui.dialog_header(@rui.dialog_title(ui(locale, UncommittedChanges))),
-      @html.div(
-        ui(
-          locale,
-          if updating {
-            BeforeUpdate(number)
-          } else {
-            BeforeCheckout(number)
-          },
+    if checkout is Some({ number, updating, .. }) {
+      [
+        @rui.dialog_header(@rui.dialog_title(ui(locale, UncommittedChanges))),
+        @html.div(
+          ui(
+            locale,
+            if updating {
+              BeforeUpdate(number)
+            } else {
+              BeforeCheckout(number)
+            },
+          ),
         ),
-      ),
-      @rui.dialog_footer(class="github-checkout-choices", [
-        @html.button(
-          class="button primary",
-          on_click=emit(ConfirmCheckout(Stash)),
-          ui(locale, StashChanges),
-        ),
-        @html.button(
-          class="button secondary github-checkout-discard",
-          on_click=emit(ConfirmCheckout(Discard)),
-          ui(locale, DiscardChanges),
-        ),
-        @html.button(
-          class="button secondary",
-          on_click=emit(ConfirmCheckout(Carry)),
-          if updating {
-            ui(locale, UpdateAnyway)
-          } else {
-            ui(locale, CheckoutAnyway)
-          },
-        ),
-        @html.button(
-          class="button secondary",
-          on_click=emit(DismissCheckout),
-          ui(locale, CancelLabel),
-        ),
-      ]),
-    ],
+        @rui.dialog_footer(class="github-checkout-choices", [
+          @html.button(
+            class="button primary",
+            on_click=emit(ConfirmCheckout(Stash)),
+            ui(locale, StashChanges),
+          ),
+          @html.button(
+            class="button secondary github-checkout-discard",
+            on_click=emit(ConfirmCheckout(Discard)),
+            ui(locale, DiscardChanges),
+          ),
+          @html.button(
+            class="button secondary",
+            on_click=emit(ConfirmCheckout(Carry)),
+            if updating {
+              ui(locale, UpdateAnyway)
+            } else {
+              ui(locale, CheckoutAnyway)
+            },
+          ),
+          @html.button(
+            class="button secondary",
+            on_click=@dialog.close("github-checkout-dialog"),
+            ui(locale, CancelLabel),
+          ),
+        ]),
+      ]
+    } else {
+      []
+    },
   )
 }
 

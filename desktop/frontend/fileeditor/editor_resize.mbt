@@ -10,8 +10,9 @@
 const ResizeHandleId = "editor-resize-handle"
 
 ///|
-/// The drag class shared by the resize cursor and viewer mouse-event isolation.
-const ResizingClass = "is-resizing"
+/// The attribute toggled on the active handle (for its highlight) and on the
+/// document element (with the drag axis, for cursor and viewer mouse isolation).
+const ResizingAttr = "data-resizing"
 
 ///|
 /// The editor never shrinks below this. A hard floor only — collapse the tree
@@ -31,10 +32,10 @@ const MinChatWidth = 240
 let resize_installed : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether a drag is in progress. The document-level move/up listeners are
-/// permanent and simply gate on this, so there is nothing to add and remove per
-/// drag.
-let resizing : Ref[Bool] = Ref(false)
+/// The handle being dragged, when a drag is in progress. The document-level
+/// move/up listeners are permanent and simply gate on this, so there is nothing
+/// to add and remove per drag.
+let resizing : Ref[@dom.Element?] = Ref(None)
 
 ///|
 /// Whether a viewer re-measure is already queued for the next frame, so a burst
@@ -56,11 +57,9 @@ fn request_resize_handle_mount() -> @cmd.Cmd {
         is Some(handle) else {
         return
       }
-      @interop.add_capture_listener(
-        @js.Value::cast_from(handle),
-        "mousedown",
-        start_resize,
-      )
+      @interop.add_capture_listener(@js.Value::cast_from(handle), "mousedown", event => {
+        start_resize(handle, event)
+      })
       let document : @js.Value = @js.globalThis.get_with_string("document")
       @interop.add_capture_listener(document, "mousemove", on_resize_move)
       @interop.add_capture_listener(document, "mouseup", _ => end_drag(resizing))
@@ -72,14 +71,13 @@ fn request_resize_handle_mount() -> @cmd.Cmd {
 
 ///|
 /// Begin a drag on a left-button press over the handle.
-fn start_resize(event : @dom.Event) -> Unit {
+fn start_resize(handle : @dom.Element, event : @dom.Event) -> Unit {
   guard event.to_mouse_event() is Some(mouse) && mouse.get_button() == 0 else {
     return
   }
   // Stop the press from starting a text selection in the viewer underneath.
   event.prevent_default()
-  resizing.val = true
-  set_root_class(ResizingClass)
+  begin_drag(resizing, handle, "col")
 }
 
 ///|
@@ -89,7 +87,7 @@ fn start_resize(event : @dom.Event) -> Unit {
 /// the travel is as wide as the layout allows and is unaffected by the sidebar
 /// being open or collapsed.
 fn on_resize_move(event : @dom.Event) -> Unit {
-  guard resizing.val &&
+  guard resizing.val is Some(_) &&
     event.to_mouse_event() is Some(mouse) &&
     @dom.document().query_selector(".content").to_option() is Some(content) else {
     return
@@ -115,12 +113,32 @@ fn drag_size(raw : Double, floor~ : Double, max~ : Double) -> Int32 {
 }
 
 ///|
-/// End a drag and give the viewer a final, exact re-measure. `active` is the
-/// drag flag of whichever resizer is ending — see `resizing` / `tree_resizing`.
-fn end_drag(active : Ref[Bool]) -> Unit {
-  guard active.val else { return }
-  active.val = false
-  set_root_class("")
+/// Start a drag on `handle` along `axis` (`"col"` or `"row"`), highlighting the
+/// handle itself and marking the document element for cursor and viewer mouse
+/// isolation.
+fn begin_drag(
+  active : Ref[@dom.Element?],
+  handle : @dom.Element,
+  axis : String,
+) -> Unit {
+  active.val = Some(handle)
+  handle.set_attribute(ResizingAttr, "")
+  if @dom.document().get_document_element() is Some(root) {
+    root.set_attribute(ResizingAttr, axis)
+  }
+}
+
+///|
+/// End a drag and give the viewer a final, exact re-measure. `active` holds
+/// the handle of whichever resizer is ending — see `resizing` /
+/// `tree_resizing` / `git_graph_resizing`.
+fn end_drag(active : Ref[@dom.Element?]) -> Unit {
+  guard active.val is Some(handle) else { return }
+  active.val = None
+  handle.remove_attribute(ResizingAttr)
+  if @dom.document().get_document_element() is Some(root) {
+    root.remove_attribute(ResizingAttr)
+  }
   layout_active_editor_surface()
 }
 
@@ -175,14 +193,6 @@ fn set_tree_height(height : Int32) -> Unit {
 fn set_tree_width(width : Int32) -> Unit {
   tree_width.val = Some(width)
   sync_root_style()
-}
-
-///|
-/// Toggle a class on the document element (empty string clears it).
-fn set_root_class(class_name : String) -> Unit {
-  if @dom.document().get_document_element() is Some(root) {
-    root.set_attribute("class", class_name)
-  }
 }
 
 ///|

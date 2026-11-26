@@ -70,11 +70,7 @@ test('client MCP authenticates before discovery, opens a visible Cloud pane, and
   const app = new CloudHarness(page, { desktop: true });
   clientTools(app);
   const nativeRequests = [];
-  const reply = app.device.replyFor.bind(app.device);
-  app.device.replyFor = request => {
-    if (request.method.startsWith('browser.')) { nativeRequests.push(request); return {}; }
-    return reply(request);
-  };
+  app.device.onRpc(/^browser\./, request => { nativeRequests.push(request); return {}; });
   await app.install();
   await app.goto();
   await app.open();
@@ -99,11 +95,7 @@ test('client MCP authenticates before discovery, opens a visible Cloud pane, and
 test('Desktop Cloud Browse keeps native views with their conversation and hides covered pages', async ({ page }, testInfo) => {
   const app = new CloudHarness(page, { desktop: true });
   const native = [];
-  const reply = app.device.replyFor.bind(app.device);
-  app.device.replyFor = request => {
-    if (request.method.startsWith('browser.')) { native.push(request); return {}; }
-    return reply(request);
-  };
+  app.device.onRpc(/^browser\./, request => { native.push(request); return {}; });
   await app.install(); await app.goto(); await app.open();
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.locator('.dock-launcher').getByRole('button', { name: /^Browse / }).click();
@@ -125,7 +117,6 @@ test('Desktop Cloud Browse keeps native views with their conversation and hides 
   await page.locator('.editor-tab.active .tab-close').click();
   await expect.poll(() => native.some(r => r.method === 'browser.close' && r.params.id === id)).toBe(true);
   expect(app.requests.some(r => r.method === 'POST' && r.path.endsWith('/previews'))).toBe(false);
-  expect(app.device.pageErrors).toEqual([]);
 });
 
 test('Cloud questions use the existing card and route immediate and delayed answers to their original session', async ({ page }) => {

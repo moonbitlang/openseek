@@ -21,9 +21,12 @@ import WebKit
     private let statusText = UILabel()
     private let recovery = UIStackView()
     private var slowLoad: Task<Void, Never>?
-    private var localDocument: WKNavigation?
+    let accountWeb: WKWebView
+    private var account: String?
+    private var archiveNavigation: WKNavigation?
     private var pendingNavigation: WKNavigation?
     private var failedPage: URL?
+    private var loadingDocumentAt: URL?
     private var signIn: SignIn?
     private var downloads: [WKDownload: (temporaryFile: URL, filename: String)] = [:]
     private let lastPageKey = "console.lastPage"
@@ -31,6 +34,9 @@ import WebKit
     init(websiteDataStore: WKWebsiteDataStore? = nil) {
         let config = WKWebViewConfiguration()
         if let websiteDataStore { config.websiteDataStore = websiteDataStore }
+        let storage = WKWebViewConfiguration()
+        storage.websiteDataStore = config.websiteDataStore
+        accountWeb = WKWebView(frame: .zero, configuration: storage)
         config.applicationNameForUserAgent = "SeekMoonIOS/0.1.0"
         web = WKWebView(frame: .zero, configuration: config)
         super.init(nibName: nil, bundle: nil)
@@ -102,10 +108,10 @@ import WebKit
         view.addSubview(statusCover)
         let retry = UIButton(type: .system)
         retry.setTitle(String(localized: "Retry"), for: .normal)
-        retry.addAction(UIAction { [weak self] _ in self?.loadPage(self?.failedPage, retry: true) }, for: .touchUpInside)
+        retry.addAction(UIAction { [weak self] _ in self?.loadPage(self?.failedPage) }, for: .touchUpInside)
         let home = UIButton(type: .system)
         home.setTitle(String(localized: "Open Cloud"), for: .normal)
-        home.addAction(UIAction { [weak self] _ in self?.loadPage(Console.home, retry: true) }, for: .touchUpInside)
+        home.addAction(UIAction { [weak self] _ in self?.loadPage(Console.home) }, for: .touchUpInside)
         if #available(iOS 26.0, *) {
             retry.configuration = .prominentGlass()
             home.configuration = .glass()
@@ -134,8 +140,8 @@ import WebKit
         showLoading()
         // This fixed local document opens WebKit's existing first-party storage.
         // No console scripts or network request are needed to show the login buttons.
-        localDocument = web.loadHTMLString(Self.accountDocument, baseURL: destination)
-        pendingNavigation = localDocument
+        accountWeb.navigationDelegate = self
+        accountWeb.loadHTMLString(Self.accountDocument, baseURL: destination)
     }
 
     override func viewDidLayoutSubviews() {
@@ -214,6 +220,12 @@ import WebKit
         view.backgroundColor = dialogDim == nil ? fill : .black
     }
 
+    @discardableResult
+    func loadLocalHTML(_ html: String, at url: URL) -> WKNavigation? {
+        loadingDocumentAt = url
+        return web.loadHTMLString(html, baseURL: url)
+    }
+
     static let accountDocument = """
         <!doctype html><html data-seekmoon-account><head>
         <meta name="color-scheme" content="light dark">
@@ -222,19 +234,36 @@ import WebKit
         """
 
     @objc private func rememberPage() {
-        if localDocument == nil, let page = web.url, Console.isPage(page) {
-            UserDefaults.standard.set(Console.origin.appending(path: page.path), forKey: lastPageKey)
+        if let page = web.url, Console.isPage(page),
+           var parts = URLComponents(url: page, resolvingAgainstBaseURL: false) {
+            parts.query = nil
+            parts.fragment = nil
+            UserDefaults.standard.set(parts.url, forKey: lastPageKey)
         }
     }
 
-    private func loadPage(_ page: URL?, retry: Bool = false) {
+    private func loadPage(_ page: URL?, preservingHistory: Bool = false) {
         let url = page.flatMap { Console.isPage($0) ? $0 : nil } ?? Console.home
-        localDocument = nil
         failedPage = url
         navigation.reset()
         showLoading()
-        let policy: URLRequest.CachePolicy = retry ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy
-        pendingNavigation = web.load(URLRequest(url: url, cachePolicy: policy))
+        do {
+            guard let archive = Bundle.main.url(forResource: "Console", withExtension: "webarchive") else {
+                throw CocoaError(.fileNoSuchFile)
+            }
+            let data = try Data(contentsOf: archive, options: .mappedIfSafe)
+            loadingDocumentAt = url
+            let mime = "application/x-webarchive"
+            if preservingHistory {
+                pendingNavigation = web.load(data, mimeType: mime, characterEncodingName: "utf-8", baseURL: url)
+            } else {
+                let response = URLResponse(url: url, mimeType: mime, expectedContentLength: data.count, textEncodingName: nil)
+                pendingNavigation = web.loadSimulatedRequest(URLRequest(url: url), response: response, responseData: data)
+            }
+            archiveNavigation = pendingNavigation
+        } catch {
+            showError(error.localizedDescription, url: url)
+        }
     }
 
     private func showLoading() {
@@ -269,6 +298,10 @@ import WebKit
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { decisionHandler(.cancel); return }
+        if webView === accountWeb {
+            decisionHandler(Console.isPage(url) && action.navigationType == .other ? .allow : .cancel)
+            return
+        }
         if url.scheme == "blob", action.shouldPerformDownload {
             let fromConsole = action.sourceFrame.isMainFrame && Console.isPage(webView.url)
             decisionHandler(fromConsole ? .download : .cancel)
@@ -278,6 +311,16 @@ import WebKit
         if Console.owns(url), url.path == "/v2/auth/login" {
             decisionHandler(.cancel)
             if action.sourceFrame.isMainFrame && Console.isPage(web.url) { beginSignIn(fromWebPage: true) }
+            return
+        }
+        if action.targetFrame?.isMainFrame == true, action.request.httpMethod == "GET", Console.isPage(url) {
+            if url == loadingDocumentAt && action.navigationType == .other {
+                loadingDocumentAt = nil
+                decisionHandler(.allow)
+            } else {
+                decisionHandler(.cancel)
+                loadPage(url, preservingHistory: action.navigationType == .reload || action.navigationType == .backForward)
+            }
             return
         }
         if action.targetFrame != nil && Console.owns(url) { decisionHandler(.allow); return }
@@ -298,8 +341,8 @@ import WebKit
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        guard webView === web else { return }
         if navigation !== pendingNavigation {
-            localDocument = nil
             if Console.isPage(webView.url) {
                 failedPage = webView.url
                 showLoading()
@@ -310,35 +353,76 @@ import WebKit
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard let document = localDocument, document === navigation else {
-            if !Console.isPage(webView.url) { consoleDidRender() }
-            rememberPage()
+        if webView === accountWeb {
+            Task {
+                do {
+                    account = try await accountWeb.evaluateJavaScript("localStorage.getItem('seekmoon.account.v1')") as? String
+                    if archiveNavigation != nil { return }
+                    let cookies = await accountWeb.configuration.websiteDataStore.httpCookieStore.allCookies()
+                    let host = Console.origin.host!
+                    let hasCookie = cookies.contains { cookie in
+                        let domain = cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+                        return domain == host || host.hasSuffix("." + domain)
+                    }
+                    if account != nil || hasCookie {
+                        loadPage(failedPage)
+                    } else {
+                        consoleDidRender()
+                        self.navigation.showWelcome(true)
+                    }
+                } catch { showError(error.localizedDescription, url: failedPage) }
+            }
             return
         }
-        Task {
-            do {
-                let stored = try await web.callAsyncJavaScript(
-                    "return Boolean(localStorage.getItem('seekmoon.account.v1') || localStorage.getItem('seekmoon.cloud.token.v1'))",
-                    arguments: [:], in: nil, contentWorld: .defaultClient)
-                let cookies = await web.configuration.websiteDataStore.httpCookieStore.allCookies()
-                guard localDocument === document else { return }
-                // A previous browser session can recover its account from an
-                // HTTP-only cookie even when there is no local account object.
-                let host = Console.origin.host!
-                let hasSiteCookie = cookies.contains { cookie in
-                    let domain = cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
-                    return domain == host || host.hasSuffix("." + domain)
+        rememberPage()
+        if let navigation, navigation === archiveNavigation {
+            Task {
+                do {
+                    try await Self.startFrontend(in: web, account: account)
+                } catch {
+                    if navigation === pendingNavigation { showError(error.localizedDescription, url: web.url) }
                 }
-                if stored as? Bool == true || hasSiteCookie {
-                    loadPage(failedPage)
-                } else {
-                    consoleDidRender()
-                    self.navigation.showWelcome(true)
-                }
-            } catch {
-                if localDocument === document { loadPage(failedPage) }
             }
+        } else if !Console.isPage(web.url) { consoleDidRender() }
+    }
+
+    static func startFrontend(in web: WKWebView, account: String?) async throws {
+        if account != nil, !Console.isPage(web.url) { throw SignInError.callback }
+        let started = try await web.callAsyncJavaScript("""
+            const entry = document.querySelector('link#seekmoon-entry');
+            if (!entry || entry.getAttribute('href') !== '/assets/frontend.js') return false;
+            if (account !== null) {
+                if (location.origin !== origin || !/^\\/(cloud(?:\\/|$)|device\\/)/.test(location.pathname)) return false;
+                localStorage.setItem('seekmoon.account.v1', account);
+            }
+            const module = document.createElement('script');
+            module.type = 'module';
+            module.src = entry.href;
+            entry.replaceWith(module);
+            return true;
+            """, arguments: ["account": account as Any? ?? NSNull(), "origin": Console.origin.absoluteString],
+            in: nil, contentWorld: .defaultClient)
+        guard started as? Bool == true else { throw SignInError.callback }
+    }
+
+    // An expired session or a completed web sign-out must also retire the
+    // durable credential, otherwise a later launch would restore it.
+    func retireAccountIfSignedOut() {
+        guard let previous = account, Console.isPage(web.url) else { return }
+        Task {
+            guard let absent = try? await web.evaluateJavaScript("localStorage.getItem('seekmoon.account.v1') === null"),
+                  absent as? Bool == true, account == previous else { return }
+            account = nil
+            _ = try? await accountWeb.callAsyncJavaScript("""
+                if (localStorage.getItem('seekmoon.account.v1') === previous) localStorage.removeItem('seekmoon.account.v1')
+                """, arguments: ["previous": previous], in: nil, contentWorld: .defaultClient)
         }
+    }
+
+    func acceptSignIn(_ session: String) async throws {
+        try await Self.installAccount(session, in: accountWeb)
+        account = session
+        loadPage(web.url ?? failedPage, preservingHistory: web.url != nil)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -357,7 +441,13 @@ import WebKit
         showError(reason.localizedDescription, url: reason.userInfo[NSURLErrorFailingURLErrorKey] as? URL)
     }
 
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { loadPage(webView.url ?? failedPage) }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        if webView === accountWeb {
+            accountWeb.loadHTMLString(Self.accountDocument, baseURL: failedPage ?? Console.home)
+        } else {
+            loadPage(webView.url ?? failedPage)
+        }
+    }
 
     static func installAccount(_ account: String, in webView: WKWebView) async throws {
         let installed = try await webView.callAsyncJavaScript("""
@@ -369,7 +459,7 @@ import WebKit
     }
 
     func beginSignIn(method: SignInMethod? = nil, fromWebPage: Bool = false) {
-        guard signIn == nil, Console.isPage(web.url), let window = view.window else { return }
+        guard signIn == nil, Console.isPage(web.url ?? accountWeb.url), let window = view.window else { return }
         let attempt = SignIn(window: window)
         signIn = attempt
         attempt.start(method: method) { [weak self] result in
@@ -378,8 +468,7 @@ import WebKit
                 defer { signIn = nil }
                 do {
                     let session = try result.get()
-                    try await Self.installAccount(session, in: web)
-                    loadPage(web.url)
+                    try await acceptSignIn(session)
                 } catch {
                     // The web-initiated flow marks its own login action as pending.
                     if fromWebPage && Console.isPage(web.url) { web.reload() }

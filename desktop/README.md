@@ -394,9 +394,17 @@ without changing the selected `provider`. Replies and broadcasts return
 returned. `has_api_key` includes the official provider's environment fallback.
 
 **Test connection** sends one short text prompt through the selected provider's
-saved API settings and the provider's default model, and reports whether it
-received streamed text. For Custom URL, the gateway needs to accept
-`deepseek-flash`, the default model ID for that provider.
+saved API settings and reports whether it received streamed text. Built-in
+providers test their default model; for Custom URL, each saved model row tests
+that model ID against the Custom endpoint.
+
+`settings.set` also accepts `models`, the complete replacement list of custom
+models saved for the Custom URL provider slot. Each entry names its wire `id`,
+optional display `label`, and `context_window` (default 1,000,000, allowed
+range 1,024 to 10,000,000). `settings.status` returns the saved entries in
+order, and the host exports a saved model's window as `OPENSEEK_CONTEXT_WINDOW`
+when running under the Custom provider (built-in providers keep the engine's
+built-in table).
 
 Custom URL edits are committed on blur or Enter. HTTP(S) root paths and paths
 ending in `/v<number>` (with an optional trailing slash) receive

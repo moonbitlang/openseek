@@ -83,7 +83,7 @@ pub fn subagents(
         // The parent's resolved key, under its provider's variable: a key
         // the parent got only from its command line reaches the child, and
         // an unrelated one in the environment does not win over it.
-        env=Map([(provider_key_variable(model), api_key)]),
+        env=child_model_env(model, api_key~),
         result_dir~,
       )
     },
@@ -117,12 +117,18 @@ pub fn subagents(
 }
 
 ///|
-/// The environment variable a child reads its provider's key from when no
-/// --api-key is given (see `@cli.agent_shared_options`).
-fn provider_key_variable(model : @deepseek.Model) -> String {
-  match model {
-    Deepseek(_) => "DEEPSEEK"
-    Kimi(_) => "KIMI"
-    Glm(_) => "GLM"
+/// Carry the resolved window across the process boundary alongside the model
+/// ID in argv. The window may have come from the parent's session record.
+fn child_model_env(
+  model : @deepseek.Model,
+  api_key? : String,
+) -> Map[String, String] {
+  let env = Map([])
+  if model is Custom(_, context_window~) {
+    env["OPENSEEK_CONTEXT_WINDOW"] = context_window.to_string()
   }
+  if api_key is Some(key) {
+    env[model.api_key_env()] = key
+  }
+  env
 }

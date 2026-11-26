@@ -88,7 +88,6 @@ test('a ! command runs in a terminal tab and its output becomes a card', async (
   await expect(card.locator('.user-shell-status')).toHaveText('exit 2');
   await expect(card.locator('.user-shell-output')).toHaveText('total 0\nls: cannot access x');
   await expect(page.locator('.user-bubble', { hasText: '<user_shell_command>' })).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('the running row opens the terminal, where Ctrl+C interrupts the command', async ({ page }) => {
@@ -111,7 +110,6 @@ test('the running row opens the terminal, where Ctrl+C interrupts the command', 
   await expect.poll(() => sentResult(app))
     .toBe(envelope('sleep 100000', 'exit=cancelled\nwaiting...\n^C'));
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('closing a running command tab settles the command as cancelled', async ({ page }) => {
@@ -126,14 +124,11 @@ test('closing a running command tab settles the command as cancelled', async ({ 
   await expect.poll(() => sentResult(app))
     .toBe(envelope('npm run dev', 'exit=cancelled\nlistening on :3000'));
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a first ! command in a fresh worktree-mode chat creates its worktree first', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = request => {
-    if (request.method !== 'worktree.create') return replyFor(request);
+  app.onRpc('worktree.create', request => {
     const worktrees = [{
       name: 'shell-e2e', branch: 'test', base: 'main', path: '/workspace/worktrees/shell-e2e', present: true,
       sessions: [request.params.session],
@@ -142,7 +137,7 @@ test('a first ! command in a fresh worktree-mode chat creates its worktree first
     // reply: the command waits for it to learn the checkout it runs in.
     setTimeout(() => app.notify('worktree.changed', { workspace: '/workspace', worktrees }), 300);
     return { name: 'shell-e2e', worktrees };
-  };
+  });
   await app.install();
   await app.goto();
   await page.locator('button.composer-worktree').click();
@@ -159,7 +154,6 @@ test('a first ! command in a fresh worktree-mode chat creates its worktree first
   // worktree exists, so nothing is created twice.
   await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.session).toBe(create.params.session);
   expect(app.requests.filter(r => r.method === 'worktree.create')).toHaveLength(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a ! command whose worktree cannot be set up runs nothing and comes back', async ({ page }) => {
@@ -174,7 +168,6 @@ test('a ! command whose worktree cannot be set up runs nothing and comes back', 
   await expect(page.locator('#task')).toHaveValue('!pwd');
   expect(app.requests.some(r => r.method === 'terminal.open')).toBe(false);
   expect(app.requests.some(r => r.method === 'agent.start')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a quick command that ends before its terminal reply still delivers its output', async ({ page }) => {
@@ -188,7 +181,6 @@ test('a quick command that ends before its terminal reply still delivers its out
   exit(app, id, 0);
   await expect.poll(() => sentResult(app)).toBe(envelope('ls', 'exit=0\nREADME.md\nsrc'));
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a tab closed as its command exits still delivers the result once', async ({ page }) => {
@@ -208,7 +200,6 @@ test('a tab closed as its command exits still delivers the result once', async (
   await expect(page.locator('.shell-commands-running')).toHaveCount(0);
   await page.waitForTimeout(300);
   expect(app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a command finishing beside an open shell tab leaves the keyboard in the composer', async ({ page }) => {
@@ -227,7 +218,6 @@ test('a command finishing beside an open shell tab leaves the keyboard in the co
   await expect(page.locator('.terminal-tab')).toHaveCount(1);
   await expect(page.locator('.terminal-panel.open')).toBeVisible();
   await expect(page.locator('#task')).toBeFocused();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a wide character at the wrap column gains no space in the result', async ({ page }) => {
@@ -241,7 +231,6 @@ test('a wide character at the wrap column gains no space in the result', async (
   print(app, id, line + '\r\nprinted trailing space \r\n');
   exit(app, id, 0);
   await expect.poll(() => sentResult(app)).toBe(envelope('ls', 'exit=0\n' + line + '\nprinted trailing space '));
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('output that outruns the terminal scrollback is marked truncated', async ({ page }) => {
@@ -257,7 +246,6 @@ test('output that outruns the terminal scrollback is marked truncated', async ({
   expect(result).toContain('truncated=true');
   expect(result).toContain('last line');
   expect(result).not.toContain('first line');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a ! command that ran comes back from history as the draft that ran it', async ({ page }) => {
@@ -276,5 +264,4 @@ test('a ! command that ran comes back from history as the draft that ran it', as
   await task.press('ArrowUp');
   await expect(task).toHaveValue('!git status');
   await expect(page.locator('.composer-mode-chip')).toHaveText(['shell', 'History 2/2']);
-  expect(app.pageErrors).toEqual([]);
 });

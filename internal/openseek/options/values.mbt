@@ -33,6 +33,24 @@ pub fn agent_settings(
 }
 
 ///|
+/// Read the launcher's custom model window. Absent or invalid values leave
+/// the saved or default window in effect.
+pub fn context_window() -> Int32? {
+  parse_context_window(@env.get_env_var("OPENSEEK_CONTEXT_WINDOW"))
+}
+
+///|
+fn parse_context_window(raw : String?) -> Int32? {
+  guard raw is Some(value) else { return None }
+  let window : Int32 = @string.from_str(value.trim()) catch { _ => return None }
+  if window > 0 {
+    Some(window)
+  } else {
+    None
+  }
+}
+
+///|
 /// `None` — no flag, no env — means turns bounded by the model's context
 /// window (the engine's own default), not by a step count.
 pub fn max_steps(matches : @argparse.Matches) -> Int32? raise {

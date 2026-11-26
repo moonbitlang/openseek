@@ -9,7 +9,6 @@ fn live_row(
     title: "chat-1",
     label: "Chat one",
     nested: false,
-    subrun: false,
     active: false,
     loading: false,
     load_failed: false,
@@ -17,8 +16,8 @@ fn live_row(
     openable: true,
     rename: None,
     run_mark: NoRunMark,
+    pull_request: None,
     trailing,
-    children: [],
   }
 }
 

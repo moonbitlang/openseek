@@ -17,6 +17,7 @@ async fn main {
             verify_review(root, temp)
             verify_ci(root, temp, exe)
             verify_simplify(root, temp, exe)
+            verify_dream(root, temp)
           })
         }
       }

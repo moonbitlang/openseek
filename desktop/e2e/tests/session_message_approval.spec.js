@@ -14,19 +14,15 @@ test('message approvals survive idle reload and turn completion, and advance ind
     tool_name: 'session.send', detail: `target-${id}`,
     body, answered: false,
   }));
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = request => {
-    if (request.method === 'agent.runs') {
-      return { runs: [], settled: [], approval_generation: generation, approvals };
-    }
-    if (request.method === 'agent.approval') {
+  app.mockRpc({
+    'agent.runs': () => ({ runs: [], settled: [], approval_generation: generation, approvals }),
+    'agent.approval': request => {
       expect(request.params.run_id ?? null).toBeNull();
       approvals = approvals.filter(item => item.id !== request.params.id);
       app.notify('agent.approvals', { generation: ++generation, approvals });
       return { delivered: true };
-    }
-    return replyFor(request);
-  };
+    },
+  });
   await app.install();
   await app.goto();
   await app.openSession();
@@ -59,7 +55,6 @@ test('message approvals survive idle reload and turn completion, and advance ind
     { id: 'message-first', allow: true },
     { id: 'message-second', allow: false },
   ]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('a running engine approval takes priority over a background message approval', async ({ page }) => {
@@ -86,7 +81,6 @@ test('a running engine approval takes priority over a background message approva
   await expect(card).toHaveCount(1);
   app.notify('agent.approvals', { generation: 2, approvals: [message] });
   await expect(card).toContainText('Send to “target-chat”');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('received messages and delivery results render tagged context live and after reload', async ({ page }) => {
@@ -115,21 +109,17 @@ test('received messages and delivery results render tagged context live and afte
   await expect(page.locator('.session-message')).toHaveCount(2);
   await expect(received.locator('.msg-content')).toHaveText(text.replaceAll('`', ''));
   await expect(page.locator('.session-message-source').last()).toHaveText('Message sent');
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const running of [false, true]) {
   test(`delivery feedback failures remain session-scoped with an ${running ? 'active' : 'idle'} sender`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
-    const replyFor = app.replyFor.bind(app);
-    app.replyFor = request => {
-      const reply = replyFor(request);
-      if (request.method === 'session.load') {
-        reply.session.id = request.params.session;
-      }
+    app.onRpc('session.load', (request, next) => {
+      const reply = next();
+      reply.session.id = request.params.session;
       return reply;
-    };
+    });
     await app.install();
     await app.goto();
     await app.openSession();
@@ -155,6 +145,5 @@ for (const running of [false, true]) {
     } else {
       await expect(page.locator('#stop')).toBeHidden();
     }
-    expect(app.pageErrors).toEqual([]);
   });
 }

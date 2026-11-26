@@ -28,6 +28,8 @@ fn apply(
 test "all question updates are pure and stale snapshots cannot revive answered requests" {
   let empty = @user_questions.Model()
   let pending = apply(empty, Snapshot(snapshot()))
+  assert_true(pending.awaits_answer("s"))
+  assert_false(pending.awaits_answer("other"))
   assert_false(empty == pending)
   assert_eq(apply(pending, Interact(request="r", Submit(skip=false))), pending)
   let edited = apply(
@@ -41,6 +43,7 @@ test "all question updates are pure and stale snapshots cannot revive answered r
     edited,
   )
   let sending = apply(edited, Interact(request="r", Submit(skip=false)))
+  assert_false(sending.awaits_answer("s"))
   assert_false(sending == edited)
   assert_eq(
     apply(sending, Interact(request="r", Edit(question="q", text="late"))),
@@ -48,6 +51,7 @@ test "all question updates are pure and stale snapshots cannot revive answered r
   )
   assert_eq(apply(sending, Interact(request="r", Submit(skip=false))), sending)
   let failed = apply(sending, Failed(request="r", error="Offline"))
+  assert_true(failed.awaits_answer("s"))
   assert_false(failed == sending)
   let retry = apply(failed, Interact(request="r", Submit(skip=false)))
   assert_eq(retry, sending)

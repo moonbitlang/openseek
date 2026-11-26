@@ -29,7 +29,6 @@ fn test_conversations(
       title: id,
       label: "Chat \{id}",
       nested: true,
-      subrun: false,
       active: active_index == Some(index),
       loading: false,
       load_failed: false,
@@ -37,8 +36,8 @@ fn test_conversations(
       openable: true,
       rename: None,
       run_mark: @conversation.NoRunMark,
+      pull_request: None,
       trailing: [],
-      children: [],
     })
   }
   conversations

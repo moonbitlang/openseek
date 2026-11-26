@@ -38,6 +38,5 @@ test('Cloud background completion uses the shared notification, badge and click 
   await expect(app.rowContainer(sessionA).getByRole('status')).toHaveCount(0);
   await expect(page.locator('#transcript')).toContainText('The Cloud task is done.');
   expect(shown(app)).toHaveLength(1);
-  expect(app.device.pageErrors).toEqual([]);
 });
 

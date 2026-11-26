@@ -1,7 +1,7 @@
 import { test, expect } from './support/test.js';
 import { CloudHarness } from './support/cloud_harness.js';
 
-test('Cloud reuses live reasoning, actual usage, stages and compaction UI before committing history', async ({ page }) => {
+test('Cloud shows live reasoning, usage and compaction before committing history', { tag: '@motion' }, async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.streamEvents = [
     ['task_started', {}],
@@ -28,20 +28,31 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     await expect(status).toHaveText('Ready');
     await page.locator('#task').fill('Explain the input');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
-    const heartbeat = page.locator('.composer-running-text');
+    const heartbeat = page.locator('#stream > .transcript-run-status:last-child');
+    const dots = heartbeat.locator('.transcript-run-dots > span:visible');
     const reasoning = page.locator('#transcript .activity-thinking');
-    await expect(heartbeat).toHaveText('Thinking…');
+    await expect(heartbeat).toHaveText('Working…');
+    await expect(dots).toHaveCount(3);
+    await expect(dots.first()).toHaveCSS('animation-name', 'transcript-run-dots-bounce');
     await expect(status).toHaveText('Running');
     await expect(status.locator('.run-dot')).toHaveClass(/pulse/);
     resume[0]();
     await expect(heartbeat).toContainText('Retrying');
+    await expect(dots).toHaveCount(4);
     await expect(status).toHaveText('Step 3');
     resume[1]();
-    await expect(heartbeat).toHaveText('Working · step 3');
+    await expect(heartbeat).toHaveText('Thinking… (step 3)');
+    await expect(dots.first()).toHaveCSS('animation-name', 'transcript-run-dots-swap-first');
+    await expect(dots.nth(1)).toHaveCSS('animation-name', 'transcript-run-dots-swap-second');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(dots.nth(1)).toHaveCSS('animation-name', 'none');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await expect(page.locator('#transcript .activity-thinking-live')).toHaveText('Partial reasoning');
     resume[2]();
     await expect(reasoning).toHaveText('Complete reasoning');
     await expect(page.locator('#transcript .activity-thinking-live')).toHaveCount(0);
+    await expect(heartbeat).toHaveText('Working · step 3');
+    await expect(dots).toHaveCount(3);
     resume[3]();
     await expect(heartbeat).toHaveText('Working · step 3 (120 tokens)');
     await expect(page.locator('#transcript').getByText('Answer', { exact: true })).toHaveCount(1);
@@ -49,8 +60,11 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     await expect(page.locator('#transcript .streaming')).toHaveCount(0);
     await expect(reasoning).toHaveText('Complete reasoning');
     await expect(page.locator('.composer-context')).toContainText('Compacting');
+    await expect(heartbeat).toContainText('Compacting context…');
+    await expect(dots).toHaveCount(4);
     resume[5]();
     await expect(page.locator('.composer-context')).not.toContainText('Compacting');
+    await expect(heartbeat).toHaveText('Working · step 3 (120 tokens)');
     resume[6]();
     await expect(heartbeat).toHaveCount(0);
     await expect(status).toHaveText('Finished');
@@ -60,7 +74,6 @@ test('Cloud reuses live reasoning, actual usage, stages and compaction UI before
     await expect(reasoning).toHaveCount(1);
     await expect(reasoning).toHaveText('Complete reasoning');
     await expect(page.locator('#transcript').getByText('Answer', { exact: true })).toHaveCount(1);
-    expect(cloud.device.pageErrors).toEqual([]);
     expect(await page.evaluate(() => window.cloudUnhandledRejections)).toEqual([]);
   } finally {
     resume.forEach(resolve => resolve());

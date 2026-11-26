@@ -39,7 +39,6 @@ test('phone conversation sends once, stops, reconnects and keeps the composer vi
   await assertFits(page);
   const box = await page.locator('#task').boundingBox();
   expect(box.y + box.height).toBeLessThanOrEqual(480);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Back closes the topmost layer first and reports when none is open', async ({ page }) => {
@@ -72,7 +71,6 @@ test('Back closes the topmost layer first and reports when none is open', async 
   await expect(page.locator('.composer-git-menu')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('.composer-git-menu')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('long engine-start failures remain readable within the phone viewport and restore the draft', { tag: '@webkit-layout' }, async ({ page }) => {
@@ -106,7 +104,6 @@ test('long engine-start failures remain readable within the phone viewport and r
   expect(reduced.y + reduced.height).toBeLessThanOrEqual(reducedTask.y);
   await notice.click();
   await expect(notice).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const viewport of [
@@ -141,7 +138,6 @@ for (const viewport of [
       await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
     }
     await expect(page.locator('#task')).toHaveValue('An unsent mobile browser draft');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -183,5 +179,4 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   expect(cloud.postCount).toBe(1);
   expect(cloud.device.socket).toBeNull();
-  expect(cloud.device.pageErrors).toEqual([]);
 });

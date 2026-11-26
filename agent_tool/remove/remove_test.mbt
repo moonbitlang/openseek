@@ -73,6 +73,11 @@ async test "remove deletes a non-source file the agent created" {
     let path = "\{dir}/notes.txt"
     let state = @agent_tool.FileStateMap()
     state.record_created(path, recorded_digest(path))
+    guard run_remove(state, { "path": "\{path}/", "reason": "temp file" })
+      is Respond(trailing) else {
+      fail("expected response")
+    }
+    assert_true(trailing.content.contains("not a directory"))
     let result = run_remove(state, { "path": path, "reason": "temp file" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
@@ -197,7 +202,7 @@ async test "remove refuses a path recreated after an earlier removal" {
 }
 
 ///|
-async test "remove refuses a path replaced by a symlink" {
+async test "a file creation record cannot authorize unlinking a replacement symlink" {
   @vfs.with_tmpdir(dir => {
     @vfs.FileSystem({ "target.mbt": "pub fn t() -> Int { 0 }\n" }).write_to(dir)
     let target = "\{dir}/target.mbt"
@@ -209,9 +214,8 @@ async test "remove refuses a path replaced by a symlink" {
     let result = run_remove(state, { "path": link, "reason": "cleanup" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("not a regular file"))
-    // The kind check does not follow the link, so neither it nor its target is
-    // removed.
+    assert_true(output.content.contains("requires approval"))
+    // A stale file digest cannot grant approval to remove the link.
     assert_true(@fs.exists(link))
     assert_true(@fs.exists(target))
   })
@@ -282,10 +286,7 @@ async test "a write scope confines remove to its allowed paths" {
       "\{dir}/other/mine.txt",
       recorded_digest("\{dir}/other/mine.txt"),
     )
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
-      is Ok(scope) else {
-      fail("expected the scope to build")
-    }
+    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=["lib"])
     let run = match
       @remove.definition(
         workspace_root=dir,

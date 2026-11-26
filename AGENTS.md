@@ -42,19 +42,14 @@ You can browse and install extra skills here:
 
 ## Tooling
 
-- `moon fmt` is used to format your code properly.
+- Run `moon fmt` with the affected package paths to format MoonBit code.
 
 - `moon ide` provides project navigation helpers like `peek-def`, `outline`, and
   `find-references`. Use `moon ide --help` for the available commands.
 
-- `moon info` is used to update the generated interface of the package, each
-  package has a generated interface file `.mbti`, it is a brief formal
-  description of the package. Review `.mbti` diffs for public signature changes;
-  use behavior tests to check runtime effects.
-
-- For MoonBit code changes, finish with `moon info` then `moon fmt`, selecting
-  the affected packages with path arguments. Check that the `.mbti` diffs are
-  expected.
+- A successful `moon check` updates `pkg.generated.mbti` for each checked
+  local package whose preferred backend is included. Review the interface
+  diff for public signature changes and use tests to verify runtime behavior.
 
 - Use `moon test` for package- or workspace-scoped MoonBit tests. MoonBit
   supports snapshot testing; when expected outputs change, run
@@ -80,7 +75,7 @@ Commands below run from the repository root.
 | --- | --- |
 | Documentation only | Diff and referenced paths/commands; affected cram document if executable examples change. |
 | Pure CSS or static presentation assets | Rebuild/serve the frontend and inspect affected UI or run focused browser scenarios, including relevant themes, viewports, and interactions. No automatic MoonBit, backend/CLI, or root gates. |
-| MoonBit source | `moon check` and relevant `moon test` cases for affected packages/targets; update interfaces and formatting as above. |
+| MoonBit source | `moon check` and relevant `moon test` cases for affected packages/targets; review the generated interface diff and run `moon fmt` for those packages. |
 | CLI arguments, output, exit status, or requests | Owning package tests and matching document under `tests/cram/` or `openseek_tui/tests/cram/`. |
 | Background jobs, turn completion, or serve controls | Owning package tests and `just test-turn-finish`. |
 | Subagents, review, or workers | Owning package tests and the matching integration script from `test-subagents` in [justfile](justfile). |

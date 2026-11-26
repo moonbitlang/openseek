@@ -82,7 +82,7 @@ Validation expectations before finishing:
 
 - Run `moon check --target native`.
 - Run `moon test --target native`.
-- Run `moon info` and `moon fmt`.
+- Run `moon fmt`.
 - Run at least these CLI probes:
   - `8 2 /` → `4`.
   - `1 0 /` (division by zero → error, not `inf` or a panic).

@@ -159,12 +159,18 @@ pub fn Conversation::extends_history_backward(
 fn Conversation::with_latest_page(
   self : Conversation,
   history : History,
+  view : @protocol.CloudHistoryView,
   request? : Int32,
 ) -> Conversation {
   // Disk hydration supplies no request because its snapshot can predate SSE.
   let self = match request {
     Some(request) =>
-      self.acknowledge_assistants(request, history.session, history.messages)
+      self.acknowledge_assistants(
+        request,
+        history.session,
+        history.messages,
+        minimal_page=view is Minimal,
+      )
     None => self
   }
   guard history.offset is Some(offset) else {
@@ -191,6 +197,7 @@ fn Conversation::with_latest_page(
 fn Conversation::with_older_page(
   self : Conversation,
   history : History,
+  view : @protocol.CloudHistoryView,
   request : Int32,
 ) -> Conversation {
   guard history.offset is Some(offset) &&
@@ -198,7 +205,12 @@ fn Conversation::with_older_page(
     return self
   }
   self
-  .acknowledge_assistants(request, history.session, history.messages)
+  .acknowledge_assistants(
+    request,
+    history.session,
+    history.messages,
+    minimal_page=view is Minimal,
+  )
   .with_history_window(window)
 }
 
@@ -208,6 +220,7 @@ fn Conversation::with_turn_page(
   self : Conversation,
   offset : Int32,
   history : History,
+  view : @protocol.CloudHistoryView,
   request : Int32,
 ) -> Conversation {
   guard history.offset == Some(offset) &&
@@ -215,7 +228,12 @@ fn Conversation::with_turn_page(
     return self
   }
   self
-  .acknowledge_assistants(request, history.session, history.messages)
+  .acknowledge_assistants(
+    request,
+    history.session,
+    history.messages,
+    minimal_page=view is Minimal,
+  )
   .with_history_window(window)
 }
 
@@ -247,14 +265,14 @@ fn Conversation::with_history_window(
 }
 
 ///|
-/// Only an assistant actually present in the returned document can replace
-/// its preview. A task may contain several identical replies, so consume
-/// matching native sequences once and in order.
+/// Completed minimal turns may omit intermediate replies. For other turns,
+/// consume matching native sequences once and in order.
 fn Conversation::acknowledge_assistants(
   self : Conversation,
   request : Int32,
   document : @protocol.SessionDocument,
   records : Array[Record],
+  minimal_page~ : Bool = false,
 ) -> Conversation {
   guard !self.pending_assistants.is_empty() else { return self }
   let events = document.events
@@ -288,6 +306,12 @@ fn Conversation::acknowledge_assistants(
       pending.item.kind is @transcript.Assistant(prose~, reasoning~, ..) else {
       return true
     }
+    if minimal_page &&
+      records.any(record => {
+        record.task_id == pending.task && record.kind == "task_finished"
+      }) {
+      return false
+    }
     let after = matched.get(pending.task).unwrap_or(0)
     guard events
       .iter()
@@ -316,4 +340,85 @@ fn Conversation::acknowledge_assistants(
     }
   }
   { ..self, pending_assistants, assistant_handoffs, }
+}
+
+///|
+/// The inactive view retains its own pages and latest-page validator.
+#derive(Eq)
+pub struct CachedTranscript {
+  window : HistoryWindow
+  records : Array[Record]
+  document : @protocol.SessionDocument
+  etag : String?
+}
+
+///|
+pub fn State::switch_history_view(
+  self : State,
+  view : @protocol.CloudHistoryView,
+  selected : String?,
+  navigation : Int32,
+  token : String?,
+  emit : @cmd.Emit[Msg],
+) -> (State, @cmd.Cmd) {
+  guard self.history_view != view else { return (self, @cmd.none) }
+  let fence = self.sequence + 1
+  let conversations = self.conversations.copy()
+  let mut next = { ..self, history_view: view, sequence: fence, conversations, }
+  let reload = []
+  for id, conv in self.conversations {
+    if self.is_draft(id) {
+      continue
+    }
+    let other = conv.other_history
+    let saved = if conv.history_cached {
+      Some(CachedTranscript::{
+        window: conv.history_window,
+        records: conv.records,
+        document: conv.document,
+        etag: conv.history_etag,
+      })
+    } else {
+      None
+    }
+    let restored = {
+      ..conv.fence_history(fence),
+      other_history: saved,
+      history_restore_range: if selected == Some(id) &&
+        conv.history_window.pages.length() > 1 {
+        Some((navigation, conv.history_window.lo))
+      } else {
+        None
+      },
+      history_window: other.map(c => c.window).unwrap_or(HistoryWindow::empty()),
+      records: other.map(c => c.records).unwrap_or([]),
+      document: other
+      .map(c => c.document)
+      .unwrap_or({ ..conv.document, events: Some([]), }),
+      history_etag: other.bind(c => c.etag),
+      history_cached: other is Some(_),
+      history_required: other is None || conv.history_required,
+      history_cache_request: None,
+      history_older_request: None,
+      history_turn_request: None,
+      history_resume_baseline: None,
+      loading: other is None && selected == Some(id),
+    }
+    conversations[id] = restored
+    if selected == Some(id) || conv.history_reading || conv.generating {
+      reload.push(id)
+    }
+  }
+  guard token is Some(token) else { return (next, @cmd.none) }
+  let commands = []
+  for id in reload {
+    let (loaded, command) = if next.conversations[id].history_cached {
+      next.load(id, Some(token), emit)
+    } else {
+      next.read_persistent_history(id, token, emit)
+    }
+    next = loaded
+    commands.push(command)
+  }
+  (next, @cmd.batch(commands))
 }

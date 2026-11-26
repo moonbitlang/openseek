@@ -1,9 +1,47 @@
 import { posix } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
+import { installNativeBridge } from './native_bridge.js';
 
-const officeFixture = name =>
-  readFileSync(new URL(`../../fixtures/office/${name}`, import.meta.url)).toString('base64');
+const officeFixtureCache = new Map();
+const officeFixture = name => {
+  let cached = officeFixtureCache.get(name);
+  if (cached === undefined) {
+    cached = readFileSync(new URL(`../../fixtures/office/${name}`, import.meta.url)).toString('base64');
+    officeFixtureCache.set(name, cached);
+  }
+  return cached;
+};
+
+const defaultOfficeFiles = () => ({
+  'docs/report.pdf': {
+    data_base64: officeFixture('two-pages.pdf'),
+    media_type: 'application/pdf',
+    sig: 'office:pdf',
+  },
+  'docs/encrypted.pdf': {
+    data_base64: officeFixture('encrypted.pdf'),
+    media_type: 'application/pdf',
+    sig: 'office:encrypted-pdf',
+  },
+  'docs/report.docx': {
+    data_base64: officeFixture('single-paragraph.docx'),
+    media_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    sig: 'office:report',
+  },
+  'docs/book1.xlsx': {
+    data_base64: officeFixture('book1.xlsx'),
+    media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    sig: 'office:book1',
+  },
+});
+
+const defaultOfficePaths = new Set([
+  'docs/report.pdf',
+  'docs/encrypted.pdf',
+  'docs/report.docx',
+  'docs/book1.xlsx',
+]);
 
 export class DesktopBrowserHarness {
   constructor(page) {
@@ -11,7 +49,7 @@ export class DesktopBrowserHarness {
     this.ticketStatus = 200;
     // `HostProtocolRevision` in desktop/protocol; another value is an
     // incompatible host build.
-    this.hostProtocol = 14;
+    this.hostProtocol = 15;
     this.pauseTicket = null;
     this.ticketRequests = [];
     this.issuedTickets = new Map();
@@ -23,8 +61,13 @@ export class DesktopBrowserHarness {
     // Error and delay controls let tests exercise the product's real pending,
     // failed, and retry states without replacing its Rabbita update logic.
     this.rpcErrors = new Map();
+    this.rpcHandlers = new Map();
+    this.rpcMatchers = [];
     this.connectionAvailable = true;
     this.rpcDelays = new Map();
+    this.systemDark = false;
+    this._officeFiles = null;
+    this._nativeBridge = null;
     // The `JobView`s `jobs.list` answers for session-1, newest first; other
     // sessions have none. Specs that read output use BackgroundJobsHarness.
     this.jobs = [];
@@ -42,7 +85,6 @@ export class DesktopBrowserHarness {
     this.textSearchMatches = [];
     this.semanticSearchMatches = [];
     this.textSearchMatchCount = undefined;
-    this.textSearchLimitHit = false;
     this.directoryEntries = {};
     this.workspaces = ['/workspace'];
     this.chatRoot = '/Users/test/Library/Application Support/SeekMoon/workspaces';
@@ -139,32 +181,6 @@ export class DesktopBrowserHarness {
       ].join('\n'),
     };
     this.searchFiles = ['src/main.mbt', 'README.md'];
-    // Small real packages keep the browser fixture on the same binary path as
-    // Desktop's `fs.read_file` host reply. Tests can add these paths to
-    // `searchFiles` or a directory listing and exercise the actual reader and
-    // Office surface instead of a synthetic HTML mock.
-    this.officeFiles = {
-      'docs/report.pdf': {
-        data_base64: officeFixture('two-pages.pdf'),
-        media_type: 'application/pdf',
-        sig: 'office:pdf',
-      },
-      'docs/encrypted.pdf': {
-        data_base64: officeFixture('encrypted.pdf'),
-        media_type: 'application/pdf',
-        sig: 'office:encrypted-pdf',
-      },
-      'docs/report.docx': {
-        data_base64: officeFixture('single-paragraph.docx'),
-        media_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        sig: 'office:report',
-      },
-      'docs/book1.xlsx': {
-        data_base64: officeFixture('book1.xlsx'),
-        media_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        sig: 'office:book1',
-      },
-    };
     // `moon.package_graph` returns the command's JSON verbatim. The default
     // UML filter keeps branching nodes, so the fixture has one package with
     // two source dependencies and exercises the real renderer path.
@@ -199,10 +215,6 @@ export class DesktopBrowserHarness {
       ],
       logs: [],
     });
-    // Transcript images use the same fs.read_file RPC as text files, but the
-    // real host returns bytes plus a verified media type. Tests opt into that
-    // response per path instead of bypassing the product image loader.
-    this.binaryFiles = {};
     this.gitFilesByRevision = {
       [this.gitBaseline]: {
         'src/main.mbt': [
@@ -518,13 +530,22 @@ export class DesktopBrowserHarness {
   }
 
   sessionGroups(sessions) {
+    const withPullRequests = sessions.map(session => {
+      if (Array.isArray(session.pull_requests)) return session;
+      const pullRequests = (this.sessionArtifacts[session.id] ?? [])
+        .filter(item => item.type === 'pull_request' && item.url)
+        .map(item => item.url);
+      return pullRequests.length > 0
+        ? { ...session, pull_requests: pullRequests }
+        : session;
+    });
     return {
       groups: [
         {
           workspace: '/workspace',
           name: 'Fixture',
           session_root: '/workspace/.openseek',
-          sessions,
+          sessions: withPullRequests,
           error: '',
         },
       ],
@@ -533,6 +554,9 @@ export class DesktopBrowserHarness {
 
   async install({ offlineAssets = process.env.OPENSEEK_DESKTOP_OFFLINE_ASSETS } = {}) {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
+    // Keep the shared UI stylesheet independent of the font CDN so the
+    // asset and comment fixtures observe only the resources they exercise.
+    await this.page.route(url => url.origin === 'https://fonts.googleapis.com' && url.pathname === '/css2', route => route.abort());
     if (offlineAssets) {
       const root = resolve(offlineAssets);
       const types = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.wasm': 'application/wasm' };
@@ -609,7 +633,7 @@ export class DesktopBrowserHarness {
           ? {
               jsonrpc: '2.0',
               id: request.id,
-              result: await this.replyFor(request),
+              result: await this.dispatchRpc(request),
             }
           : {
               jsonrpc: '2.0',
@@ -632,8 +656,100 @@ export class DesktopBrowserHarness {
     });
   }
 
+  // Small real packages keep the browser fixture on the same binary path as
+  // Desktop's `fs.read_file` host reply. Lazily instantiate per harness so
+  // specs that do not touch Office files avoid disk reads and base64 encoding.
+  get officeFiles() {
+    if (this._officeFiles === null) {
+      this._officeFiles = defaultOfficeFiles();
+    }
+    return this._officeFiles;
+  }
+
+  set officeFiles(value) {
+    this._officeFiles = value;
+  }
+
+  onRpc(matcher, handler) {
+    if (typeof matcher === 'string') {
+      const stack = this.rpcHandlers.get(matcher) || [];
+      stack.push(handler);
+      this.rpcHandlers.set(matcher, stack);
+      return () => {
+        const index = stack.lastIndexOf(handler);
+        if (index >= 0) stack.splice(index, 1);
+      };
+    }
+    const entry = {
+      test: matcher instanceof RegExp ? method => matcher.test(method) : matcher,
+      handler,
+    };
+    this.rpcMatchers.push(entry);
+    return () => {
+      const index = this.rpcMatchers.lastIndexOf(entry);
+      if (index >= 0) this.rpcMatchers.splice(index, 1);
+    };
+  }
+
+  mockRpc(handlers) {
+    const cleanups = Object.entries(handlers).map(([method, handler]) =>
+      this.onRpc(method, typeof handler === 'function' ? handler : () => handler),
+    );
+    return () => {
+      for (const cleanup of cleanups) cleanup();
+    };
+  }
+
+  async installNative({ onRequest, onNotification } = {}) {
+    this._nativeBridge = await installNativeBridge(this.page, {
+      hostProtocol: this.hostProtocol,
+      onNotification,
+      onRequest: async request => {
+        this.requests.push(request);
+        if (onRequest) {
+          return onRequest(request, () => this.dispatchRpc(request));
+        }
+        return this.dispatchRpc(request);
+      },
+    });
+    return this._nativeBridge;
+  }
+
+  async emitNative(name, payload) {
+    if (this._nativeBridge) {
+      return this._nativeBridge.emit(name, payload);
+    }
+    return this.page.evaluate(
+      ([eventName, eventPayload]) => window.desktopEvent(eventName, eventPayload),
+      [name, payload],
+    );
+  }
+
+  dispatchRpc(request) {
+    const methodStack = this.rpcHandlers.get(request.method) || [];
+    const dispatchMethod = index => {
+      if (index >= 0) {
+        return methodStack[index](request, () => dispatchMethod(index - 1));
+      }
+      return this.replyFor(request);
+    };
+    const dispatchMatcher = index => {
+      if (index >= 0) {
+        const { test, handler } = this.rpcMatchers[index];
+        if (test(request.method, request)) {
+          return handler(request, () => dispatchMatcher(index - 1));
+        }
+        return dispatchMatcher(index - 1);
+      }
+      return dispatchMethod(methodStack.length - 1);
+    };
+    return dispatchMatcher(this.rpcMatchers.length - 1);
+  }
+
   replyFor(request) {
     switch (request.method) {
+      case 'app.system_appearance':
+        return { dark: this.systemDark };
       case 'host.open_path':
       case 'host.open_path_preview':
         // File-open flows now ask the host to choose a surface before reading
@@ -682,6 +798,8 @@ export class DesktopBrowserHarness {
       }
       case 'app.info':
         return { version: '0.0.0-fixture' };
+      case 'app.set_titlebar_style':
+        return { custom_overlay: false };
       case 'settings.get':
         return this.hostSettings;
       case 'settings.set': {
@@ -921,6 +1039,14 @@ export class DesktopBrowserHarness {
         const pullRequest = this.githubPullRequestSummaries[request.params?.url];
         return pullRequest ? { pull_request: pullRequest } : {};
       }
+      case 'github.pull_request_summaries': {
+        const pullRequests = {};
+        for (const url of request.params?.urls ?? []) {
+          const pullRequest = this.githubPullRequestSummaries[url];
+          if (pullRequest) pullRequests[url] = pullRequest;
+        }
+        return { pull_requests: pullRequests };
+      }
       case 'session.artifacts_list':
         return { artifacts: [...(this.sessionArtifacts[request.params?.session] ?? [])] };
       case 'session.artifacts_remove': {
@@ -1072,7 +1198,7 @@ export class DesktopBrowserHarness {
           matches: this.textSearchMatches,
           match_count: this.textSearchMatchCount ?? this.textSearchMatches.length,
           file_count: new Set(this.textSearchMatches.map(match => match.path)).size,
-          limit_hit: this.textSearchLimitHit,
+          limit_hit: false,
           cancelled: false,
         };
       case 'fs.search_semantic':
@@ -1145,16 +1271,9 @@ export class DesktopBrowserHarness {
     const absolute = params.path;
     const prefix = '/workspace/';
     const path = absolute?.startsWith(prefix) ? absolute.slice(prefix.length) : absolute;
-    const binary = this.binaryFiles[path];
-    if (binary !== undefined) {
-      return {
-        kind: 'binary_content',
-        data_base64: binary.data_base64,
-        media_type: binary.media_type,
-        sig: binary.sig || `working:${path}`,
-      };
-    }
-    const office = this.officeFiles[path];
+    const office = this._officeFiles !== null || defaultOfficePaths.has(path)
+      ? this.officeFiles[path]
+      : undefined;
     if (office !== undefined) {
       return {
         kind: 'binary_content',

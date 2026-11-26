@@ -45,6 +45,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   let root_ready = conv.prompt_ready() &&
     self.bridge_state() is Connected &&
     self.api_ready() &&
+    self.conversation_model_ready(conv.engine_model) &&
     checkout_ready
   let primary_action : @composer.PrimaryAction = if conv.is_running() {
     @composer.Running(
@@ -114,6 +115,30 @@ fn Model::composer_input(self : Model) -> @composer.Input {
           .unwrap_or(@settings.text(self.locale, LoadingSettings)),
       ),
     )
+  }
+  // A model this host cannot run is not swapped for another one behind the
+  // user's back: Send stays out of reach until the entry is re-added, one of
+  // the endpoint's own models is picked, or the provider changes back.
+  match self.model_availability(conv.engine_model) {
+    ModelEntryDeleted =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, ModelDeletedNotice),
+        ),
+      )
+    ModelNotOnEndpoint =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, ModelNotOnEndpointNotice),
+        ),
+      )
+    ModelNoneSaved =>
+      context.push(
+        @composer.ApiSetupNotice(
+          text=@settings.text(self.locale, CustomModelsMissingNotice),
+        ),
+      )
+    ModelReady => ()
   }
   if self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
@@ -238,7 +263,6 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // The outer run heartbeat and child-run lanes are both typed live status,
     // rendered by the composer above the draft rather than persisted into the
     // transcript.
-    run: conv.run_heartbeat(),
     goal: conv.controls.input(),
     slash_commands: self.openseek_commands(
       editing_queue=conv.queue_edit is Some(_),
@@ -281,8 +305,15 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: self.active_workspace_file(),
     file_index,
     presentation: {
-      images_enabled: conv.engine_model is Deepseek(V4Flash) &&
-      self.api_provider() is (Deepseek | Custom),
+      // Custom models accept images by default; built-in tiers keep their route rule.
+      images_enabled: self.conversation_model_ready(conv.engine_model) &&
+      (
+        conv.engine_model is Custom(_) ||
+        (
+          conv.engine_model is Deepseek(V4Flash) &&
+          self.api_provider() is (Deepseek | Custom)
+        )
+      ),
       context,
       status,
       placeholder: if conv.controls.edit is Some(_) {
@@ -415,7 +446,6 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
       archive_generation: self.composer_entry_changes.length(),
     },
     draft: { images: [], task: "", mentions: [], },
-    run: None,
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
     shell_available: false,
@@ -505,6 +535,18 @@ const SimplifyPrompt : String =
   #|Focus:
 
 ///|
+/// What `/dream [focus]` sends. It ends on `Focus:`, which the text typed
+/// after the command completes.
+const DreamPrompt : String =
+  #|Consolidate recent OpenSeek sessions into durable project memory and reusable skills with the bundled dream workflow.
+  #|
+  #|1. Call the `mbtx` tool with `filename: "@builtin/dream.mbtx"` and `args: ["--", <focus>]`, where the focus is the Focus text below; when it is empty, pass no args.
+  #|2. Wait for the job with `job_wait` and read it with `job_output`.
+  #|3. Report what was added, updated, or pruned in `.openseek/memory/` (MEMORY.md, topics/, and skills/), or say plainly if everything was already up to date.
+  #|
+  #|Focus:
+
+///|
 fn Model::openseek_commands(
   self : Model,
   editing_queue~ : Bool,
@@ -533,6 +575,12 @@ fn Model::openseek_commands(
       detail: shell_text(self.locale, SimplifyProject),
       command: "simplify",
       prompt: Some(SimplifyPrompt),
+    },
+    {
+      label: "/dream",
+      detail: shell_text(self.locale, DreamConsolidate),
+      command: "dream",
+      prompt: Some(DreamPrompt),
     },
   ]
   if !editing_queue {

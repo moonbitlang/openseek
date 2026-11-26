@@ -3,47 +3,12 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // Replace only Proton's transport. The real shell, DOM focus, and xterm run
 // in Chromium; macOS menu key-equivalent handling still needs a native test.
-async function installDesktop(page, systemDark = false) {
+async function installDesktop(page, systemDark = false, customTitlebar = false) {
   const app = new DesktopBrowserHarness(page);
-  await app.install();
   app.systemDark = systemDark;
-  let terminalId = 0;
-  await page.exposeFunction('desktopRequest', request => {
-    app.requests.push(request);
-    if (request.method === 'app.system_appearance') {
-      return { dark: app.systemDark };
-    }
-    if (request.method === 'terminal.open') return { id: `terminal-${++terminalId}` };
-    return app.replyFor(request);
-  });
-  await page.addInitScript(() => {
-    const listeners = new Map();
-    const events = {
-      on(name, callback) {
-        const callbacks = listeners.get(name) || new Set();
-        listeners.set(name, callbacks);
-        callbacks.add(callback);
-        return () => callbacks.delete(callback);
-      },
-    };
-    window.desktopEvent = (name, payload) => {
-      for (const callback of listeners.get(name) || []) callback({ payload });
-    };
-    window.titlebarArea = null;
-    window.__MoonBit__ = {
-      getTitlebarArea: async () => window.titlebarArea,
-      app: events,
-      events,
-      openseek: new Proxy({}, {
-        get: (_, method) => async params => {
-          if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { protocol: 6 });
-          }
-          return window.desktopRequest({ method, params });
-        },
-      }),
-    };
-  });
+  app.onRpc('app.set_titlebar_style', () => ({ custom_overlay: customTitlebar }));
+  await app.install();
+  await app.installNative();
   await page.goto('/index.html');
   await app.openSession();
   return app;
@@ -107,7 +72,6 @@ test('native browser notifications cross the local bridge with navigation and fa
   await page.locator('.editor-tab.active .tab-close').click();
   await expect(page.locator('.editor-tab')).toHaveCount(0);
   await expect.poll(() => app.requests.filter(request => request.method === 'browser.close').map(request => request.params.id)).toEqual([id]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('fixed sidebar toggle respects native geometry across pages and fullscreen', async ({ page }) => {
@@ -171,7 +135,6 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   await expect(toggle).toHaveAccessibleName('Hide sidebar');
   await toggle.click();
   await expect(toggle).toHaveAccessibleName('Show sidebar');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Launcher tabs receive focus and Close never closes the window', async ({ page }) => {
@@ -193,7 +156,6 @@ test('Launcher tabs receive focus and Close never closes the window', async ({ p
     await expect(page.getByRole('button', { name: 'Show panel', exact: true })).toBeVisible();
   }
   expect(app.requests.filter(request => request.method === 'app.close_window')).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('Selecting a dock tab moves focus out of the composer', async ({ page }) => {
@@ -252,7 +214,107 @@ test('Close follows terminal focus and keeps the remaining terminal usable', asy
   await page.locator('#task').click();
   await closeFocused(page);
   await expect.poll(() => requests('app.close_window').length).toBe(1);
-  expect(app.pageErrors).toEqual([]);
+});
+
+test('Windows caption row follows the app font and theme and clears in fullscreen', async ({ page }) => {
+  const app = await installDesktop(page, false, true);
+  const root = page.locator('html');
+  const lastStyle = () => app.requests.filter(r => r.method === 'app.set_titlebar_style').at(-1)?.params;
+  const geometry = () => page.evaluate(() => ({
+    preferredHeight: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-header-height')),
+    nativeHeight: window.customTitlebarHeight,
+    rowHeight: document.querySelector('.topbar').getBoundingClientRect().height,
+  }));
+  await expect(root).toHaveClass(/native-titlebar-custom/);
+  const initial = await geometry();
+  expect(initial.rowHeight).toBe(initial.nativeHeight);
+  const underBackdrop = color => '#' + color.slice(1).match(/../g)
+    .map(hex => Math.round(parseInt(hex, 16) * 127 / 255).toString(16).padStart(2, '0')).join('');
+  const undimmed = lastStyle();
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect.poll(lastStyle).toMatchObject({
+    background_color: underBackdrop(undimmed.background_color),
+    symbol_color: underBackdrop(undimmed.symbol_color),
+  });
+  const backdrop = await page.locator('dialog:modal').evaluate(dialog => {
+    const style = getComputedStyle(dialog, '::backdrop');
+    return [style.backgroundColor, style.transitionDuration];
+  });
+  expect(backdrop).toEqual(['rgba(0, 0, 0, 0.5)', '0s']);
+  await page.getByRole('button', { name: 'Font size', exact: true }).click();
+  await page.getByRole('option', { name: '22px', exact: true }).click();
+  await expect.poll(async () => (await geometry()).rowHeight).toBeGreaterThan(initial.rowHeight);
+  const resized = await geometry();
+  expect(resized.rowHeight).toBe(resized.nativeHeight);
+  expect(lastStyle().height).toBeCloseTo(resized.preferredHeight);
+  const lightBackground = lastStyle().background_color;
+
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  await page.getByRole('option', { name: 'Dark', exact: true }).click();
+  await expect.poll(() => lastStyle()?.dark).toBe(true);
+  const darkBackdrop = lastStyle().background_color;
+  expect(darkBackdrop).not.toBe(lightBackground);
+
+  await page.getByRole('dialog', { name: 'Settings', exact: true })
+    .getByRole('button', { name: 'Dismiss', exact: true }).click();
+  const toggle = page.getByRole('button', { name: 'Show panel', exact: true });
+  await toggle.click();
+  await expect.poll(() => underBackdrop(lastStyle().background_color)).toBe(darkBackdrop);
+  const rows = await page.evaluate(() => {
+    const rows = ['.sidebar-header', '.topbar', '.editor-tabsbar'].map(selector => document.querySelector(selector));
+    const controls = ['.sidebar-toggle', '.sidebar-mode', '.right-panel-toggle', '.editor-tabsbar .tab-add'];
+    const [sidebarHeader, ...canvasRows] = rows;
+    const sidebarBackground = getComputedStyle(sidebarHeader.closest('aside')).backgroundColor;
+    const headerBackground = getComputedStyle(sidebarHeader).backgroundColor;
+    return {
+      heights: rows.map(row => row.getBoundingClientRect().height),
+      backgrounds: canvasRows.map(row => getComputedStyle(row).backgroundColor),
+      sidebarBackground,
+      sidebarHeaderBackground: headerBackground === 'rgba(0, 0, 0, 0)' ? sidebarBackground : headerBackground,
+      centers: controls.map(selector => {
+        const { top, height } = document.querySelector(selector).getBoundingClientRect();
+        return top + height / 2;
+      }),
+      nativeBoundary: innerWidth - 138,
+    };
+  });
+  expect(rows.heights).toEqual(Array(3).fill(resized.nativeHeight));
+  for (const center of rows.centers) expect(center).toBeCloseTo(resized.nativeHeight / 2, 1);
+  const rgb = `rgb(${lastStyle().background_color.slice(1).match(/../g).map(v => parseInt(v, 16)).join(', ')})`;
+  expect(rows.backgrounds).toEqual([rgb, rgb]);
+  expect(rows.sidebarHeaderBackground).toBe(rows.sidebarBackground);
+  const { x, width } = await page.getByRole('button', { name: 'Hide panel', exact: true }).boundingBox();
+  expect(x + width).toBeLessThanOrEqual(rows.nativeBoundary);
+
+  await page.evaluate(() => {
+    window.titlebarFullscreen = true;
+    window.desktopEvent('openseek.window.chrome_changed', {});
+  });
+  await expect(root).not.toHaveClass(/native-titlebar-(overlay|custom)/);
+  await expect.poll(() => root.evaluate(element => element.style.getPropertyValue('--native-titlebar-right'))).toBe('');
+  expect((await geometry()).rowHeight).toBeCloseTo(resized.preferredHeight, 1);
+  await page.evaluate(() => {
+    window.titlebarFullscreen = false;
+    window.desktopEvent('openseek.window.chrome_changed', {});
+  });
+  await expect(root).toHaveClass(/native-titlebar-custom/);
+  expect((await geometry()).rowHeight).toBe(resized.nativeHeight);
+});
+
+test('Windows caption color returns to the outer dialog when the SSH editor closes', async ({ page }) => {
+  const app = await installDesktop(page, false, true);
+  const background = () => app.requests.findLast(r => r.method === 'app.set_titlebar_style')?.params.background_color;
+  await expect(page.locator('html')).toHaveClass(/native-titlebar-custom/);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Connections', exact: true }).click();
+  await expect.poll(background).toBe('#7f7f7f');
+  await page.locator('#ssh-settings-add-host').click();
+  await expect.poll(background).toBe('#3f3f3f');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#ssh-modal')).toBeHidden();
+  await expect(page.locator('#management-dialog:modal')).toBeVisible();
+  await expect.poll(background).toBe('#7f7f7f');
 });
 
 // A native dialog can change CEF's media query without changing OS appearance.
@@ -282,7 +344,6 @@ test('desktop theme follows Proton and ignores browser color-scheme changes', as
   await page.reload();
   await expect.poll(queries).toBe(before + 2);
   await expect(root).toHaveAttribute('data-theme', 'light');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('web theme follows the browser without querying native appearance', async ({ page }) => {
@@ -295,7 +356,6 @@ test('web theme follows the browser without querying native appearance', async (
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   expect(app.requests.some(r => r.method === 'app.system_appearance')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('titlebar geometry ignores stale replies and preserves the last valid area on errors', async ({ page }) => {
@@ -349,5 +409,4 @@ test('titlebar geometry ignores stale replies and preserves the last valid area 
   await page.evaluate(() => window.titlebarReads.at(-1).resolve(null));
   await expect.poll(leftInset).toBe('');
   await expect(root).not.toHaveClass(/native-titlebar-overlay/);
-  expect(app.pageErrors).toEqual([]);
 });

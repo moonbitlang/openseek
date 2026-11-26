@@ -33,5 +33,4 @@ test('Excel selection owns annotation shortcuts without stealing them from other
     await input.press('Escape');
     await expect(input).toBeHidden();
   }
-  expect(app.pageErrors).toEqual([]);
 });

@@ -9,7 +9,7 @@ pub(all) enum FeedbackFailure {
 #derive(Eq)
 priv enum FeedbackStatus {
   Sending(String, String)
-  Submitted
+  Submitted(String)
   Failed(FeedbackFailure, held~ : String?)
   RetryReady(String)
 }
@@ -74,6 +74,7 @@ fn Entry::feedback_failed(
 fn Model::command_result(
   self : Model,
   message : CommandResult,
+  emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
 ) -> (Model, @cmd.Cmd) {
   match message {
@@ -108,11 +109,15 @@ fn Model::command_result(
         active == request else {
         return (self, @cmd.none)
       }
-      let next = match result {
-        Ok(_) => { ..entry, feedback: Some(Submitted), }
-        Err(reason) => entry.feedback_failed(submitted, reason)
+      let (next, command) = match result {
+        Ok(_) =>
+          (
+            { ..entry, feedback: Some(Submitted(request)), },
+            @cmd.delay(emit(FeedbackConfirmationExpired(request)), 3000),
+          )
+        Err(reason) => (entry.feedback_failed(submitted, reason), @cmd.none)
       }
-      self.commit_entry_change(entry, next, @cmd.none, action_emit)
+      self.commit_entry_change(entry, next, command, action_emit)
     }
     RestoreFeedback(input, draft, held) => {
       let entry = self.active(input)

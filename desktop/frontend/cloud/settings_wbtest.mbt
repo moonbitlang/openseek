@@ -110,11 +110,7 @@ test "busy or compacting sessions refuse all engine option edits" {
       }),
     ] {
     for
-      edit in [
-        SetApproval(ApprovalReview),
-        SetModel(V4Pro),
-        SetThinking(ThinkingOff),
-      ] {
+      edit in [SetApproval("review"), SetModel(V4Pro), SetThinking(ThinkingOff)] {
       assert_false(running.can_choose_settings("a"))
       assert_true(
         metadata_update(running, Edit(account="fixture", session="a", edit~)) ==
@@ -157,7 +153,7 @@ test "uncertain option saves stay fenced until a fresh catalog succeeds" {
     (edit, failure) in [
       (SetModel(V4Pro), @cloud_client.Unreachable),
       (SetThinking(ThinkingMax), @cloud_client.Http(408)),
-      (SetApproval(ApprovalReview), @cloud_client.Http(502)),
+      (SetApproval("review"), @cloud_client.Http(502)),
     ] {
     let initial = deletion_state()
     let pending = metadata_update(

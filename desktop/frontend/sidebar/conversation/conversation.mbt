@@ -149,16 +149,35 @@ pub(all) enum RenameEdit {
 }
 
 ///|
-/// Plain, comparable input to one conversation component. Child runs are
-/// nested data so their lifetime follows the parent branch rather than array
-/// position in the global sidebar.
+/// Aggregate state of the pull requests attached to a sidebar conversation.
+#derive(Debug, Eq)
+pub(all) enum PullRequestTone {
+  Open
+  Draft
+  Merged
+  Closed
+  Unknown
+}
+
+///|
+/// Compact PR status badge rendered beside a sidebar conversation's title.
+/// `count` is the total number of attached PRs (at least 1); the numeric count
+/// is shown beside the icon when `count > 1`.
+#derive(Debug, Eq)
+pub(all) struct PullRequestBadge {
+  tone : PullRequestTone
+  count : Int32
+  title : String
+}
+
+///|
+/// Plain, comparable input to one conversation component.
 #derive(Debug, Eq)
 pub(all) struct Input {
   id : Id
   title : String
   label : String
   nested : Bool
-  subrun : Bool
   active : Bool
   loading : Bool
   load_failed : Bool
@@ -166,8 +185,8 @@ pub(all) struct Input {
   openable : Bool
   rename : Rename?
   run_mark : RunMark
+  pull_request : PullRequestBadge?
   trailing : Array[TrailingAction]
-  children : Array[Input]
 }
 
 ///|
@@ -216,17 +235,6 @@ fn highlighted(value : String, query : String) -> @html.Html {
 }
 
 ///|
-priv enum Msg {
-  ToggleChildren
-}
-
-///|
-#derive(Eq)
-priv struct State {
-  children_open : Bool
-}
-
-///|
 fn Actions::command(
   self : Actions,
   action : TrailingAction,
@@ -248,7 +256,7 @@ priv enum MenuKind {
 
 ///|
 fn Input::menu_kind(self : Input) -> MenuKind? {
-  if self.subrun || self.trailing.is_empty() {
+  if self.trailing.is_empty() {
     return None
   }
   match self.id.source() {
@@ -447,49 +455,104 @@ fn rename_field(
 }
 
 ///|
-fn Actions::child_component(
-  self : Actions,
-  locale : @rabbita.Val[@i18n.Locale],
-  _id : Id,
-  input : @rabbita.Val[Input],
-  search : @rabbita.Val[Search],
-) -> @rabbita.Val[(String, @html.Html)] {
-  component(locale, input, self, search)
+fn Input::status_icon(self : Input, locale : @i18n.Locale) -> @html.Html? {
+  if self.load_failed && !self.loading {
+    return Some(
+      @html.span(
+        class="conversation-load-failed",
+        attrs=@html.Attrs::build().aria_label(
+          ui(locale, ConversationLoadFailed),
+        ),
+        "!",
+      ),
+    )
+  }
+  let (message, image, class_name) = match (self.run_mark, self.loading) {
+    (NeedsInputMark, _) => (NeedsInput, @icons.icon_question, "needs-input")
+    (RunningMark, _) | (_, true) =>
+      (
+        if self.run_mark is RunningMark {
+          RunningLabel
+        } else {
+          LoadingMessages
+        },
+        @icons.icon_loading,
+        "running",
+      )
+    (CompletedMark, false) => (CompletedUnread, @icons.icon_check, "completed")
+    (FailedMark, false) => (FailedUnread, @icons.icon_error, "failed")
+    (StoppedMark, false) => (StoppedUnread, @icons.icon_debug_stop, "completed")
+    (EndedMark, false) => (EndedUnread, @icons.icon_circle, "completed")
+    (NoRunMark, false) => return None
+  }
+  let label = ui(locale, message)
+  Some(
+    @html.span(
+      class="sidebar-run-status " + class_name,
+      attrs=@html.Attrs::build()
+        .role("status")
+        .aria_live("polite")
+        .aria_label(label)
+        .title(label),
+      @icons.icon(image),
+    ),
+  )
+}
+
+///|
+fn Input::pull_request_badge(
+  self : Input,
+  locale : @i18n.Locale,
+) -> @html.Html? {
+  guard self.pull_request is Some(pr) && pr.count > 0 else { return None }
+  let (tone_class, image, state_label) = match pr.tone {
+    Open => ("open", @icons.icon_git_pull_request, ui(locale, PullRequestOpen))
+    Draft =>
+      (
+        "draft",
+        @icons.icon_git_pull_request_draft,
+        ui(locale, PullRequestDraft),
+      )
+    Merged => ("merged", @icons.icon_git_merge, ui(locale, PullRequestMerged))
+    Closed =>
+      (
+        "closed",
+        @icons.icon_git_pull_request_closed,
+        ui(locale, PullRequestClosed),
+      )
+    Unknown =>
+      ("unknown", @icons.icon_git_pull_request, ui(locale, PullRequestAttached))
+  }
+  let badge_children : Array[@html.Html] = [
+    @html.span(class="row-pr-icon \{tone_class}", @icons.icon(image)),
+  ]
+  if pr.count > 1 {
+    badge_children.push(@html.span(class="row-pr-count", pr.count.to_string()))
+  }
+  let aria_label = if pr.count > 1 {
+    ui(locale, PullRequestSummaryMulti(pr.count, state_label))
+  } else {
+    state_label
+  }
+  Some(
+    @html.span(
+      class="row-pr-status",
+      title=pr.title,
+      attrs=@html.Attrs::build().aria_label(aria_label),
+      badge_children,
+    ),
+  )
 }
 
 ///|
 /// A real Rabbita component: it is constructed once for an `assoc_by` key,
-/// owns its sub-run disclosure state, consumes incremental input, and returns
-/// an incremental DOM value. Child branches stay mounted when folded.
+/// consumes incremental input, and returns an incremental DOM value.
 pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   actions : Actions,
   search : @rabbita.Val[Search],
 ) -> @rabbita.Val[(String, @html.Html)] {
-  let (state, emit) = @rabbita.create_state_with_input(
-    input~,
-    init=(_, _) => ({ children_open: false, }, @cmd.none),
-    update=(state, _, msg, _) => {
-      match msg {
-        ToggleChildren => ({ children_open: !state.children_open, }, @cmd.none)
-      }
-    },
-  )
-  let child_inputs = input.map3(locale, search, (input, locale, search) => {
-    @vector.from_array(input.children.map(child => (locale, child, search)))
-  })
-  let child_rows = child_inputs.assoc_by(
-    (id, child) => {
-      actions.child_component(
-        child.map(pair => pair.0),
-        id,
-        child.map(pair => pair.1),
-        child.map(parts => parts.2),
-      )
-    },
-    by=child => child.1.id(),
-  )
   let menu = input
     .map2(locale, (input, locale) => (input, locale))
     .switch_by(
@@ -511,24 +574,11 @@ pub fn component(
       },
     )
   let input = input.map2(menu, (input, menu) => (input, menu))
-  let rendered = state.map5(input, child_rows, locale, search, (
-    state,
-    pair,
-    child_rows,
-    locale,
-    search,
-  ) => {
+  let rendered = input.map3(locale, search, (pair, locale, search) => {
     let (input, menu) = pair
-    // Opening a workflow child must keep its selected row visible under the parent.
-    let children_open = !search.query.is_blank() ||
-      state.children_open ||
-      input.children.any(child => child.active || child.loading)
     let mut class = "conversation-row"
     if input.nested {
       class += " nested"
-    }
-    if input.subrun {
-      class += " subrun"
     }
     if input.active {
       class += " active"
@@ -549,27 +599,7 @@ pub fn component(
     if renaming {
       class += " renaming"
     }
-    let children : Array[@html.Html] = []
-    if input.children.is_empty() {
-      children.push(@html.span(class="row-twisty spacer", ""))
-    } else {
-      children.push(
-        @html.button(
-          class=if children_open { "row-twisty expanded" } else { "row-twisty" },
-          type_="button",
-          title=ui(locale, SubagentRuns(input.children.length())),
-          attrs=@html.Attrs::build()
-            .aria_expanded(children_open.to_string())
-            .aria_controls(input.id.key() + ":children")
-            .on_click(event => {
-              event.stop_propagation()
-              emit(ToggleChildren)
-            }),
-          @icons.icon(@icons.icon_chevron_down),
-        ),
-      )
-    }
-    children.push(
+    let children : Array[@html.Html] = [
       if input.rename is Some(rename) {
         rename_field(locale, input.id, rename, actions)
       } else if input.openable {
@@ -604,87 +634,13 @@ pub fn component(
       } else {
         @html.span(class="sidebar-label", input.label)
       },
-    )
+    ]
     let status : Array[@html.Html] = []
-    if input.loading {
-      status.push(
-        @html.span(
-          class="conversation-load-spinner",
-          attrs=@html.Attrs::build()
-            .role("status")
-            .aria_label(ui(locale, LoadingConversation)),
-          "",
-        ),
-      )
-    } else if input.load_failed {
-      status.push(
-        @html.span(
-          class="conversation-load-failed",
-          attrs=@html.Attrs::build().aria_label(
-            ui(locale, ConversationLoadFailed),
-          ),
-          "!",
-        ),
-      )
+    if input.pull_request_badge(locale) is Some(badge) {
+      status.push(badge)
     }
-    match input.run_mark {
-      NoRunMark => ()
-      RunningMark
-      | NeedsInputMark
-      | CompletedMark
-      | FailedMark
-      | StoppedMark
-      | EndedMark => {
-        let (label, image, class_name) = match input.run_mark {
-          RunningMark =>
-            (
-              ui(locale, RunningLabel),
-              @icons.icon_loading,
-              "sidebar-run-status running",
-            )
-          NeedsInputMark =>
-            (
-              ui(locale, NeedsInput),
-              @icons.icon_question,
-              "sidebar-run-status needs-input",
-            )
-          CompletedMark =>
-            (
-              ui(locale, CompletedUnread),
-              @icons.icon_check,
-              "sidebar-run-status completed",
-            )
-          FailedMark =>
-            (
-              ui(locale, FailedUnread),
-              @icons.icon_error,
-              "sidebar-run-status failed",
-            )
-          StoppedMark =>
-            (
-              ui(locale, StoppedUnread),
-              @icons.icon_debug_stop,
-              "sidebar-run-status completed",
-            )
-          _ =>
-            (
-              ui(locale, EndedUnread),
-              @icons.icon_circle,
-              "sidebar-run-status completed",
-            )
-        }
-        status.push(
-          @html.span(
-            class=class_name,
-            attrs=@html.Attrs::build()
-              .role("status")
-              .aria_live("polite")
-              .aria_label(label)
-              .title(label),
-            @icons.icon(image),
-          ),
-        )
-      }
+    if input.status_icon(locale) is Some(icon) {
+      status.push(icon)
     }
     let menu_kind = input.menu_kind()
     // A live row folds its actions behind one overflow trigger, so Rename
@@ -709,7 +665,7 @@ pub fn component(
         !trailing_actions.is_empty()
       ) {
       // The status group stays in the slot even when empty: a glyph coming or
-      // going (the load spinner, a run mark) must not shift the action group
+      // going must not shift the action group
       // to another child position, which would re-create a focused button.
       let trailing : Array[@html.Html] = [
         @html.span(class="row-status", status),
@@ -762,8 +718,6 @@ pub fn component(
           input.rename,
           input.openable,
           input.active,
-          input.children.length(),
-          children_open,
           input.trailing,
           locale,
           search.query,
@@ -781,38 +735,16 @@ pub fn component(
         })
       },
     }
-    let rows = Map::from_iter(child_rows.iter())
-    let collapsed = !children_open || input.children.is_empty()
-    (
-      input.id.key(),
-      class,
-      input.title,
-      context,
-      trailing_slot,
-      @html.div(
-        id=input.id.key() + ":children",
-        class="conversation-children sidebar-branch-content",
-        attrs=@html.Attrs::build()
-          .aria_hidden(collapsed.to_string())
-          .inert(collapsed),
-        rows,
-      ),
-      collapsed,
-    )
+    (input.id.key(), class, input.title, context, trailing_slot)
   })
   let context = @action_menu.row_context(rendered.map(row => row.3))
   rendered.map2(context, (row, context) => {
-    let (id, class, title, _, trailing, children, collapsed) = row
+    let (id, class, title, _, trailing) = row
     (
       id,
-      @html.div(
-        class=if collapsed {
-          "sidebar-conversation sidebar-branch collapsed"
-        } else {
-          "sidebar-conversation sidebar-branch"
-        },
-        [@html.div(class~, title~, [context, ..trailing]), children],
-      ),
+      @html.div(class="sidebar-conversation", [
+        @html.div(class~, title~, [context, ..trailing]),
+      ]),
     )
   })
 }
@@ -861,6 +793,18 @@ pub extend TrailingAction with Eq::{equal, not_equal}
 
 ///|
 pub extend RunOutcome with Eq::{equal, not_equal}
+
+///|
+pub extend PullRequestTone with Debug::{to_repr}
+
+///|
+pub extend PullRequestTone with Eq::{equal, not_equal}
+
+///|
+pub extend PullRequestBadge with Debug::{to_repr}
+
+///|
+pub extend PullRequestBadge with Eq::{equal, not_equal}
 
 ///|
 pub extend Search with Eq::{equal, not_equal}

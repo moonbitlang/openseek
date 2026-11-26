@@ -14,5 +14,5 @@ pub fn component(
   emit : @cmd.Emit[Msg],
   locale : @rabbita.Val[@i18n.Locale],
 ) -> @rabbita.Val[@html.Html] {
-  state.map2(locale, (state, locale) => state.view(emit, locale))
+  state.view2(locale, (state, locale) => state.view(emit, locale))
 }

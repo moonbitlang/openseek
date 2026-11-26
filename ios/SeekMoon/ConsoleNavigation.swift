@@ -73,6 +73,7 @@ import WebKit
             return
         }
         if event == "login", let visible = body["visible"] as? Bool {
+            if visible { parent?.retireAccountIfSignedOut() }
             showWelcome(visible)
             return
         }

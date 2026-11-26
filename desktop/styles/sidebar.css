@@ -101,6 +101,14 @@
   padding-right: max(0px, var(--sidebar-inset) - var(--scrollbar-lane));
   scrollbar-gutter: stable;
 }
+.sidebar-main[data-auto-hide-scrollbar]:not([data-scrolling]) {
+  scrollbar-color: transparent transparent;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar-main[data-auto-hide-scrollbar]:not([data-scrolling]) {
+    transition: scrollbar-color 250ms ease-out;
+  }
+}
 .sidebar-section {
   display: grid;
   --sidebar-row-gap: calc(1em / 14);
@@ -153,16 +161,21 @@
 }
 
 .conversation-row {
+  --row-bg: var(--color-bg-surface);
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
   min-height: 2em;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-control);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   font-size: var(--font-size-md);
   cursor: pointer;
+}
+.sidebar-conversation {
+  min-width: 0;
 }
 .sidebar-conversation > .conversation-row {
   /* Keep row DOM and state while the browser skips off-screen content.
@@ -227,11 +240,13 @@
   outline-offset: 2px;
 }
 .conversation-row:hover {
-  background: var(--color-bg-subtle);
+  --row-bg: var(--color-bg-subtle);
+  background: var(--row-bg);
 }
 
 .conversation-row.active {
-  background: var(--color-conversation-selected);
+  --row-bg: var(--color-conversation-selected);
+  background: var(--row-bg);
 }
 
 .conversation-row.load-failed {
@@ -279,8 +294,8 @@
   cursor: default;
 }
 
-/* Hover-revealed archive control on a durable row. Kept in layout
-   (visibility, not display) so the label doesn't shift as it appears. */
+/* Hover-revealed row action button. Kept in layout on workspace rows so their
+   controls stay aligned; conversation rows overlay `.row-actions` instead. */
 .row-archive {
   --icon-size: var(--icon-md);
   flex: 0 0 auto;
@@ -296,11 +311,8 @@
   font-size: var(--font-size-sm);
   line-height: var(--line-height-tight);
   cursor: pointer;
+  pointer-events: auto;
   visibility: hidden;
-}
-.conversation-row:hover .row-archive,
-.conversation-row:focus-within .row-archive {
-  visibility: visible;
 }
 .row-archive:hover {
   background: var(--color-hover-subtle);
@@ -318,16 +330,25 @@
   background: var(--color-danger-soft);
   color: var(--color-danger);
 }
-/* Stack status and actions in one cell sized to the wider group, so swapping
-   them on hover does not shift the conversation title. */
+/* Status icons stay in flow when present so titles never overlap them; when
+   idle, `.row-trailing` drops out of flex layout so titles use the full row
+   width and `.row-actions` overlays the trailing edge on hover or focus. */
 .row-trailing {
   flex: 0 0 auto;
-  display: grid;
+  display: flex;
   align-items: center;
-  justify-items: end;
+  gap: var(--space-3);
 }
-.row-trailing > * {
-  grid-area: 1 / 1;
+.row-trailing:has(> .row-status:empty) {
+  display: contents;
+}
+/* Collapse empty trailing slots at rest so idle rows use the full width for
+   their titles instead of reserving space for hidden hover actions. */
+.conversation-row:not(:hover):not(:focus-within):not(
+    :has(.row-menu-button[aria-expanded="true"])
+  )
+  .row-trailing:not(:has(.row-status > *)) {
+  display: none;
 }
 
 .sidebar-run-status {
@@ -346,34 +367,84 @@
 .sidebar-run-status.completed { color: var(--color-text-secondary); }
 .sidebar-run-status.failed { color: var(--color-danger); }
 
+/* Compact PR status indicator placed inside `.row-status` so it stays in flow
+   at rest without overlapping titles and cleanly yields to the hover-overlaid
+   `.row-actions` menu. */
+.row-pr-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  line-height: var(--line-height-tight);
+}
+.row-pr-icon {
+  --icon-size: var(--icon-md);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--color-text-muted);
+}
+.row-pr-icon.open {
+  color: var(--color-success);
+}
+.row-pr-icon.draft {
+  color: var(--color-warning);
+}
+.row-pr-icon.merged {
+  color: var(--color-pr-merged);
+}
+.row-pr-icon.closed {
+  color: var(--color-danger);
+}
+.row-pr-icon.unknown {
+  color: var(--color-text-muted);
+}
+.row-pr-count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-height-tight);
+}
+
 .row-status,
 .row-actions {
   display: flex;
   align-items: center;
   gap: var(--space-3);
 }
-.conversation-row:hover .row-trailing:has(.row-actions) .row-status,
-.conversation-row:focus-within .row-trailing:has(.row-actions) .row-status {
+.row-status:empty {
+  display: none;
+}
+.row-actions {
+  pointer-events: none;
   visibility: hidden;
 }
-/* An open conversation menu keeps its hover-revealed trigger in place of the
-   status glyphs while the pointer moves into the floating surface. */
+.conversation-row:not(.loading) .row-actions {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  padding-inline: 1rem var(--space-2);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--row-bg) 1rem
+  );
+}
+/* Reveal actions on hover, focus, or while the overflow menu is open; swap out
+   the status icon except while loading so the spinner stays beside the menu. */
+.conversation-row:is(:hover, :focus-within, :has(.row-menu-button[aria-expanded="true"])) {
+  & .row-actions,
+  & .row-archive {
+    visibility: visible;
+  }
+
+  &:not(.loading) .row-trailing:has(.row-actions) .row-status {
+    visibility: hidden;
+  }
+}
 .row-menu-button[aria-expanded="true"] {
-  visibility: visible;
   color: var(--color-text-primary);
-}
-.conversation-row:not(.loading)
-  .row-trailing:has(.row-menu-button[aria-expanded="true"])
-  .row-status {
-  visibility: hidden;
-}
-.conversation-row.loading .row-trailing {
-  display: flex;
-  gap: var(--space-3);
-}
-.conversation-row.loading:hover .row-trailing:has(.row-actions) .row-status,
-.conversation-row.loading:focus-within .row-trailing:has(.row-actions) .row-status {
-  visibility: visible;
 }
 
 .sidebar-group,
@@ -454,10 +525,13 @@
   }
 }
 
+.sidebar-project + .sidebar-project {
+  margin-block-start: var(--space-2);
+}
 .conversation-row + .sidebar-project,
 .sidebar-conversation + .sidebar-project,
 .sidebar-project:not(.collapsed):has(.conversation-row) + .sidebar-project {
-  margin-block-start: var(--space-4);
+  margin-block-start: var(--space-6);
 }
 
 .workspace-row {
@@ -465,11 +539,11 @@
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  min-height: 2.5rem;
+  min-height: 1.75rem;
   padding: 0 var(--space-4);
   border-radius: var(--radius-control);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 .workspace-content {
   display: flex;
@@ -481,7 +555,7 @@
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-width: 0;
   align-self: stretch;
   padding: 0;
@@ -492,15 +566,41 @@
   text-align: left;
   cursor: pointer;
 }
+.workspace-disclosure:hover {
+  color: var(--color-text-secondary);
+}
 .workspace-disclosure > .sidebar-label {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace-disclosure > .sidebar-icon {
+.workspace-row.active .workspace-disclosure > .sidebar-label {
+  font-weight: 600;
+}
+.workspace-chevron {
+  --icon-size: var(--icon-sm);
   flex: none;
-  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  transition: transform var(--disclosure-duration) ease;
+}
+.workspace-chevron svg {
+  stroke: currentColor;
+  stroke-width: 0.35;
+  stroke-linejoin: round;
+}
+.workspace-disclosure[aria-expanded="false"] > .workspace-chevron {
+  transform: rotate(-90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-chevron {
+    transition: none;
+  }
 }
 .workspace-disclosure:focus-visible,
 .project-show-more:focus-visible {
@@ -509,8 +609,7 @@
   border-radius: var(--radius-control);
 }
 .workspace-row.active {
-  color: var(--color-text-primary);
-  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 .workspace-row:hover .row-archive {
   visibility: visible;
@@ -523,20 +622,16 @@
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
-.conversation-row.nested {
-  padding-left: var(--space-5);
-}
 .project-show-more {
   width: 100%;
   min-height: 2em;
-  /* Match nested titles: row inset, twisty cell, then content gap. */
-  padding: 0 var(--space-4) 0 calc(var(--space-5) + 1rem + var(--space-2));
+  padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-xs);
   text-align: left;
   cursor: pointer;
 }
@@ -550,49 +645,6 @@
 }
 .conversation-row.placeholder:hover {
   background: transparent;
-}
-
-/* Rows without children retain an empty twisty slot to keep titles aligned. */
-.row-twisty {
-  --icon-size: var(--icon-sm);
-  flex: 0 0 1rem;
-  display: grid;
-  place-items: center;
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.row-twisty .icon {
-  transform: rotate(-90deg);
-  transition: transform var(--disclosure-duration) ease;
-}
-.row-twisty.expanded .icon {
-  transform: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .row-twisty .icon {
-    transition: none;
-  }
-}
-button.row-twisty:hover {
-  background: var(--color-hover-subtle);
-  color: var(--color-text-primary);
-}
-.row-twisty.spacer {
-  cursor: inherit;
-}
-
-.conversation-row.subrun {
-  padding-left: calc(2rem - var(--space-2));
-  color: var(--color-text-muted);
-}
-.conversation-row.subrun.nested {
-  padding-left: calc(2.5rem - var(--space-2));
 }
 
 #project-picker-dialog {
@@ -1120,9 +1172,11 @@ button.row-twisty:hover {
   color: inherit;
   font: inherit;
 }
-.sidebar-search input::placeholder { color: inherit; opacity: 1; }
 .sidebar-search-clear { --icon-size: var(--icon-sm); width: 1.5rem; height: 1.5rem; }
-.conversation-row.search-selected { background: var(--color-bg-subtle); }
+.conversation-row.search-selected {
+  --row-bg: var(--color-bg-subtle);
+  background: var(--row-bg);
+}
 .conversation-open strong { color: var(--color-text-primary); font-weight: 600; }
 
 .workspace-trailing {

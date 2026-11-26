@@ -7,7 +7,7 @@ pub(all) struct Session {
   generating : Bool
   archived : Bool
   // The policy the next engine starts with; a running turn keeps its own.
-  approval : @protocol.OpenSeekApproval
+  approval : String
   model : @deepseek.DsVariant
   thinking : @protocol.Thinking
 }
@@ -89,6 +89,9 @@ pub extend PendingAssistant with Eq::{equal, not_equal}
 #derive(Eq)
 pub(all) struct Conversation {
   records : Array[Record]
+  other_history : CachedTranscript?
+  // Navigation and earliest visible turn to restore after changing views.
+  history_restore_range : (Int32, Int32)?
   history_cached : Bool
   history_etag : String?
   history_reading : Bool
@@ -148,8 +151,8 @@ pub(all) struct Conversation {
   // The task whose start this observation connection delivered.
   live_task : String?
   assistant_handoffs : Map[String, Int32]
-  heartbeat : @composer.RunHeartbeat?
-  retrying : @composer.RunStage?
+  heartbeat : @transcript.RunHeartbeat?
+  retrying : @transcript.RunStage?
   controls : @engine_session.State
   // The permission question this client answered, kept answered until the
   // control snapshot settles it or publishes another.
@@ -161,6 +164,8 @@ pub(all) struct Conversation {
 fn Conversation::empty() -> Conversation {
   {
     records: [],
+    other_history: None,
+    history_restore_range: None,
     history_cached: false,
     history_etag: None,
     history_reading: false,
@@ -224,7 +229,7 @@ pub struct Creation {
   id : String
   request : Int32
   navigation : Int32
-  approval : @protocol.OpenSeekApproval
+  approval : String
   model : @deepseek.DsVariant
   thinking : @protocol.Thinking
 }
@@ -254,7 +259,7 @@ pub enum CommandInput {
 pub(all) enum SessionEdit {
   Rename(String)
   Archive(Bool)
-  SetApproval(@protocol.OpenSeekApproval)
+  SetApproval(String)
   SetModel(@deepseek.DsVariant)
   SetThinking(@protocol.Thinking)
 }
@@ -264,7 +269,7 @@ impl ToJson for SessionEdit with fn to_json(self) {
   match self {
     Rename(title) => { "title": Json(title) }
     Archive(archived) => { "archived": Json(archived) }
-    SetApproval(mode) => { "approval": mode.to_json() }
+    SetApproval(mode) => { "approval": Json(mode) }
     SetModel(model) => { "model": Json(@deepseek.Deepseek(model).to_string()) }
     SetThinking(thinking) => { "thinking": thinking.to_json() }
   }
@@ -300,6 +305,7 @@ pub extend SessionListStatus with Eq::{equal, not_equal}
 ///|
 #derive(Eq)
 pub(all) struct State {
+  history_view : @protocol.CloudHistoryView
   client_tools : Bool
   user_id : String?
   epoch : Int32
@@ -321,6 +327,7 @@ pub(all) struct State {
 ///|
 pub fn State::empty() -> State {
   {
+    history_view: Minimal,
     client_tools: false,
     user_id: None,
     epoch: 0,
@@ -473,12 +480,8 @@ fn decode_sessions(json : Json) -> Array[Session] raise RequestError {
     },
     // Servers that predate approval modes start every engine asking.
     approval: match item {
-      Object(fields) if !fields.contains("approval") => ApprovalAsk
-      Object(fields) =>
-        @json.from_json(fields["approval"]) catch {
-          _ => raise @cloud_client.RequestError(Malformed)
-        }
-      _ => raise @cloud_client.RequestError(Malformed)
+      Object(fields) if !fields.contains("approval") => "ask"
+      _ => required_string(item, "approval")
     },
     model: match item {
       Object(fields) if !fields.contains("model") => V4Flash

@@ -3,14 +3,13 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('GitHub inventory, PR details and checkout follow live language changes', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  const fallback = app.replyFor.bind(app);
   const item = { number: 42, title: 'Keep this PR title', url: 'https://github.com/owner/project/pull/42', author: 'contributor', draft: false };
-  app.replyFor = request => {
-    if (request.method === 'github.list') return {
+  app.mockRpc({
+    'github.list': request => ({
       repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
       items: request.params.kind === 'issues' ? [] : [item],
-    };
-    if (request.method === 'github.pull_request') return {
+    }),
+    'github.pull_request': () => ({
       item, state: 'OPEN', mergeable: 'MERGEABLE', base: 'main', head: 'feature',
       body_html: '<p>Keep the original description.</p>', additions: 2, deletions: 1, changed_files: 1,
       checks: [
@@ -20,10 +19,9 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
       ],
       comments: [], created_at: '2026-01-02T00:00:00Z',
       reviewers: [{ name: 'reviewer', state: 'APPROVED' }], assignees: [], labels: [],
-    };
-    if (request.method === 'github.checkout') return { status: 'uncommitted_changes' };
-    return fallback(request);
-  };
+    }),
+    'github.checkout': () => ({ status: 'uncommitted_changes' }),
+  });
   await app.install();
   await app.goto();
   await app.openSession();
@@ -71,14 +69,11 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
   await expect(checkout).toBeFocused();
   expect(app.requests.filter(request => request.method === 'github.pull_request')).toHaveLength(1);
   expect(app.requests.filter(request => request.method === 'github.checkout').map(request => request.params.changes)).toEqual(['ask']);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('GitHub dock keeps both inventories scrollable and disclosures keyboard accessible', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  const originalReply = app.replyFor.bind(app);
-  app.replyFor = request => {
-    if (request.method !== 'github.list') return originalReply(request);
+  app.onRpc('github.list', request => {
     const { kind } = request.params;
     return {
       repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
@@ -88,7 +83,7 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
         author: 'contributor', avatar_url: 'https://avatars.githubusercontent.com/u/1?s=32', draft: kind !== 'issues' && i === 0,
       })),
     };
-  };
+  });
   await page.route('https://avatars.githubusercontent.com/**', route => route.fulfill({
     contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#729ac4"/></svg>',
   }));
@@ -132,22 +127,17 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
   await expect(issues).toBeVisible();
   expect(app.requests.filter(request => request.method === 'github.list').map(request => request.params.cwd))
     .toEqual(['/workspace', '/workspace', '/workspace']);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('avatar errors retain the inventory and retry clears the warning', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  const originalReply = app.replyFor.bind(app);
   let avatarFailed = true;
-  app.replyFor = request => {
-    if (request.method !== 'github.list') return originalReply(request);
-    return {
-      repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
-      avatar_error: avatarFailed ? 'Could not load GitHub avatars: offline' : undefined,
-      items: [{ number: 42, title: 'Review the implementation', url: 'https://github.com/owner/project/pull/42',
-        author: 'contributor', draft: false }],
-    };
-  };
+  app.onRpc('github.list', () => ({
+    repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
+    avatar_error: avatarFailed ? 'Could not load GitHub avatars: offline' : undefined,
+    items: [{ number: 42, title: 'Review the implementation', url: 'https://github.com/owner/project/pull/42',
+      author: 'contributor', draft: false }],
+  }));
   await app.install();
   await app.goto();
   await app.openSession();
@@ -161,5 +151,4 @@ test('avatar errors retain the inventory and retry clears the warning', async ({
   await pulls.getByRole('button', { name: 'Retry avatars', exact: true }).click();
   await expect(pulls.getByRole('alert')).toHaveCount(0);
   await expect(pulls.locator('.github-item')).toHaveCount(1);
-  expect(app.pageErrors).toEqual([]);
 });

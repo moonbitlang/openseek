@@ -26,7 +26,7 @@ fn State::submit_command(
           submission.request,
           required_string(
             request(CloudOrigin, "/v1/sessions", Post, token~, body={
-              "approval": creation.approval.to_json(),
+              "approval": Json(creation.approval),
             }),
             "id",
           ),
@@ -85,7 +85,8 @@ fn State::send_pending(
         send_request: request,
         sending: true,
         heartbeat: Some({
-          stage: @composer.Starting,
+          stage: @transcript.Starting,
+          step: None,
           started_ms: None,
           tokens: 0,
         }),

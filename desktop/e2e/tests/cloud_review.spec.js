@@ -122,7 +122,6 @@ test('Cloud review shares diff, selected-change context and feedback with the ow
     expect(request.body).not.toHaveProperty('session');
   }
   expect(cloud.device.requests.filter(r => /^git\.(changes|original_file|history|commit_changes)$/.test(r.method))).toEqual([]);
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud commit history opens an immutable diff and ignores a previous session baseline', async ({ page }, testInfo) => {
@@ -144,7 +143,6 @@ test('Cloud commit history opens an immutable diff and ignores a previous sessio
   await expect(diff(page)).toContainText('history commit');
   await expect.poll(() => cloud.reviewRequests.filter(r => r.operation === 'original-file' && [cloud.device.gitMerge, cloud.device.gitHead].includes(r.body.revision)).length).toBe(2);
   await page.screenshot({ path: testInfo.outputPath('cloud-review-history.png') });
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud review reuses the non-Git notice and allows retry after an unavailable endpoint', async ({ page }) => {
@@ -155,7 +153,6 @@ test('Cloud review reuses the non-Git notice and allows retry after an unavailab
   cloud.reviewStatus = 200; cloud.repository = false;
   await page.getByRole('tab', { name: /Changes/ }).click();
   await expect(page.locator('#review-changes-body')).toContainText('Git is unavailable or this workspace is not a Git repository.');
-  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud review preserves Git rejection reasons and retries without treating checkout conflicts as generation', async ({ page }, testInfo) => {
@@ -186,5 +183,4 @@ test('Cloud review preserves Git rejection reasons and retries without treating 
   await page.evaluate(session => window.cloudInvalidateFiles(session), sessionA);
   await expect.poll(() => cloud.reviewRequests.filter(request => request.operation === 'changes').length).toBeGreaterThan(before);
   await expect(changedMain(page)).toBeVisible();
-  expect(cloud.device.pageErrors).toEqual([]);
 });

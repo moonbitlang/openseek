@@ -254,6 +254,20 @@ fn checkout_row(locale : @i18n.Locale, checkout : Checkout) -> @html.Html {
 }
 
 ///|
+/// Localized display label for a pull request's state.
+pub fn PullRequestState::label(
+  self : PullRequestState,
+  locale~ : @i18n.Locale = English,
+) -> String {
+  match self {
+    Open => text(locale, StateOpen)
+    Draft => text(locale, StateDraft)
+    Merged => text(locale, StateMerged)
+    Closed => text(locale, StateClosed)
+  }
+}
+
+///|
 /// How a pull request in `self` state looks: its icon's tone, the icon, and
 /// the state's name.
 fn PullRequestState::look(
@@ -261,12 +275,11 @@ fn PullRequestState::look(
   locale : @i18n.Locale,
 ) -> (String, () -> @html.Html, String) {
   match self {
-    Open => ("open", @icons.icon_git_pull_request, text(locale, StateOpen))
-    Draft =>
-      ("draft", @icons.icon_git_pull_request_draft, text(locale, StateDraft))
-    Merged => ("merged", @icons.icon_git_merge, text(locale, StateMerged))
+    Open => ("open", @icons.icon_git_pull_request, self.label(locale~))
+    Draft => ("draft", @icons.icon_git_pull_request_draft, self.label(locale~))
+    Merged => ("merged", @icons.icon_git_merge, self.label(locale~))
     Closed =>
-      ("closed", @icons.icon_git_pull_request_closed, text(locale, StateClosed))
+      ("closed", @icons.icon_git_pull_request_closed, self.label(locale~))
   }
 }
 

@@ -1,10 +1,14 @@
 ///|
 async test "directory approval describes and removes a complete tree including hidden and empty entries" {
   @vfs.with_tmpdir(dir => {
-    @vfs.FileSystem({ "tree/a": "a", "tree/nested/.hidden": "hidden" }).write_to(
-      dir,
-    )
+    @vfs.FileSystem({
+      "tree/a": "a",
+      "tree/nested/.hidden": "hidden",
+      "outside/file": "keep",
+    }).write_to(dir)
     @fs.mkdir("\{dir}/tree/empty")
+    @fs.symlink("\{dir}/tree/nested/out", target="\{dir}/outside")
+    @fs.symlink("\{dir}/tree/loop", target="\{dir}/tree")
     let state = @agent_tool.FileStateMap()
     state.record_created("\{dir}/tree/a", @agent_tool.content_digest("a"))
     let asked = Ref(false)
@@ -15,7 +19,7 @@ async test "directory approval describes and removes a complete tree including h
         asked.val = true
         assert_eq(
           ask.detail,
-          "\{dir}/tree (recursive directory deletion: 2 files and 2 subdirectories; all contents will be removed)",
+          "\{dir}/tree (recursive directory deletion: all contents present at deletion will be removed)",
         )
         assert_true(ask.body is Some(body) && body.contains("cleanup"))
         AllowedOnce
@@ -29,6 +33,7 @@ async test "directory approval describes and removes a complete tree including h
     assert_true(asked.val)
     assert_false(@fs.exists("\{dir}/tree"))
     assert_eq(state.get("\{dir}/tree/a"), None)
+    assert_eq(@fs.read_text("\{dir}/outside/file"), "keep")
   })
 }
 
@@ -60,89 +65,82 @@ async test "nonempty directory requires approval and all denial outcomes preserv
 }
 
 ///|
-async test "directory approval invalidates changed added removed renamed and replaced entries" {
-  for change in ["edit", "add", "remove", "rename", "kind", "link"] {
-    @vfs.with_tmpdir(dir => {
-      @vfs.FileSystem({
-        "tree/a": "before",
-        "tree/keep": "keep",
-        "outside": "outside",
-      }).write_to(dir)
-      let state = @agent_tool.FileStateMap()
-      let result = run_remove(
-        state,
-        { "path": "\{dir}/tree", "reason": "cleanup" },
-        approval=ApprovalChannel(_ => {
-          state.with_access(() => {
-            match change {
-              "edit" =>
-                @fs.write_text(
-                  "\{dir}/tree/a",
-                  "after",
-                  create_mode=CreateOrTruncate,
-                )
-              "add" => @fs.mkdir("\{dir}/tree/new-empty")
-              "remove" => @fs.remove("\{dir}/tree/a")
-              "rename" => @fs.rename("\{dir}/tree/a", "\{dir}/tree/b")
-              "kind" => {
-                @fs.remove("\{dir}/tree/a")
-                @fs.mkdir("\{dir}/tree/a")
-              }
-              _ => {
-                @fs.remove("\{dir}/tree/a")
-                @fs.symlink("\{dir}/tree/a", target="\{dir}/outside")
-              }
-            }
-          })
-          AllowedOnce
-        }),
-      )
-      guard result is Respond(out) else { fail("expected response") }
-      assert_true(out.is_error, msg=change)
-      assert_eq(@fs.read_text("\{dir}/tree/keep"), "keep")
-      assert_eq(@fs.read_text("\{dir}/outside"), "outside")
-    })
-  }
+#cfg(all(target="native", not(platform="windows")))
+async test "requesting directory approval does not require reading its subdirectories" {
+  @vfs.with_tmpdir(dir => {
+    let tree = "\{dir}/tree"
+    let nested = "\{tree}/nested"
+    @fs.mkdir(nested, recursive=true)
+    @fs.chmod(nested, 0)
+    defer @async.protect_from_cancel(() => @fs.chmod(nested, 0o700))
+    let result = run_remove(
+      FileStateMap(),
+      { "path": tree, "reason": "cleanup" },
+      approval=ApprovalChannel(_ => Rejected),
+    )
+    guard result is Respond(out) else { fail("expected response") }
+    assert_true(out.content.contains("approval rejected"), msg=out.content)
+  })
 }
 
 ///|
-async test "directory deletion refuses workspace ancestors symlinks and scope escapes before approval" {
+async test "directory approval deletes the contents present at execution" {
+  @vfs.with_tmpdir(dir => {
+    @vfs.FileSystem({
+      "tree/old": "old",
+      "outside/keep": "keep",
+      "treehouse/file": "mine",
+    }).write_to(dir)
+    let state = @agent_tool.FileStateMap()
+    let sibling = "\{dir}/treehouse/file"
+    state.record_created(sibling, @agent_tool.content_digest("mine"))
+    let added = "\{dir}/tree/new/file"
+    let result = run_remove(
+      state,
+      { "path": "\{dir}/tree", "reason": "cleanup" },
+      approval=ApprovalChannel(_ => {
+        state.with_access(() => {
+          @fs.remove("\{dir}/tree/old")
+          state.create_parent_directories(added)
+          @fs.write_text(added, "new", create_mode=CreateNew)
+          state.record_created(added, @agent_tool.content_digest("new"))
+          @fs.symlink("\{dir}/tree/link", target="\{dir}/outside")
+        })
+        AllowedOnce
+      }),
+    )
+    guard result is Respond(out) else { fail("expected response") }
+    assert_false(out.is_error, msg=out.content)
+    assert_false(@fs.exists("\{dir}/tree"))
+    assert_eq(@fs.read_text("\{dir}/outside/keep"), "keep")
+    assert_eq(state.get(added), None)
+    assert_false(state.created_directory("\{dir}/tree/new"))
+    assert_true(state.get(sibling) is Some(Created))
+  })
+}
+
+///|
+async test "directory deletion protects the workspace and its ancestors" {
   @vfs.with_tmpdir(dir => {
     @vfs.FileSystem({ "workspace/tree/keep": "keep", "outside/file": "outside" }).write_to(
       dir,
     )
-    @fs.symlink("\{dir}/workspace/tree/link", target="\{dir}/outside")
-    @fs.symlink("\{dir}/workspace-alias", target="\{dir}/workspace")
+    let asks = Ref(0)
     let definition = @remove.definition(
       workspace_root="\{dir}/workspace",
-      approval=ApprovalChannel(_ => fail("must not ask")),
+      approval=ApprovalChannel(_ => {
+        asks.val += 1
+        Rejected
+      }),
     )
     guard definition.execute is Async(run) else { fail("expected async") }
-    for path in [".", "..", "../workspace-alias", "tree"] {
+    for path in [".", "..", dir, "\{dir}/workspace"] {
       guard run({ "path": path, "reason": "cleanup" }) is Respond(out) else {
         fail("expected response")
       }
       assert_true(out.is_error, msg=path)
     }
-    guard @write_scope.WriteScope::create(root=dir, allowed_paths=[
-        "workspace/tree",
-      ])
-      is Ok(scope) else {
-      fail("expected scope")
-    }
-    let confined = @remove.definition(
-      workspace_root=dir,
-      write_scope=scope,
-      approval=ApprovalChannel(_ => fail("must not ask")),
-    )
-    guard confined.execute is Async(run_confined) else {
-      fail("expected async")
-    }
-    guard run_confined({ "path": "workspace", "reason": "cleanup" })
-      is Respond(out) else {
-      fail("expected response")
-    }
-    assert_true(out.is_error)
+    assert_eq(asks.val, 0)
     assert_eq(@fs.read_text("\{dir}/workspace/tree/keep"), "keep")
     assert_eq(@fs.read_text("\{dir}/outside/file"), "outside")
   })

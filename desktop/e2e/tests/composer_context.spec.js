@@ -67,20 +67,18 @@ test('context rows align and approval disclosure preserves draft focus and actio
   await approval.getByRole('button', { name: 'Allow once', exact: true }).click();
   await expect.poll(() => app.requests.find(r => r.method === 'agent.approval')?.params.allow).toBe(true);
   await expect(composer).toHaveValue('Keep this draft');
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('replayed write approvals decode content and preserve unrecognized bodies', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const content = 'fn main {\n  println("recovered")\n}\n';
-  const replyFor = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'agent.runs' ? {
+  app.onRpc('agent.runs', () => ({
     runs: [{ run_id: 'run-e2e', session: 'session-1', model: 'deepseek-flash', max_steps: 1000 }],
     settled: [], approval_generation: 1,
     approvals: [{ answered: false, id: 'approval-replay', session: 'session-1', run_id: 'run-e2e',
       tool_name: 'write', detail: '/workspace/src/parser.mbt (overwrite existing source file)',
       body: JSON.stringify({ path: '/workspace/src/parser.mbt', content }) }],
-  } : replyFor(request);
+  }));
   await app.install();
   await app.goto();
   await app.openSession();
@@ -101,7 +99,6 @@ test('replayed write approvals decode content and preserve unrecognized bodies',
     }] });
     await expect.poll(() => source.textContent()).toBe(expected);
   }
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const [name, content, allow] of [
@@ -131,7 +128,6 @@ for (const [name, content, allow] of [
     expect(await source.textContent()).toBe(content);
     await approval.getByRole('button', { name: allow ? 'Allow once' : 'Deny', exact: true }).click();
     await expect.poll(() => app.requests.find(r => r.method === 'agent.approval')?.params.allow).toBe(allow);
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -176,7 +172,6 @@ test('Codex shares the question card while approvals retain their disclosure', a
   await expectAlignedRows(page);
   await approval.getByRole('button', { name: 'Approve once', exact: true }).click();
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(2);
-  expect(app.pageErrors).toEqual([]);
 });
 
 for (const expanded of [false, true]) {
@@ -220,7 +215,6 @@ for (const expanded of [false, true]) {
     await page.keyboard.press('Space');
     if (expanded) await expect(second).not.toHaveAttribute('open');
     else await expect(second).toHaveAttribute('open', '');
-    expect(app.pageErrors).toEqual([]);
   });
 }
 
@@ -259,5 +253,4 @@ test('a running composer keeps the follow-up draft usable beside an editor and a
   await expect.poll(() => app.requests.filter(r => r.method === 'terminal.open').length).toBe(1);
   await page.locator('.content').evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
   await expectUsable();
-  expect(app.pageErrors).toEqual([]);
 });

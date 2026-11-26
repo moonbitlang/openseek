@@ -40,7 +40,6 @@ test('Theme Lab applies palettes to the real app without remounting its draft or
   await expect(composer).toHaveValue('Keep this unsent draft');
   await preview.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(preview.getByRole('button', { name: 'Theme', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('palette edits recolor an existing real terminal without losing output', async ({ page }) => {
@@ -57,7 +56,6 @@ test('palette edits recolor an existing real terminal without losing output', as
   await expect(terminal.locator('.xterm-viewport')).toHaveCSS('background-color', 'rgb(240, 228, 208)');
   await expect(terminal.locator('.xterm-rows')).toContainText('PALETTE_PREVIEW');
   expect(await emulator.evaluate(el => el.isConnected)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
 });
 
 test('opening the HTML directly explains how to launch the real preview', async ({ page }) => {
@@ -75,6 +73,5 @@ test.describe('a localized browser', () => {
   test('the real preview opens its demo file independently of translated tooltips', async ({ page }) => {
     const app = await openThemeLab(page);
     await expect(page.frameLocator('#preview').locator('.editor-tab.active')).toContainText('main.mbt');
-    expect(app.pageErrors).toEqual([]);
   });
 });

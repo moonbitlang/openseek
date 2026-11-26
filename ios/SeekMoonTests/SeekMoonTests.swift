@@ -18,12 +18,12 @@ import XCTest
             controller.conversationView.accessibilityElementsHidden && cover.isHidden
         }, object: nil)
         await fulfillment(of: [welcome], timeout: 10)
-        let local = try await web.evaluateJavaScript("document.documentElement.hasAttribute('data-seekmoon-account') && performance.getEntriesByType('resource').length === 0")
+        let local = try await controller.accountWeb.evaluateJavaScript("document.documentElement.hasAttribute('data-seekmoon-account') && performance.getEntriesByType('resource').length === 0")
         XCTAssertEqual(local as? Bool, true)
-        try await ConsoleController.installAccount("fixture", in: web)
+        try await ConsoleController.installAccount("fixture", in: controller.accountWeb)
 
-        let url = try XCTUnwrap(web.url)
-        web.loadHTMLString("<html style='background:#191919'><body><div id='app'></div></body></html>", baseURL: url)
+        let url = try XCTUnwrap(controller.accountWeb.url)
+        controller.loadLocalHTML("<html style='background:#191919'><body><div id='app'></div></body></html>", at: url)
         let waiting = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             !web.isLoading && !controller.conversationView.accessibilityElementsHidden && !cover.isHidden
         }, object: nil)
@@ -57,8 +57,8 @@ import XCTest
         let welcome = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in conversation.accessibilityElementsHidden }, object: nil)
         await fulfillment(of: [welcome], timeout: 10)
 
-        let url = try XCTUnwrap(web.url)
-        web.loadHTMLString("""
+        let url = try XCTUnwrap(controller.accountWeb.url)
+        controller.loadLocalHTML("""
             <html data-theme="dark"><head><meta name="viewport" content="width=device-width,initial-scale=1">
             <style>[data-theme=dark]{color-scheme:dark} [data-theme=light]{color-scheme:light}
             .sidebar-toggle { position:fixed; left:15px; top:8px; width:36px; height:36px }
@@ -70,8 +70,8 @@ import XCTest
             <button title="Export" onclick="document.querySelector('dialog').showModal()">Export</button>
             <button title="Busy" disabled>Busy</button></div><div class="transcript"></div>
             <div class="composer"><div class="composer-inner"><textarea id="task"></textarea></div></div></main></div></div>
-            <dialog id="session-import-dialog"><input placeholder="Share link"></dialog></body></html>
-            """, baseURL: url)
+            <dialog id="session-import-dialog"><div class="session-import-actions"><input placeholder="Share link"></div></dialog></body></html>
+            """, at: url)
         func waitForButton(visible: Bool) async {
             let state = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in button.isHidden != visible }, object: nil)
             await fulfillment(of: [state], timeout: 5)
@@ -143,7 +143,7 @@ import XCTest
             await fulfillment(of: [check], timeout: 8)
         }
         await waitUntil { shell.accessibilityElementsHidden }
-        web.loadHTMLString("""
+        controller.loadLocalHTML("""
             <!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
             <style>:root{color-scheme:dark;--color-bg-canvas:#191919}.composer-inner{position:absolute;bottom:10px;height:50px;width:90%}</style>
             <div id="app"><main><section class="composer"><div class="composer-inner"><button id="attach">+</button>
@@ -170,7 +170,7 @@ import XCTest
                 }
             };
             </script>
-            """, baseURL: try XCTUnwrap(web.url))
+            """, at: try XCTUnwrap(controller.accountWeb.url))
         await waitUntil { !glass.isHidden }
         XCTAssertTrue(glass.effect is UIGlassEffect)
         XCTAssertFalse(glass.isUserInteractionEnabled)
@@ -237,6 +237,144 @@ import XCTest
         await waitUntil { settings() == nil && !glass.isHidden }
         let draft = try await web.evaluateJavaScript("task.value")
         XCTAssertEqual(draft as? String, "草稿 🌓")
+    }
+
+    func testPackagedSignInSurvivesHandoffAndSignOutSurvivesRelaunch() async throws {
+        let store = WKWebsiteDataStore.nonPersistent()
+        let controller = ConsoleController(websiteDataStore: store)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let web = try XCTUnwrap(controller.conversationView.subviews.compactMap { $0 as? WKWebView }.first)
+        let welcome = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            controller.conversationView.accessibilityElementsHidden
+        }, object: nil)
+        await fulfillment(of: [welcome], timeout: 10)
+        let session = #"{"token":"ts_test","user":{"user_id":"test","login":"test","avatar_url":""}}"#
+        let url = try XCTUnwrap(controller.accountWeb.url)
+        web.configuration.userContentController.addUserScript(WKUserScript(source: """
+            const insert = new MutationObserver(() => {
+                if (document.querySelector('script[src$="/assets/frontend.js"]')) {
+                    window.accountAtStartup = localStorage.getItem('seekmoon.account.v1'); insert.disconnect();
+                }
+            });
+            insert.observe(document, {childList:true, subtree:true});
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        try await controller.acceptSignIn(session)
+        try await waitForFrontend(web, at: url)
+        let stored = try await web.evaluateJavaScript("window.accountAtStartup")
+        XCTAssertEqual(stored as? String, session)
+
+        // Mount the same signed-out gate the browser renders after sign-out.
+        _ = try await web.evaluateJavaScript("""
+            localStorage.removeItem('seekmoon.account.v1');
+            document.body.insertAdjacentHTML('afterbegin', '<div class="cloud-home"><div class="empty"><button class="primary">Sign in</button></div></div>');
+            """)
+        let signedOut = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            controller.conversationView.accessibilityElementsHidden
+        }, object: nil)
+        await fulfillment(of: [signedOut], timeout: 10)
+        let durable = try await controller.accountWeb.evaluateJavaScript("localStorage.getItem('seekmoon.account.v1') === null")
+        XCTAssertEqual(durable as? Bool, true)
+        let reopened = ConsoleController(websiteDataStore: store)
+        reopened.loadViewIfNeeded()
+        let stillSignedOut = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            reopened.conversationView.accessibilityElementsHidden
+        }, object: nil)
+        await fulfillment(of: [stillSignedOut], timeout: 10)
+    }
+
+    func testPackagedConsoleRestoresAndReloadsDeviceRoutes() async throws {
+        try await assertRouteRestored("/device/d/chat/session/a%2Fb")
+    }
+
+    func testPackagedConsoleRestoresAndReloadsCloudRoutes() async throws {
+        try await assertRouteRestored("/cloud/session/a%2Fb")
+    }
+
+    private func assertRouteRestored(_ path: String) async throws {
+        let store = WKWebsiteDataStore.nonPersistent()
+        let cookie = try XCTUnwrap(HTTPCookie(properties: [
+            .domain: try XCTUnwrap(Console.origin.host), .path: "/", .name: "route-test", .value: "1"
+        ]))
+        await store.httpCookieStore.setCookie(cookie)
+        let defaults = UserDefaults.standard
+        let key = "console.lastPage"
+        let previous = defaults.url(forKey: key)
+        defer { defaults.set(previous, forKey: key) }
+        let start = Console.origin.appending(path: "cloud")
+        defaults.set(start, forKey: key)
+
+        let controller = ConsoleController(websiteDataStore: store)
+        controller.loadViewIfNeeded()
+        let web = try XCTUnwrap(controller.conversationView.subviews.compactMap { $0 as? WKWebView }.first)
+        try await waitForFrontend(web, at: start)
+        let route = try XCTUnwrap(URL(string: path, relativeTo: Console.origin)?.absoluteURL)
+        _ = try await web.callAsyncJavaScript("location.assign(path); return true", arguments: ["path": path], in: nil, contentWorld: .page)
+        try await waitForFrontend(web, at: route)
+        XCTAssertEqual(defaults.url(forKey: key), route)
+        _ = try await web.evaluateJavaScript("window.beforeReload = true")
+        web.reload()
+        try await waitForFrontend(web, at: route)
+        XCTAssertEqual(web.backForwardList.backItem?.url, start)
+        web.goBack()
+        try await waitForFrontend(web, at: start)
+        web.goForward()
+        try await waitForFrontend(web, at: route)
+
+        let restored = ConsoleController(websiteDataStore: store)
+        restored.loadViewIfNeeded()
+        let reopened = try XCTUnwrap(restored.conversationView.subviews.compactMap { $0 as? WKWebView }.first)
+        try await waitForFrontend(reopened, at: route)
+        withExtendedLifetime((controller, restored)) {}
+    }
+
+    func testBrowserArchiveRendersAndLoadsLazyAssetsAtAnUnreachableOrigin() async throws {
+        // Rebase only the archive's URL keys. The unmodified HTML, JavaScript and styles
+        // cannot fall back to the hosted console if a packaged subresource is missing.
+        let file = try XCTUnwrap(Bundle.main.url(forResource: "Console", withExtension: "webarchive"))
+        let bytes = try Data(contentsOf: file, options: .mappedIfSafe)
+        var archive = try XCTUnwrap(PropertyListSerialization.propertyList(from: bytes, format: nil) as? [String: Any])
+        var resources = try XCTUnwrap(archive["WebSubresources"] as? [[String: Any]])
+        let offline = URL(string: "https://seekmoon.invalid")!
+        for index in resources.indices {
+            let original = try XCTUnwrap(resources[index]["WebResourceURL"] as? String)
+            XCTAssertTrue(original.hasPrefix(Console.origin.absoluteString + "/"))
+            resources[index]["WebResourceURL"] = offline.absoluteString + original.dropFirst(Console.origin.absoluteString.count)
+        }
+        archive["WebSubresources"] = resources
+        let data = try PropertyListSerialization.data(fromPropertyList: archive, format: .binary, options: 0)
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .nonPersistent()
+        let web = WKWebView(frame: .zero, configuration: config)
+        let url = offline.appending(path: "cloud")
+        let entry = DocumentLoaded()
+        web.navigationDelegate = entry
+        web.load(data, mimeType: "application/x-webarchive", characterEncodingName: "utf-8", baseURL: url)
+        await fulfillment(of: [entry.loaded], timeout: 30)
+        try await ConsoleController.startFrontend(in: web, account: nil)
+        try await waitForFrontend(web, at: url)
+        let assetsLoaded = try await web.callAsyncJavaScript("""
+            const viewer = await fetch('/assets/viz/index.html');
+            const mermaid = await import('/assets/mermaid/mermaid.esm.min.mjs');
+            return (await viewer.text()).includes('OpenSeek session viewer') && typeof mermaid.default.render === 'function';
+            """, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(assetsLoaded as? Bool, true)
+    }
+
+    private func waitForFrontend(_ web: WKWebView, at url: URL) async throws {
+        let deadline = ContinuousClock.now + .seconds(25)
+        while ContinuousClock.now < deadline {
+            if !web.isLoading, web.url == url,
+               (try? await web.evaluateJavaScript("!window.beforeReload && document.querySelector('#app')?.childElementCount > 0 && document.styleSheets.length > 0")) as? Bool == true {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let state = try? await web.evaluateJavaScript("[location.href, document.readyState, document.body?.innerText?.slice(0, 150), window.beforeReload ?? false]")
+        XCTFail("Packaged frontend did not render at \(url): \(String(describing: state))")
     }
 
     func testAttachmentCameraPurposeIsInAppBundle() throws {
