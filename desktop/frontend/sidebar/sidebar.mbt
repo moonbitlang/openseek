@@ -368,7 +368,8 @@ pub fn component(
           src~,
           alt="",
           class="console-avatar",
-          style=["--rui-avatar-size:var(--icon-size)"],
+          // The image has its own circular crop; the fallback glyph doesn't need one.
+          style=["--rui-avatar-size:var(--icon-size);overflow:visible"],
           fallback_style=["background:transparent;color:inherit"],
           @icons.icon(@icons.icon_account),
         )
