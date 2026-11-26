@@ -293,7 +293,7 @@ pub async fn Connection::run(
         "SSH_ASKPASS_REQUIRE": "force",
         "SEEKMOON_ASKPASS": "1",
         "SEEKMOON_ASKPASS_TOKEN": token,
-        "SEEKMOON_ASKPASS_ADDRESS": auth_server.addr.to_string(),
+        "SEEKMOON_ASKPASS_ADDRESS": auth_server.local_addr().to_string(),
         "LC_ALL": "C",
       }
       group.spawn_bg(() => self.serve_auth(auth_server, token, emit))
@@ -379,7 +379,7 @@ pub async fn Connection::run(
         },
       )
       let reservation = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
-      let address = reservation.addr
+      let address = reservation.local_addr()
       reservation.close()
       let forward = arguments(self.profile.command)
       forward.insert(0, "127.0.0.1:\{address.port}:127.0.0.1:\{port}")

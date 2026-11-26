@@ -42,7 +42,7 @@ pub async fn LocalConsole::bind(
   {
     server,
     account_origin,
-    sign_in: Flow(relay=account_origin, port=server.addr.port.to_int()),
+    sign_in: Flow(relay=account_origin, port=server.local_addr().port.to_int()),
     name,
   }
 }
@@ -81,7 +81,7 @@ pub async fn LocalConsole::run(
   defer self.server.close()
   @async.with_task_group(group => {
     for ;; {
-      let (conn, _) = self.server.accept()
+      let conn = self.server.accept()
       group.spawn_bg(allow_failure=true, () => {
         self.handle(state, conn, root~, entry~)
       })

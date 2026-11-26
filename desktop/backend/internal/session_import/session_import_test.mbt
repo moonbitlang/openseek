@@ -114,7 +114,7 @@ async test "share download is anonymous and expiry leaves no imported record" {
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       for code in [200, 410, 302] {
-        let (connection, _) = server.accept()
+        let connection = server.accept()
         defer connection.close()
         let request = connection.read_request()
         assert_eq(request.path, "/v1/shares/sh_test/files/json")
@@ -132,7 +132,7 @@ async test "share download is anonymous and expiry leaves no imported record" {
       }
     })
     let source : @protocol.SessionImportSource = ShareLink(
-      url="http://127.0.0.1:\{server.addr.port}/v1/shares/sh_test",
+      url="http://127.0.0.1:\{server.local_addr().port}/v1/shares/sh_test",
     )
     let records = @session_import.prepare(source)
     assert_eq(records[0].title, "Imported test")

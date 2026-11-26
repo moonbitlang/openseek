@@ -51,7 +51,7 @@ async fn Connection::serve_auth(
 ) -> Unit {
   let mut request_id = 0
   for ;; {
-    let (socket, _) = server.accept()
+    let socket = server.accept()
     defer socket.close()
     let frame = @async.with_timeout(5000, () => auth_frame(socket)) catch {
       _ => continue

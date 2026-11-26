@@ -191,7 +191,7 @@ async test "local browser sign-in and logout are independent of Desktop and keep
     })
     group.spawn_bg(no_wait=true, () => {
       for ;; {
-        let (conn, _) = issuer.accept()
+        let conn = issuer.accept()
         defer conn.close()
         let request = conn.read_request()
         let body = if request.path == "/v2/auth/account/exchange" {

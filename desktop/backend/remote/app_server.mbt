@@ -30,7 +30,7 @@ async fn run_app_server(
   @async.with_task_group(group => {
     state.start_services(group)
     let announcement = AppServerAnnouncement::{
-      port: server.addr.port.to_int(),
+      port: server.local_addr().port.to_int(),
       instance,
     }
     announce.write(@utf8.encode(@json.to_json(announcement).stringify() + "\n"))
@@ -45,7 +45,7 @@ async fn run_app_server(
       }
     })
     for ;; {
-      let (conn, _) = server.accept()
+      let conn = server.accept()
       group.spawn_bg(allow_failure=true, () => {
         defer conn.close()
         let request = @async.with_timeout(10_000, () => conn.read_request())

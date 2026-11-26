@@ -37,7 +37,7 @@ const LocalConsoleDevice = "host"
 /// The port this console is bound on. Private: consumers read the bound
 /// address through `origin()`, the exported accessor.
 fn LocalConsole::port(self : LocalConsole) -> Int32 {
-  self.server.addr.port.to_int()
+  self.server.local_addr().port.to_int()
 }
 
 ///|

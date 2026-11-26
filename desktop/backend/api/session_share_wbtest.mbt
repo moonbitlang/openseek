@@ -73,7 +73,7 @@ async test "share refusal retires the captured login and preserves a newer one" 
   for login in [Current, Stale, Retired] {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let origin = "http://127.0.0.1:\{server.addr.port}"
+    let origin = "http://127.0.0.1:\{server.local_addr().port}"
     let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-auth-"))
     defer @fs.remove(dir.to_string(), recursive=true)
     @fs.write_text(dir.join("auth.json").to_string(), share_account_fixture())
@@ -112,7 +112,7 @@ async test "share refusal retires the captured login and preserves a newer one" 
     }
     @async.with_task_group(group => {
       let receiver = group.spawn(() => {
-        let (connection, _) = server.accept()
+        let connection = server.accept()
         defer connection.close()
         let request = connection.read_request()
         assert_eq(
@@ -198,7 +198,7 @@ async test "remote grants never retire the host account even when the upload is 
     }
     @async.with_task_group(group => {
       let receiver = group.spawn(() => {
-        let (connection, _) = server.accept()
+        let connection = server.accept()
         defer connection.close()
         let request = connection.read_request()
         assert_eq(
@@ -217,7 +217,7 @@ async test "remote grants never retire the host account even when the upload is 
           [],
         ),
         Grant("sug_fixture"),
-        server_url="http://127.0.0.1:\{server.addr.port}",
+        server_url="http://127.0.0.1:\{server.local_addr().port}",
       )
       receiver.wait()
       assert_true(reply is Failed(_))
