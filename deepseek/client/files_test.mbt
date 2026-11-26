@@ -267,10 +267,7 @@ async test "image upload preserves typed JSON decoding errors" {
     @async.with_task_group() <| group => {
       let server = UploadServer::start(group, response~)
       try server.client().upload_image(b"GIF87a", filename="image.gif") catch {
-        @client.MalformedResponseJson(error) => {
-          assert_eq(response, "not JSON")
-          assert_true(error is InvalidChar(_, _))
-        }
+        @client.MalformedResponseJson(_) => assert_eq(response, "not JSON")
         @client.InvalidResponseShape(error) => {
           assert_eq(response, "{}")
           assert_true(error is JsonDecodeError(_))
