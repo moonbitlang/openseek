@@ -2,10 +2,22 @@
 const ARTIFACT_FRAME_POLICY = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
 
 ///|
-/// Runs inside the frame before the artifact, with `token` bound by
-/// `artifact_srcdoc`. Serializes inside the frame, so the parent only
-/// receives a string and validates it as JSON. State that is not plain JSON
-/// data posts no payload.
+const ARTIFACT_FRAME_THEME_STYLE = "<style>:root[data-theme=\"light\"]{color-scheme:light}:root[data-theme=\"dark\"]{color-scheme:dark}</style>"
+
+///|
+fn artifact_theme(dark_mode : Bool) -> String {
+  if dark_mode {
+    "dark"
+  } else {
+    "light"
+  }
+}
+
+///|
+/// Runs inside the frame before the artifact, with `token`, `initialTheme`,
+/// and `initialLocale` bound by `artifact_srcdoc`. Serializes inside the
+/// frame, so the parent only receives a string and validates it as JSON.
+/// State that is not plain JSON data posts no payload.
 let artifact_frame_bridge : String =
   #|const plain = value => {
   #|  const type = typeof value;
@@ -15,7 +27,41 @@ let artifact_frame_bridge : String =
   #|  const proto = Object.getPrototypeOf(value);
   #|  return Array.isArray(value) || proto === Object.prototype || proto === null;
   #|};
+  #|let hostContext = null;
+  #|const applyHostContext = next => {
+  #|  const theme = next?.theme === "dark" ? "dark" : "light";
+  #|  const locale = typeof next?.locale === "string" && next.locale ? next.locale : "en";
+  #|  const root = document.documentElement;
+  #|  if (root) {
+  #|    root.dataset.theme = theme;
+  #|    root.style.colorScheme = theme;
+  #|  }
+  #|  hostContext = Object.freeze({ theme, locale });
+  #|  return hostContext;
+  #|};
+  #|applyHostContext({ theme: initialTheme, locale: initialLocale });
+  #|addEventListener("DOMContentLoaded", () => applyHostContext(hostContext));
+  #|const contextListeners = new Set();
+  #|addEventListener("message", event => {
+  #|  if (event.source !== parent) return;
+  #|  const data = event.data;
+  #|  if (!data || data.type !== "openseek-artifact-context" || data.version !== 2 || data.token !== token) return;
+  #|  const prev = hostContext;
+  #|  const next = applyHostContext(data);
+  #|  if (next.theme === prev.theme && next.locale === prev.locale) return;
+  #|  for (const listener of contextListeners) {
+  #|    try { listener(next); } catch {}
+  #|  }
+  #|});
   #|window.openseekArtifact = {
+  #|  get hostContext() {
+  #|    return hostContext;
+  #|  },
+  #|  onHostContextChange: listener => {
+  #|    if (typeof listener !== "function") return () => {};
+  #|    contextListeners.add(listener);
+  #|    return () => contextListeners.delete(listener);
+  #|  },
   #|  setState: (title, state) => {
   #|    let payload = null;
   #|    try {
@@ -51,13 +97,46 @@ fn artifact_srcdoc(
   content : String,
   token : String,
   followup_enabled~ : Bool,
+  theme~ : String,
+  locale~ : String,
 ) -> String {
   let token = Json::string(token).stringify()
+  let initial_theme = Json::string(theme).stringify()
+  let initial_locale = Json::string(locale).stringify()
   let followup = if followup_enabled { artifact_frame_followup } else { "" }
   "<meta http-equiv=\"Content-Security-Policy\" content=\"\{ARTIFACT_FRAME_POLICY}\"><meta name=\"referrer\" content=\"no-referrer\">" +
-  "<script>(() => {\nconst token = \{token};\n\{artifact_frame_bridge}\n\{followup}\n})();</script>" +
+  ARTIFACT_FRAME_THEME_STYLE +
+  "<script>(() => {\nconst token = \{token};\nconst initialTheme = \{initial_theme};\nconst initialLocale = \{initial_locale};\n\{artifact_frame_bridge}\n\{followup}\n})();</script>" +
   content +
   "<script>(() => {\n\{artifact_frame_resize}\n})();</script>"
+}
+
+///|
+fn sync_artifact_frame_context(
+  frame : @dom.Element,
+  theme : String,
+  locale : String,
+) -> Unit {
+  guard frame.get_attribute("data-artifact-token") is Some(token) else {
+    return
+  }
+  if frame.get_attribute("data-artifact-theme") == Some(theme) &&
+    frame.get_attribute("data-artifact-locale") == Some(locale) {
+    return
+  }
+  frame.set_attribute("data-artifact-theme", theme)
+  frame.set_attribute("data-artifact-locale", locale)
+  post_context_to_frame(frame, token, theme, locale)
+}
+
+///|
+fn sync_artifact_frames_context(theme : String, locale : String) -> Unit {
+  for
+    frame in @dom.document().query_selector_all(
+      "#transcript .chat-artifact-frame",
+    ) {
+    sync_artifact_frame_context(frame, theme, locale)
+  }
 }
 
 ///|
@@ -80,6 +159,8 @@ fn settle_artifact_frames(
   state : ArtifactFileState,
   owner : String,
   followup_enabled~ : Bool,
+  theme~ : String,
+  locale~ : String,
 ) -> Unit {
   for node in @dom.document().query_selector_all("[data-transcript-artifact]") {
     guard node.get_attribute("data-transcript-artifact") == Some(reference) &&
@@ -89,6 +170,7 @@ fn settle_artifact_frames(
     }
     if frame.get_attribute("data-artifact-loaded") == Some(owner) &&
       frame.get_attribute("data-artifact-reference") == Some(reference) {
+      sync_artifact_frame_context(frame, theme, locale)
       continue
     }
     let button = node.query_selector(".chat-artifact-context")
@@ -97,6 +179,8 @@ fn settle_artifact_frames(
       frame.remove_attribute("data-artifact-loaded")
       frame.remove_attribute("data-artifact-reference")
       frame.remove_attribute("data-artifact-token")
+      frame.remove_attribute("data-artifact-theme")
+      frame.remove_attribute("data-artifact-locale")
       set_display(frame, "none")
       if button is Some(button) {
         set_display(button, "none")
@@ -112,12 +196,14 @@ fn settle_artifact_frames(
       ReadyArtifact(content) => {
         let token = @uuid.mint()
         frame.set_attribute("data-artifact-token", token)
+        frame.set_attribute("data-artifact-theme", theme)
+        frame.set_attribute("data-artifact-locale", locale)
         if button is Some(button) {
           set_display(button, "none")
         }
         frame.set_attribute(
           "srcdoc",
-          artifact_srcdoc(content, token, followup_enabled~),
+          artifact_srcdoc(content, token, followup_enabled~, theme~, locale~),
         )
         frame.set_attribute("data-artifact-loaded", owner)
         frame.set_attribute("data-artifact-reference", reference)
@@ -328,3 +414,17 @@ extern "js" fn event_is_trusted(event : @dom.Event) -> Bool =
 ///|
 extern "js" fn frame_has_user_activation(frame : @dom.Element) -> Bool =
   #|frame => document.activeElement === frame && navigator.userActivation?.isActive === true
+
+///|
+extern "js" fn post_context_to_frame(
+  frame : @dom.Element,
+  token : String,
+  theme : String,
+  locale : String,
+) -> Unit =
+  #|(frame, token, theme, locale) => {
+  #|  frame.contentWindow?.postMessage(
+  #|    { type: "openseek-artifact-context", version: 2, token, theme, locale },
+  #|    "*",
+  #|  );
+  #|}
