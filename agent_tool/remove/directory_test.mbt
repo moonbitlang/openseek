@@ -106,40 +106,27 @@ async test "directory approval invalidates changed added removed renamed and rep
 }
 
 ///|
-async test "directory deletion refuses workspace ancestors symlinks and scope escapes before approval" {
+async test "directory deletion protects the workspace and its ancestors" {
   @vfs.with_tmpdir(dir => {
     @vfs.FileSystem({ "workspace/tree/keep": "keep", "outside/file": "outside" }).write_to(
       dir,
     )
-    @fs.symlink("\{dir}/workspace/tree/link", target="\{dir}/outside")
-    @fs.symlink("\{dir}/workspace-alias", target="\{dir}/workspace")
+    let asks = Ref(0)
     let definition = @remove.definition(
       workspace_root="\{dir}/workspace",
-      approval=ApprovalChannel(_ => fail("must not ask")),
+      approval=ApprovalChannel(_ => {
+        asks.val += 1
+        Rejected
+      }),
     )
     guard definition.execute is Async(run) else { fail("expected async") }
-    for path in [".", "..", "../workspace-alias", "tree"] {
+    for path in [".", "..", dir, "\{dir}/workspace"] {
       guard run({ "path": path, "reason": "cleanup" }) is Respond(out) else {
         fail("expected response")
       }
       assert_true(out.is_error, msg=path)
     }
-    let scope = @write_scope.WriteScope::create(root=dir, allowed_paths=[
-      "workspace/tree",
-    ])
-    let confined = @remove.definition(
-      workspace_root=dir,
-      write_scope=scope,
-      approval=ApprovalChannel(_ => fail("must not ask")),
-    )
-    guard confined.execute is Async(run_confined) else {
-      fail("expected async")
-    }
-    guard run_confined({ "path": "workspace", "reason": "cleanup" })
-      is Respond(out) else {
-      fail("expected response")
-    }
-    assert_true(out.is_error)
+    assert_eq(asks.val, 0)
     assert_eq(@fs.read_text("\{dir}/workspace/tree/keep"), "keep")
     assert_eq(@fs.read_text("\{dir}/outside/file"), "outside")
   })
@@ -224,5 +211,28 @@ async test "a complete agent-created directory tree is removed without approval"
     assert_true(state.get(path) is None)
     assert_false(state.created_directory(root))
     assert_false(state.created_directory(nested))
+  })
+}
+
+///|
+async test "recursive deletion unlinks directory links without traversing their targets" {
+  @vfs.with_tmpdir(dir => {
+    @vfs.FileSystem({ "tree/file": "remove", "outside/file": "keep" }).write_to(
+      dir,
+    )
+    @fs.symlink("\{dir}/tree/out", target="\{dir}/outside")
+    @fs.symlink("\{dir}/tree/loop", target="\{dir}/tree")
+    let result = run_remove(
+      FileStateMap(),
+      { "path": "\{dir}/tree", "reason": "cleanup" },
+      approval=ApprovalChannel(ask => {
+        assert_true(ask.detail.contains("2 symbolic links"))
+        AllowedOnce
+      }),
+    )
+    guard result is Respond(out) else { fail("expected response") }
+    assert_false(out.is_error, msg=out.content)
+    assert_false(@fs.exists("\{dir}/tree"))
+    assert_eq(@fs.read_text("\{dir}/outside/file"), "keep")
   })
 }

@@ -16,13 +16,13 @@ pub fn definition(
     description=(
       #|Delete a file or recursively delete a directory, with a non-empty reason.
       #|Unchanged session-created files and empty directories are removed automatically.
-      #|Other files and nonempty directories require approval through the permission channel.
+      #|Symbolic links, other files and nonempty directories require approval through the permission channel.
       #|If approval is unavailable, rejected, or cancelled, the target is kept.
       #|A file or tree changed while waiting must be reconsidered
       #|and approved again. Directory approval covers the whole captured tree.
-      #|Workspace roots and their ancestors, symlinks (including inside a tree),
-      #|and special files are refused. Valid paths outside the write scope require
-      #|approval for this deletion only.
+      #|Unlink symbolic links themselves, including dangling links and links inside a tree.
+      #|Workspace roots, their ancestors, and special files are refused.
+      #|Valid paths outside the write scope require approval for this deletion only.
       #|Do not bypass a refusal with mbtx.
       #|Deleting .mbt/.mbt.md also runs moon check and reports its feedback.
     ),
@@ -64,6 +64,15 @@ priv struct FileVersion {
 priv enum NodeVersion {
   File(FileVersion)
   Directory(String)
+  Symlink(String, Bytes)
+}
+
+///|
+fn NodeVersion::location(self : NodeVersion) -> String {
+  match self {
+    File(file) => file.canonical
+    Directory(location) | Symlink(location, _) => location
+  }
 }
 
 ///|
@@ -83,6 +92,36 @@ fn removal_error(path : String, message : String) -> @agent_tool.ToolAction {
 }
 
 ///|
+fn removal_path(workspace_root : String, input : String) -> String raise {
+  let requested = @path.Path(input)
+  if requested.basename() is ("." | "..") {
+    fail("cannot remove . or ..")
+  }
+  // Preserve kernel resolution of intermediate links followed by "..".
+  let components = if @path.sep == '\\' {
+    input.replace_all(old="\\", new="/")
+  } else {
+    input
+  }
+  let resolved = if !requested.is_absolute() &&
+    components.split("/").any(part => part == "..") &&
+    workspace_root != "." &&
+    workspace_root != "" {
+    @workspace_path.join_child(workspace_root, input)
+  } else {
+    @workspace_path.resolve(workspace_root, input)
+  }
+  // A trailing separator makes lstat follow a directory link on POSIX.
+  if @path.Path(resolved).basename().is_empty() {
+    resolved
+  } else {
+    resolved
+    .trim_end(chars=if @path.sep == '\\' { "/\\" } else { "/" })
+    .to_owned()
+  }
+}
+
+///|
 async fn execute_with_workspace(
   workspace_root : String,
   file_state : @agent_tool.FileStateMap,
@@ -99,19 +138,38 @@ async fn execute_with_workspace(
       )
     }
   }
-  let path = @workspace_path.resolve(workspace_root, input.path)
+  let path = removal_path(workspace_root, input.path) catch {
+    error =>
+      return removal_error(input.path, @tool_error.failure_message("\{error}"))
+  }
   file_state.with_access(() => {
     let version = inspect_target(path, workspace_root)
+    if (
+        input.path.has_suffix("/") ||
+        (@path.sep == '\\' && input.path.has_suffix("\\"))
+      ) &&
+      version.entries is [(_, File(_))] {
+      return removal_error(path, "not a directory")
+    }
     let reason = match version.entries {
       [(_, File(file))] if file_state.created_and_unchanged(path, file.digest) =>
         None
       [(_, Directory(_))] => None
+      [(_, Symlink(_, _))] => Some("unlink symbolic link")
       _ if created_directory_tree(version, file_state) => None
       _ =>
         Some(
           if version.entries.last() is Some((_, Directory(_))) {
             let files = version.entries.count_if(entry => entry.1 is File(_))
-            "recursive directory deletion: \{files} files and \{version.entries.length() - files - 1} subdirectories; all contents will be removed"
+            let links = version.entries.count_if(entry => {
+              entry.1 is Symlink(_, _)
+            })
+            let link_summary = if links == 0 {
+              ""
+            } else {
+              ", \{links} symbolic links"
+            }
+            "recursive directory deletion: \{files} files\{link_summary} and \{version.entries.length() - files - links - 1} subdirectories; all contents will be removed"
           } else if file_state.get(path) is Some(Created) {
             "the file's content has changed since the agent last wrote it"
           } else {
@@ -119,16 +177,37 @@ async fn execute_with_workspace(
           },
         )
     }
-    let write_scope = @permission.authorize(
-      version.entries.map(entry => entry.0),
-      target_path=path,
-      tool_name="remove",
-      arguments={ "path": path, "reason": input.reason },
-      file_state~,
-      write_scope?,
-      approval?,
-      reason?,
-    )
+    let reasons = []
+    if reason is Some(message) {
+      reasons.push(message)
+    }
+    if write_scope is Some(scope) {
+      for (entry, node) in version.entries {
+        if scope.check_entry(entry, node.location()) is Some(message) {
+          reasons.push("write blocked: \{entry}: \{message}")
+        }
+      }
+    }
+    let write_scope = if reasons.is_empty() {
+      write_scope
+    } else {
+      let ask = @permission.prepare_approval(
+        target_path=path,
+        tool_name="remove",
+        arguments={ "path": path, "reason": input.reason },
+        file_state~,
+        approval?,
+        reason=reasons.join("; "),
+      )
+      ask()
+      write_scope.map(scope => {
+        scope.with_grants(
+          [
+            for (entry, node) in version.entries => (entry, node.location())
+          ],
+        )
+      })
+    }
     guard inspect_target(path, workspace_root, write_scope?) == version else {
       return removal_error(
         path, "file or directory changed while awaiting approval; deletion refused. Reconsider and request approval again",
@@ -137,7 +216,8 @@ async fn execute_with_workspace(
     if version.entries.last() is Some((_, Directory(_))) {
       delete_directory(path, input.reason, version, file_state, write_scope?)
     } else {
-      delete_file(path, input.reason, file_state, write_scope?)
+      let (_, node) = version.entries[0]
+      delete_file(path, input.reason, node, file_state)
     }
   }) catch {
     error => removal_error(path, @tool_error.failure_message("\{error}"))
@@ -157,6 +237,7 @@ fn created_directory_tree(
     match entry {
       (path, File(file)) => file_state.created_and_unchanged(path, file.digest)
       (path, Directory(_)) => file_state.created_directory(path)
+      (_, Symlink(_, _)) => false
     }
   })
 }
@@ -167,24 +248,33 @@ async fn inspect_node(
   path : String,
   write_scope? : @write_scope.WriteScope,
 ) -> NodeVersion {
-  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
+  let kind = @fs.kind(path, follow_symlink=false) catch {
+    @os_error.OsError(NotFound, ..) => fail("no such file")
+    err => raise err
+  }
+  let location = match kind {
+    SymLink => {
+      let entry = @path.Path(path)
+      let parent = @fs.realpath(entry.dirname().to_string())
+      @path.Path(parent).join(Path(entry.basename().to_owned())).to_string()
+    }
+    Regular | Directory => @fs.realpath(path)
+    _ => fail("cannot remove special files")
+  }
+  if write_scope is Some(scope) &&
+    scope.check_entry(path, location) is Some(reason) {
     fail("write blocked: \{reason}")
   }
-  guard @fs.exists(path) else { fail("no such file") }
-  match @fs.kind(path, follow_symlink=false) {
-    Regular => {
-      let canonical = @fs.realpath(path)
+  match kind {
+    SymLink => Symlink(location, read_link_target(location))
+    Directory => Directory(location)
+    _ => {
       let bytes = @fs.read_binary(path)
       File({
-        canonical,
+        canonical: location,
         digest: @crypto.bytes_to_hex_string(@crypto.sha256(bytes)),
       })
     }
-    Directory => Directory(@fs.realpath(path))
-    _ =>
-      fail(
-        "not a regular file or directory; symlinks and special files cannot be removed",
-      )
   }
 }
 
@@ -204,7 +294,13 @@ async fn inspect_target(
         fail("cannot remove the workspace root or its ancestors")
       }
       for name in @fs.readdir(path, include_hidden=true, sort=true) {
-        visit(@workspace_path.join_child_preserving_separator(path, name))
+        visit(
+          if @path.sep == '/' {
+            @workspace_path.join_child(path, name)
+          } else {
+            @workspace_path.join_child_preserving_separator(path, name)
+          },
+        )
       }
     }
     entries.push((path, node))
@@ -227,16 +323,7 @@ async fn delete_directory(
     guard inspect_node(entry, write_scope?) == expected else {
       fail("directory changed during deletion; remaining entries were kept")
     }
-    match expected {
-      File(_) => {
-        @fs.remove(entry)
-        file_state.forget(entry)
-      }
-      Directory(_) => {
-        @fs.remove(entry)
-        file_state.forget_directory(entry)
-      }
-    }
+    expected.remove_entry(entry, file_state)
   }
   @agent_tool.respond(
     "ok: recursively removed \{path} (reason: \{reason})",
@@ -245,17 +332,32 @@ async fn delete_directory(
 }
 
 ///|
+async fn NodeVersion::remove_entry(
+  self : NodeVersion,
+  path : String,
+  file_state : @agent_tool.FileStateMap,
+) -> Unit {
+  // Unlink a reviewed link by name under the captured parent.
+  @fs.remove(if self is Symlink(location, _) { location } else { path })
+  match self {
+    File(_) => file_state.forget(path)
+    Directory(_) => file_state.forget_directory(path)
+    Symlink(_, _) => {
+      // A link can replace a previously recorded file or directory.
+      file_state.forget(path)
+      file_state.forget_directory(path)
+    }
+  }
+}
+
+///|
 async fn delete_file(
   path : String,
   reason : String,
+  node : NodeVersion,
   file_state : @agent_tool.FileStateMap,
-  write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  if write_scope is Some(scope) && scope.deny_reason(path) is Some(why) {
-    return removal_error(path, "write blocked: \{why}")
-  }
-  @fs.remove(path)
-  file_state.forget(path)
+  node.remove_entry(path, file_state)
   let summary = "ok: removed \{path} (reason: \{reason})"
   @agent_tool.respond(
     @auto_check.append_summary(path, summary),

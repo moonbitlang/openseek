@@ -197,7 +197,7 @@ async test "remove refuses a path recreated after an earlier removal" {
 }
 
 ///|
-async test "remove refuses a path replaced by a symlink" {
+async test "a file creation record cannot authorize unlinking a replacement symlink" {
   @vfs.with_tmpdir(dir => {
     @vfs.FileSystem({ "target.mbt": "pub fn t() -> Int { 0 }\n" }).write_to(dir)
     let target = "\{dir}/target.mbt"
@@ -209,9 +209,8 @@ async test "remove refuses a path replaced by a symlink" {
     let result = run_remove(state, { "path": link, "reason": "cleanup" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("not a regular file"))
-    // The kind check does not follow the link, so neither it nor its target is
-    // removed.
+    assert_true(output.content.contains("requires approval"))
+    // A stale file digest cannot grant approval to remove the link.
     assert_true(@fs.exists(link))
     assert_true(@fs.exists(target))
   })
@@ -304,5 +303,20 @@ async test "a write scope confines remove to its allowed paths" {
     }
     assert_false(admitted.is_error)
     assert_false(@fs.exists("\{dir}/lib/mine.txt"))
+  })
+}
+
+///|
+async test "a trailing separator on a regular file preserves the file" {
+  @vfs.with_tmpdir(dir => {
+    @vfs.FileSystem({ "keep": "content" }).write_to(dir)
+    let result = run_remove(
+      FileStateMap(),
+      { "path": "\{dir}/keep/", "reason": "cleanup" },
+      approval=ApprovalChannel(_ => fail("must not ask")),
+    )
+    guard result is Respond(out) else { fail("expected response") }
+    assert_true(out.content.contains("not a directory"))
+    assert_eq(@fs.read_text("\{dir}/keep"), "content")
   })
 }

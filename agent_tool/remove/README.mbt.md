@@ -1,7 +1,7 @@
 # Remove Tool
 
-`remove(path, reason)` deletes a regular file or recursively deletes a directory. The arguments are unchanged;
-the agent does not supply a hash or an approval flag.
+`remove(path, reason)` deletes a regular file, unlinks a symbolic link, or
+recursively deletes a directory.
 
 - Files recorded as created by this session whose contents still match the
   recorded digest are deleted automatically.
@@ -15,8 +15,12 @@ the agent does not supply a hash or an approval flag.
   if an entry appears before removal, it fails without deleting that entry.
 - Other nonempty directories require approval, showing the recursive file and
   subdirectory counts. Hidden files and empty subdirectories are included.
-- Missing files, workspace roots and their ancestors, symlinks (including inside
-  a directory), and special files are rejected without requesting approval.
+- Symbolic links, including dangling links, require approval. A link inside a
+  directory is a leaf in the approved tree. Unlinking it preserves its target.
+  A trailing slash on the link still unlinks the entry. Intermediate links
+  resolve normally when addressing an entry below them.
+- Missing entries, workspace roots and their ancestors, and special files are
+  rejected without requesting approval.
 - Valid targets outside a configured write scope require one-shot approval.
   The grant names only the captured entries; it never authorizes an entire
   subtree or changes the scope for later calls.
@@ -34,7 +38,9 @@ raw-byte SHA-256. After approval, the tool rechecks the scope, kind, location,
 and contents. A changed version is refused; a later request needs fresh
 approval. Matching bytes identify a content version, not a filesystem object.
 For directories, the captured version includes every entry's path, kind,
-canonical location, and each regular file's raw-byte digest. Added, removed,
+canonical location, each regular file's raw-byte digest, and each symlink's
+stored target. An unlink grant covers the name in its resolved parent. Changes
+to the referent's contents leave that grant valid. Added, removed,
 renamed, or changed entries invalidate the grant before deletion starts.
 
 There is no atomic compare-and-unlink against external writers. After validating

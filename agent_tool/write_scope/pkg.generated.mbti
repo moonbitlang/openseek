@@ -19,6 +19,7 @@ pub impl Show for WriteScopeError
 // Types and methods
 type WriteScope
 pub async fn WriteScope::check(Self, String) -> String? raise WriteScopeError
+pub fn WriteScope::check_entry(Self, String, String) -> String? raise WriteScopeError
 pub async fn WriteScope::create(root~ : String, allowed_paths? : Array[String]) -> Self raise WriteScopeError
 pub async fn WriteScope::deny_reason(Self, String) -> String? noraise
 pub async fn WriteScope::destination(Self, String) -> String raise WriteScopeError
