@@ -1961,8 +1961,6 @@ fn sync_package_graph(
   state : State,
   ctx : Ctx,
 ) -> (State, @cmd.Cmd) {
-  guard ctx.owner is @interop.Host(owner) else { return (state, @cmd.none) }
-
   guard ctx.checkout_ready() &&
     ctx.panel_open &&
     ctx.active_history_diff is None &&
@@ -1988,14 +1986,7 @@ fn sync_package_graph(
             { ..state, package_graphs, package_graph_generation: generation, },
             @cmd.batch([
               show_package_graph_in_viewer(graph),
-              read_package_graph(
-                dispatch,
-                owner,
-                ctx.request_epoch,
-                path,
-                generation,
-                root=ctx.root(),
-              ),
+              read_package_graph(dispatch, ctx, path, generation),
             ]),
           )
         }
@@ -3002,7 +2993,10 @@ fn update_inner(
       moon_mod_view_modes[path] = mode
       let package_graphs = state.package_graphs.copy()
       if mode is MoonModDependencies &&
-        package_graphs.get(path) is Some(PackageGraphFailed(_, _)) {
+        (
+          ctx.owner is Cloud(..) ||
+          package_graphs.get(path) is Some(PackageGraphFailed(_, _))
+        ) {
         package_graphs.remove(path)
       }
       (
@@ -3011,9 +3005,8 @@ fn update_inner(
       )
     }
     PackageGraphRequestLoaded(owner~, epoch~, path~, generation~, source~) =>
-      if state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
-        state.request_epoch == epoch &&
+      if state.owner == Some(owner) &&
+        (owner is Cloud(..) || state.request_epoch == epoch) &&
         state.package_graphs.get(path) is Some(PackageGraphLoading(current)) &&
         current == generation {
         let package_graphs = state.package_graphs.copy()
@@ -3023,9 +3016,8 @@ fn update_inner(
         (@cmd.none, state)
       }
     PackageGraphRequestFailed(owner~, epoch~, path~, generation~, message~) =>
-      if state.owner is Some(state_owner) &&
-        state_owner == @interop.Host(owner) &&
-        state.request_epoch == epoch &&
+      if state.owner == Some(owner) &&
+        (owner is Cloud(..) || state.request_epoch == epoch) &&
         state.package_graphs.get(path) is Some(PackageGraphLoading(current)) &&
         current == generation {
         let package_graphs = state.package_graphs.copy()
@@ -4355,8 +4347,16 @@ fn update_inner(
       } else {
         (@cmd.none, state)
       }
-    RunSettled(owner=@interop.Cloud(..)) =>
-      refresh_cloud_files(dispatch, state, ctx)
+    RunSettled(owner=@interop.Cloud(..) as owner) =>
+      if state.owner == Some(owner) {
+        refresh_cloud_files(
+          dispatch,
+          { ..state, package_graphs: Map([]), },
+          ctx,
+        )
+      } else {
+        (@cmd.none, state)
+      }
     RunSettled(owner=@interop.Host(owner)) =>
       if state.owner is Some(state_owner) && state_owner == @interop.Host(owner) {
         // A completed agent run can write files outside the pruned watcher.
