@@ -91,12 +91,12 @@ fn assistant_view(
       // Do not parse an unfinished Markdown document on every provider token.
       // Newlines are preserved by CSS while fragments are still arriving.
       @html.div(
-        class="msg-content transcript-prose activity-thinking activity-thinking-live",
+        class="msg-content activity-thinking activity-thinking-live",
         @html.text(text),
       )
     } else {
       @html.div(
-        class="msg-content transcript-prose markdown moonbit-viewer-markdown-content activity-thinking",
+        class="msg-content markdown moonbit-viewer-markdown-content activity-thinking",
         @markdown.markdown_nodes(locale~, text, open_file=on_open),
       )
     }
@@ -809,11 +809,11 @@ fn user_message_body(
 ) -> @html.Html {
   if markdown {
     @html.div(
-      class="msg-content transcript-prose markdown moonbit-viewer-markdown-content",
+      class="msg-content markdown moonbit-viewer-markdown-content",
       @markdown.user_markdown_nodes(locale~, text),
     )
   } else {
-    @html.div(class="msg-content transcript-prose", inline_code_nodes(text))
+    @html.div(class="msg-content", inline_code_nodes(text))
   }
 }
 
@@ -891,12 +891,7 @@ fn user_text_nodes(
       body.push(@html.div(class="mention-tray", chips))
       for mention in parsed.mentions {
         if mention.comment() is Some(comment) {
-          body.push(
-            @html.div(
-              class="msg-content transcript-prose",
-              inline_code_nodes(comment),
-            ),
-          )
+          body.push(@html.div(class="msg-content", inline_code_nodes(comment)))
         }
       }
       parsed.task
@@ -1289,7 +1284,7 @@ fn assistant_message_view(
     ])
   } else {
     @html.div(
-      class="msg-content transcript-prose markdown moonbit-viewer-markdown-content",
+      class="msg-content markdown moonbit-viewer-markdown-content",
       @markdown.markdown_nodes(
         locale~,
         content,
@@ -1365,7 +1360,7 @@ fn summary_card_view(
         disclosure_icon(),
       ]),
       @html.div(
-        class="msg-content transcript-prose markdown moonbit-viewer-markdown-content summary-card-body",
+        class="msg-content markdown moonbit-viewer-markdown-content summary-card-body",
         @markdown.markdown_nodes(locale~, content, open_file=on_open),
       ),
     ]),

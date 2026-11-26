@@ -34,9 +34,8 @@
   /* Typography */
   --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
-  --font-family-system-sans: ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-family-sans: var(--font-family-system-sans);
+  --font-family-sans: "Google Sans", "Noto Sans SC", ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* Keep this root default in sync with DefaultEditorFontSize in
      desktop/frontend/fileeditor/editor_panel.mbt (the pre-settings fallback). */
   --font-size-base: 15px;
@@ -184,14 +183,6 @@
   --z-modal: 60;
   --z-quick-open: 70;
   --z-connection-lost: 80;
-}
-
-:root:lang(en) {
-  --font-family-sans: "Google Sans", var(--font-family-system-sans);
-}
-
-:root:lang(zh-Hans) {
-  --font-family-sans: "Noto Sans SC", var(--font-family-system-sans);
 }
 
 /* Keep CSS and the measured code view supplied through ViewerOptions on the

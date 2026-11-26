@@ -663,15 +663,6 @@
   content: "\eae9";
 }
 
-.transcript-prose {
-  font-family: "Google Sans", "Noto Sans SC", var(--font-family-system-sans);
-}
-
-/* Markdown can contain app-supplied labels as well as message text. */
-.transcript-prose :where(.citation-sources-heading, .citation-source-origin, .workspace-file-kind) {
-  font-family: var(--font-family-sans);
-}
-
 .msg-content {
   /* Let the content box shrink so a wide child (a <pre>) scrolls
      internally rather than widening the message. */

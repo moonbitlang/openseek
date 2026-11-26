@@ -129,7 +129,7 @@ test('system language switching preserves palette IME, focus and editor contents
   expect(app.pageErrors).toEqual([]);
 });
 
-test('mixed-language transcript prose keeps its font stack when UI language changes', async ({ page }) => {
+test('UI labels and transcript prose keep the shared font stack when UI language changes', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const text = 'Hello，中文、繁體、こんにちは';
   app.sessionEvents = [
@@ -147,15 +147,12 @@ test('mixed-language transcript prose keeps its font stack when UI language chan
   expect(stack).toMatch(/^"Google Sans", "Noto Sans SC",/);
 
   const sidebar = page.getByRole('complementary');
-  for (const [language, settings, font] of [
-    ['zh-CN', '设置', /^"Noto Sans SC",/],
-    ['ja', '設定', /^ui-sans-serif,/],
-  ]) {
+  for (const [language, settings] of [['zh-CN', '设置'], ['ja', '設定']]) {
     await page.evaluate(language => {
       Object.defineProperty(navigator, 'languages', { configurable: true, value: [language] });
       window.dispatchEvent(new Event('languagechange'));
     }, language);
-    await expect(sidebar.getByRole('button', { name: settings, exact: true })).toHaveCSS('font-family', font);
+    await expect(sidebar.getByRole('button', { name: settings, exact: true })).toHaveCSS('font-family', stack);
     await expect(message).toHaveCSS('font-family', stack);
   }
 });
