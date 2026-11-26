@@ -301,6 +301,7 @@ async fn multi_edit_files(
   let groups = group_contiguous(resolved)
   let failures : Array[EditFailure] = []
   let prepared : Array[PreparedFile] = []
+  let context_budget = ContextBudget::new()
   for group in groups {
     let content = @fs.read_text(group.path) catch {
       error => {
@@ -309,13 +310,23 @@ async fn multi_edit_files(
           index: None,
           range: "",
           message: "error reading file: \{error}",
+          context: NoContext,
         })
         continue
       }
     }
+    let file_index = FileContextIndex::new(content)
     let plans : Array[PlannedEdit] = []
     for edit in group.items {
-      match validate_edit(content, edit.item, edit.index, file=group.file) {
+      match
+        validate_edit(
+          content,
+          file_index,
+          context_budget,
+          edit.item,
+          edit.index,
+          file=group.file,
+        ) {
         Valid(plan) => plans.push(plan)
         Invalid(failure) => failures.push(failure)
       }
@@ -357,6 +368,7 @@ async fn multi_edit_files(
           index: None,
           range: "",
           message,
+          context: NoContext,
         })
       None =>
         writes.push({
@@ -1274,16 +1286,21 @@ priv struct PlannedEdit {
 ///|
 /// A rejected edit (or a file-level read/write-guard problem, when `index` is
 /// `None`). `file` lets the report point at the right file in a multi-file batch.
+/// `context` carries an optional rendered `─── file context ───` block for the
+/// human/model text report without bloating `data.failures`.
 priv struct EditFailure {
   file : String
   index : Int32?
   range : String
   message : String
+  context : FailureContext
 }
 
 ///|
 fn validate_edit(
   content : String,
+  file_index : FileContextIndex,
+  context_budget : ContextBudget,
   item : @decode.MultiEditItem,
   index : Int32,
   file~ : String,
@@ -1300,6 +1317,7 @@ fn validate_edit(
         index: Some(index),
         range,
         message: "old_string and new_string are both empty",
+        context: NoContext,
       })
     }
     let at = @line_offset.line_start_offset(content, item.start_line).clamp(
@@ -1315,29 +1333,57 @@ fn validate_edit(
     })
   }
   if item.old_string == item.new_string {
+    let context = if context_budget.can_accept() {
+      let (norm_old, _) = @matching.normalize_content_for_matching(
+        item.old_string,
+      )
+      context_budget.record(
+        build_file_context(
+          file_index,
+          item.start_line,
+          item.end_line,
+          total_line_count(norm_old),
+        ),
+      )
+    } else {
+      Omitted
+    }
     return Invalid({
       file,
       index: Some(index),
       range,
       message: "old_string and new_string are identical",
+      context,
     })
   }
-  let (norm_content, offset_map) = @matching.normalize_content_for_matching(
-    content,
-  )
   let (norm_old, _) = @matching.normalize_content_for_matching(item.old_string)
+  let normalized = file_index.normalized()
+  let norm_content = normalized.text
+  let offset_map = normalized.offset_map
   let region = select_edit_region(norm_content, item.start_line, item.end_line)
   let match_offset = match region.body.find(norm_old) {
     Some(offset) => Some(offset)
     None => @matching.find_quote_normalized_match(region.body, norm_old)
   }
   guard match_offset is Some(offset) else {
-    return Invalid({
-      file,
-      index: Some(index),
-      range,
-      message: "old_string not found",
-    })
+    let message = match
+      find_other_match_hint(norm_content, norm_old, item.start_line) {
+      Some(hint) => "old_string not found (\{hint})"
+      None => "old_string not found"
+    }
+    let context = if context_budget.can_accept() {
+      context_budget.record(
+        build_file_context(
+          file_index,
+          item.start_line,
+          item.end_line,
+          total_line_count(norm_old),
+        ),
+      )
+    } else {
+      Omitted
+    }
+    return Invalid({ file, index: Some(index), range, message, context, })
   }
   let norm_global = region.start_offset + offset
   let orig_start = offset_map[norm_global]
@@ -1372,6 +1418,7 @@ fn collect_overlap_failures(
         index: Some(plan.index),
         range: plan.range,
         message: "replacement overlaps edit[\{previous_index}]",
+        context: NoContext,
       })
     }
     if plan.end > previous_end {
@@ -1402,8 +1449,36 @@ fn apply_plans(content : String, plans : Array[PlannedEdit]) -> String {
 
 ///|
 fn failure_report(failures : Array[EditFailure]) -> String {
-  let lines = [ for failure in failures => format_failure(failure) ]
-  "error multi_editing: \{failures.length()} problem(s); no changes applied\n\{lines.join("\n")}"
+  let sections : Array[String] = []
+  let mut shown_contexts = 0
+  let mut context_chars = 0
+  let mut omitted_contexts = 0
+  for failure in failures {
+    let header = format_failure(failure)
+    match failure.context {
+      Context(ctx) =>
+        if shown_contexts < FailureContextSiteLimit &&
+          context_chars + ctx.length() <= FailureContextBudgetChars {
+          shown_contexts += 1
+          context_chars += ctx.length()
+          sections.push("\{header}\n\{ctx}")
+        } else {
+          omitted_contexts += 1
+          sections.push(header)
+        }
+      Omitted => {
+        omitted_contexts += 1
+        sections.push(header)
+      }
+      NoContext => sections.push(header)
+    }
+  }
+  let suffix = if omitted_contexts > 0 {
+    "\n(file context omitted for \{omitted_contexts} additional failure(s) to keep output concise)"
+  } else {
+    ""
+  }
+  "error multi_editing: \{failures.length()} problem(s); no changes applied\n\{sections.join("\n")}\{suffix}"
 }
 
 ///|

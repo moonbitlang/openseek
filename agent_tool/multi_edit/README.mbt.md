@@ -107,9 +107,11 @@ once and the response lists the per-file counts:
 - `"ok: applied <n> edit(s) across <m> file(s)\n<path>: <k> edit(s)"`
 
 On failure, no files are written. Failed-edit reports name the file and the
-original edit index:
+original edit index; `old_string not found` and identical-replacement failures
+also include bounded `─── file context ───` snippets around `start_line` (plus
+exact-match line hints when `old_string` exists elsewhere in the file):
 
-- `"error multi_editing: <n> problem(s); no changes applied\n<file> edit[1] line range 10-12: old_string not found"`
+- `"error multi_editing: <n> problem(s); no changes applied\n<file> edit[1] line range 10-12: old_string not found"` (followed by a bounded file context block, and `(exact match found at line <m>)` when `old_string` matches outside the requested range)
 - `"error multi_editing: edits for <file> must be contiguous; it reappears at edit[2] after another file's edits; list all edits for a file together"`
 - `"error: multi_edit requires arguments.edits[0].start_line to be an integer"` — a present field has the wrong type.
 - `"error: multi_edit requires arguments.edits[0] to include start_line (present keys: file, line, new_string, old_string)"` — a required field is absent; the present keys are listed so a misnamed key (here `line` instead of `start_line`) is obvious.
