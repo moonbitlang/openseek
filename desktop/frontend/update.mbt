@@ -5589,7 +5589,7 @@ fn update_msg(
       }
     }
     CloudQuestions(account~, msg) => {
-      guard model.is_desktop &&
+      guard model.has_cloud_client_tools() &&
         model.account.map(a => a.user.user_id) == Some(account) else {
         return (@cmd.none, model)
       }
@@ -5598,6 +5598,9 @@ fn update_msg(
         Local,
         dispatch.map(msg => CloudQuestions(account~, msg)),
         submit=(answer, emit) => {
+          if model.mobile_questions is Some(mobile) {
+            return mobile.answer(account, answer, dispatch, emit)
+          }
           @cmd.attempt(
             result => {
               match result {

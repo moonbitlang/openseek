@@ -290,6 +290,11 @@ fn account_loaded(
   let next = {
     ..model,
     account,
+    mobile_questions: if changed {
+      model.mobile_questions.map(_ => MobileCloudQuestions())
+    } else {
+      model.mobile_questions
+    },
     cloud_questions: if changed {
       @user_questions.Model()
     } else {

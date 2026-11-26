@@ -575,7 +575,12 @@ fn main {
   let android = user_agent.contains(" SeekMoonAndroid/")
   // The input device is independent of window width: a narrow desktop
   // window still supports accepting a prediction with Tab.
-  let mobile = !desktop && (android || user_agent.contains("Mobi"))
+  let mobile = !desktop &&
+    (
+      android ||
+      user_agent.contains("SeekMoonIOS/") ||
+      user_agent.contains("Mobi")
+    )
   @crash_page.install()
   let app = @rabbita.new(() => {
     // The root routes editor events; the composer created below owns its draft.
@@ -593,7 +598,7 @@ fn main {
       // Init flows through `update` like any other message, as
       // `with_init(dispatch(Init))` did before the 0.13 migration.
       init=emit => {
-        (initial_model(desktop~, local_console~, android~), emit(Init))
+        (initial_model(desktop~, local_console~, android~, mobile~), emit(Init))
       },
       update=(model, msg, emit) => {
         let (cmd, next) = match msg {

@@ -283,8 +283,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       } else {
         cloud_transcript_run(
           conversation,
-          awaiting_answer=self.is_desktop &&
-            self.cloud_questions.awaits_answer(owner.session()),
+          awaiting_answer=self.cloud_questions.awaits_answer(owner.session()),
         )
       },
       streaming_response=conversation.live.response,

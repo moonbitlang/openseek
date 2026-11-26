@@ -1250,6 +1250,7 @@ priv struct Model {
     @interop.ConversationIdentity,
     Array[@protocol.PreviewOpenRequest],
   ]
+  mobile_questions : MobileCloudQuestions?
   cloud_questions : @user_questions.Model
   cloud : @cloud.State
   chat_navigation_generation : Int32
@@ -2718,6 +2719,7 @@ fn initial_model(
   desktop~ : Bool,
   local_console~ : Bool = false,
   android~ : Bool = false,
+  mobile~ : Bool = false,
 ) -> Model {
   // Read once here (main runs before the first render); afterwards the
   // resize subscription keeps the flag current through `ViewportResized`.
@@ -2771,6 +2773,11 @@ fn initial_model(
     // place from the start; a browser page starts empty and fills `devices`
     // from the fetched roster (`apply_roster`).
     pending_previews: Map([]),
+    mobile_questions: if mobile {
+      Some(MobileCloudQuestions())
+    } else {
+      None
+    },
     cloud_questions: @user_questions.Model(),
     cloud: @cloud.State::empty(),
     chat_navigation_generation: 0,

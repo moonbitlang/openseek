@@ -215,24 +215,24 @@ export class CloudHarness {
       throw new Error(`Unexpected account request: ${path}`);
     });
     await this.page.route(`${cloudOrigin}/**`, route => this.cloudRequest(route));
-    if (this.desktop) {
-      await this.page.routeWebSocket('wss://cloud.moonbitlang.com/v1/sessions/*/mcp', socket => {
-        const session = new URL(socket.url()).pathname.split('/')[3];
-        this.mcpSockets.set(session, socket);
-        socket.onMessage(async raw => {
-          const frame = JSON.parse(raw);
-          this.mcpFrames.push({ session, frame });
-          if (frame.type === 'auth') {
-            if (this.pauseMcpReady) await this.pauseMcpReady;
-            socket.send(JSON.stringify({ type: 'ready' }));
-          } else {
-            this.onMcpReply?.(session, frame);
-          }
-        });
-        socket.onClose(() => {
-          if (this.mcpSockets.get(session) === socket) this.mcpSockets.delete(session);
-        });
+    await this.page.routeWebSocket('wss://cloud.moonbitlang.com/v1/sessions/*/mcp', socket => {
+      const session = new URL(socket.url()).pathname.split('/')[3];
+      this.mcpSockets.set(session, socket);
+      socket.onMessage(async raw => {
+        const frame = JSON.parse(raw);
+        this.mcpFrames.push({ session, frame });
+        if (frame.type === 'auth') {
+          if (this.pauseMcpReady) await this.pauseMcpReady;
+          socket.send(JSON.stringify({ type: 'ready' }));
+        } else {
+          this.onMcpReply?.(session, frame);
+        }
       });
+      socket.onClose(() => {
+        if (this.mcpSockets.get(session) === socket) this.mcpSockets.delete(session);
+      });
+    });
+    if (this.desktop) {
       await this.installDesktopBridge();
     }
   }

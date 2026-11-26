@@ -209,13 +209,7 @@ async fn Dispatcher::call_tool(
   let (content, is_error) = match outcome {
     Ok(content) => (content, false)
     Err(error) => {
-      @xlog.warn(category="mcp") <?
-        {
-          "event": "mcp_tool_failed",
-          "tool": name,
-          "session": session,
-          "error": error,
-        }
+      log_tool_failure(name, session, error)
       ([Text(error)], true)
     }
   }
@@ -231,4 +225,61 @@ fn offered(name : String, groups : Array[String]) -> Bool {
     name
   }
   groups.is_empty() || groups.contains(group)
+}
+
+///|
+/// Stateless request metadata shared by every transport. HTTP additionally
+/// checks the mirrored headers before calling the dispatcher.
+fn validate_modern(message : Json) -> Json? {
+  guard message
+    is {
+      "params": {
+        "_meta": { "io.modelcontextprotocol/protocolVersion": _, .. },
+        ..
+      },
+      ..
+    } else {
+    return None
+  }
+  guard message
+    is { "id": id, "method": String(_), "params": Object(params), .. } else {
+    return Some(failure(null, InvalidRequest, "Invalid stateless request"))
+  }
+  guard @wire.request_version(message) is Some(version) else {
+    return Some(failure(id, -32020, "Missing protocol version"))
+  }
+  guard version == @wire.ModernVersion else {
+    return Some({
+      "jsonrpc": "2.0",
+      "id": id,
+      "error": {
+        "code": -32022,
+        "message": "Unsupported protocol version",
+        "data": { "requested": version, "supported": [@wire.ModernVersion] },
+      },
+    })
+  }
+  guard params.get("_meta")
+    is Some({ "io.modelcontextprotocol/clientCapabilities": Object(_), .. }) else {
+    return Some(failure(id, InvalidParams, "Missing clientCapabilities"))
+  }
+  None
+}
+
+///|
+#cfg(target="native")
+fn log_tool_failure(name : String, session : String, error : String) -> Unit {
+  @xlog.warn(category="mcp") <?
+    {
+      "event": "mcp_tool_failed",
+      "tool": name,
+      "session": session,
+      "error": error,
+    }
+}
+
+///|
+#cfg(not(target="native"))
+fn log_tool_failure(_name : String, _session : String, _error : String) -> Unit {
+  ()
 }

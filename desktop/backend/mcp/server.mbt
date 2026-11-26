@@ -37,21 +37,6 @@ const MaxRequestBytes : Int32 = 1048576
 const RequestReadTimeoutMs : Int32 = 10000
 
 ///|
-/// A failure of the server itself, as opposed to one of its tools.
-pub suberror ServerError {
-  ServerError(String)
-}
-
-///|
-pub impl Show for ServerError with fn output(self, logger) {
-  let ServerError(message) = self
-  logger.write_string(message)
-}
-
-///|
-pub extend ServerError with Show::{output, to_string}
-
-///|
 struct Server {
   listener : @http.Server
   dispatcher : Dispatcher

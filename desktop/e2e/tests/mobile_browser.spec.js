@@ -1,6 +1,6 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, authOrigin } from './support/cloud_harness.js';
+import { CloudHarness, authOrigin, sessionA } from './support/cloud_harness.js';
 
 // Exercise the browser packager's normal HTML, CSS and frontend bundle.
 // Only the remote account and host responses contain fixture data.
@@ -179,4 +179,73 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   expect(cloud.postCount).toBe(1);
   expect(cloud.device.socket).toBeNull();
+});
+
+test.describe('Cloud ask_user on a phone', () => {
+  // The bundled apps run the shared frontend without a desktop bridge.
+  test.use({ userAgent: 'Mozilla/5.0 (iPhone) Mobile SeekMoonIOS/0.1.0' });
+
+  async function openChat(page) {
+    const app = new CloudHarness(page);
+    app.device.connectionAvailable = false;
+    await app.install();
+    await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
+    await expect.poll(() => app.mcpFrames.filter(f => f.session === sessionA && f.frame.type === 'auth').length).toBe(1);
+    return app;
+  }
+
+  function request(app, id, method, params) {
+    app.mcpSockets.get(sessionA).send(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
+  }
+
+  function reply(app, id) {
+    return app.mcpFrames.find(f => f.session === sessionA && f.frame.id === id)?.frame.result;
+  }
+
+  function ask(app, id) {
+    request(app, id, 'tools/call', { name: 'ask_user', arguments: {
+      questions: [{ id: 'plan', title: 'Which plan?', options: ['Small change'] }],
+    } });
+  }
+
+  test('discovers ask_user and returns a choice over MCP @webkit-layout', async ({ page }) => {
+    const app = await openChat(page);
+    request(app, 1, 'tools/list', {});
+    await expect.poll(() => reply(app, 1)?.tools.map(t => t.name)).toEqual(['ask_user']);
+    ask(app, 2);
+    const card = page.locator('.user-question-card');
+    await expect(card).toContainText('Which plan?');
+    await card.getByRole('button', { name: 'Small change', exact: true }).click();
+    await card.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(() => reply(app, 2)?.content[0].text).toBeTruthy();
+    expect(JSON.parse(reply(app, 2).content[0].text)).toMatchObject({ status: 'answered', answers: { plan: 'Small change' } });
+    await expect(card).toHaveCount(0);
+    expect(app.requests.filter(r => r.path.endsWith('/commands'))).toHaveLength(0);
+  });
+
+  for (const reason of ['timeout', 'disconnect']) {
+    test(`delivers a late answer once after ${reason}`, async ({ page }) => {
+      if (reason === 'timeout') await page.clock.install();
+      const app = await openChat(page);
+      ask(app, 3);
+      const card = page.locator('.user-question-card');
+      await expect(card).toContainText('Which plan?');
+      await card.locator('textarea').fill('Keep the existing layout');
+      if (reason === 'timeout') {
+        await page.clock.fastForward(31_000);
+        await expect.poll(() => reply(app, 3)?.content[0].text).toBeTruthy();
+        expect(JSON.parse(reply(app, 3).content[0].text).status).toBe('pending');
+      } else {
+        app.mcpSockets.get(sessionA).close({ code: 1012, reason: 'fixture restart' });
+        await expect.poll(() => app.mcpFrames.filter(f => f.session === sessionA && f.frame.type === 'auth').length).toBe(2);
+      }
+      await card.getByRole('button', { name: 'Send', exact: true }).click();
+      const deliveries = () => app.requests.filter(r => r.path === `/v1/sessions/${sessionA}/commands` && r.method === 'POST');
+      await expect.poll(() => deliveries().length).toBe(1);
+      expect(JSON.parse(deliveries()[0].body).command).toMatchObject({ command: 'prompt', submission_id: expect.stringMatching(/^question-.*-result$/) });
+      expect(deliveries()[0].body).toContain('Keep the existing layout');
+      await expect(card).toHaveCount(0);
+      if (reason === 'disconnect') expect(reply(app, 3)).toBeUndefined();
+    });
+  }
 });
