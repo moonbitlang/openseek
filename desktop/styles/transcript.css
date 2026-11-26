@@ -664,8 +664,7 @@
 }
 
 .transcript-prose {
-  font-family: "Google Sans", "Noto Sans JP Kana", "Noto Sans", "Noto Sans SC",
-    "Noto Sans TC", "Noto Sans JP", var(--font-family-system-sans);
+  font-family: "Google Sans", "Noto Sans SC", var(--font-family-system-sans);
 }
 
 /* Markdown can contain app-supplied labels as well as message text. */

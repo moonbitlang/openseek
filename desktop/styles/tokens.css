@@ -34,10 +34,9 @@
   /* Typography */
   --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
-  --font-family-localized: "Google Sans", "Noto Sans";
   --font-family-system-sans: ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-family-sans: var(--font-family-localized), var(--font-family-system-sans);
+  --font-family-sans: var(--font-family-system-sans);
   /* Keep this root default in sync with DefaultEditorFontSize in
      desktop/frontend/fileeditor/editor_panel.mbt (the pre-settings fallback). */
   --font-size-base: 15px;
@@ -187,21 +186,12 @@
   --z-connection-lost: 80;
 }
 
-/* Prefer the document language's Han glyphs over cross-region CJK fallbacks. */
+:root:lang(en) {
+  --font-family-sans: "Google Sans", var(--font-family-system-sans);
+}
+
 :root:lang(zh-Hans) {
-  --font-family-localized: "Noto Sans SC", "Noto Sans";
-}
-
-:root:lang(zh-Hant) {
-  --font-family-localized: "Noto Sans TC", "Noto Sans";
-}
-
-:root:lang(ja) {
-  --font-family-localized: "Noto Sans JP", "Noto Sans";
-}
-
-:root:lang(es) {
-  --font-family-localized: "Noto Sans";
+  --font-family-sans: "Noto Sans SC", var(--font-family-system-sans);
 }
 
 /* Keep CSS and the measured code view supplied through ViewerOptions on the

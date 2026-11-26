@@ -144,20 +144,20 @@ test('mixed-language transcript prose keeps its font stack when UI language chan
   await app.openSession();
   const message = page.locator('#stream .msg-content').filter({ hasText: text });
   const stack = await message.evaluate(node => getComputedStyle(node).fontFamily);
-  expect(stack).toMatch(/^"Google Sans", "Noto Sans JP Kana",/);
+  expect(stack).toMatch(/^"Google Sans", "Noto Sans SC",/);
 
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-CN'] });
-    window.dispatchEvent(new Event('languagechange'));
-  });
-  const settings = page.getByRole('complementary').getByRole('button', { name: '设置', exact: true });
-  await expect(settings).toHaveCSS('font-family', /^"Noto Sans SC",/);
-  await expect(message).toHaveCSS('font-family', stack);
-  // The kana face is packaged; the shared harness blocks Google Fonts.
-  expect(await page.evaluate(async () => {
-    const faces = await document.fonts.load('400 1rem "Noto Sans JP Kana"', 'こんにちは');
-    return faces.some(face => face.status === 'loaded');
-  })).toBe(true);
+  const sidebar = page.getByRole('complementary');
+  for (const [language, settings, font] of [
+    ['zh-CN', '设置', /^"Noto Sans SC",/],
+    ['ja', '設定', /^ui-sans-serif,/],
+  ]) {
+    await page.evaluate(language => {
+      Object.defineProperty(navigator, 'languages', { configurable: true, value: [language] });
+      window.dispatchEvent(new Event('languagechange'));
+    }, language);
+    await expect(sidebar.getByRole('button', { name: settings, exact: true })).toHaveCSS('font-family', font);
+    await expect(message).toHaveCSS('font-family', stack);
+  }
 });
 
 test('Traditional Chinese system startup yields to an explicit saved choice', async ({ page }) => {
