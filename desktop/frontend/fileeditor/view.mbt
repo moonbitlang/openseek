@@ -2126,7 +2126,7 @@ fn office_viewer_toolbar(
         type_="button",
         class="office-viewer-control",
         title=ui(locale, OfficeRegion),
-        disabled=ctx.owner.host() is None ||
+        disabled=!ctx.feedback_enabled ||
           state.office_region_request is Some(_) ||
           state.pending_region_feedback(ctx) is Some(_) ||
           state.has_pinned_office_selection(ctx),

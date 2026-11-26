@@ -1,7 +1,6 @@
 ///|
 priv struct Session {
   host : @js.Value
-  viewport : @js.Value
   overlay : @js.Value
   box : @js.Value
   abort : @js.Value
@@ -30,7 +29,7 @@ fn Session::finish(self : Session, result : Result[Capture, String]?) -> Unit {
   self.observer.apply_with_string("disconnect", ([] : FixedArray[@js.Value]))
   self.resize.apply_with_string("disconnect", ([] : FixedArray[@js.Value]))
   self.overlay.apply_with_string("remove", ([] : FixedArray[@js.Value]))
-  let classes : @js.Value = self.viewport.get_with_string("classList")
+  let classes : @js.Value = self.host.get_with_string("classList")
   classes.apply_with_string("remove", ["office-region-selecting"])
   self.host.set_with_string(
     "__officeRegionCapture",
@@ -64,7 +63,7 @@ fn position(event : @js.Value) -> Point {
 
 ///|
 fn Session::visible(self : Session) -> Rect? {
-  bounds(self.viewport).intersection({
+  bounds(self.host).intersection({
     x: 0,
     y: 0,
     width: @js.globalThis.get_with_string("innerWidth"),
@@ -105,11 +104,11 @@ fn Session::wire(self : Session) -> Unit {
       self.finish(None)
     }
   })
-  self.listen(self.viewport, "contextmenu", event => {
+  self.listen(self.host, "contextmenu", event => {
     stop(event)
     self.finish(None)
   })
-  self.listen(self.viewport, "pointerdown", event => {
+  self.listen(self.host, "pointerdown", event => {
     if self.capturing ||
       (event.get_with_string("button") : Int32) != 0 ||
       !(event.get_with_string("isPrimary") : Bool) {
@@ -126,9 +125,9 @@ fn Session::wire(self : Session) -> Unit {
     self.dragging = false
     let id : Int32 = event.get_with_string("pointerId")
     self.pointer = Some(id)
-    self.viewport.apply_with_string("setPointerCapture", [id])
+    self.host.apply_with_string("setPointerCapture", [id])
   })
-  self.listen(self.viewport, "pointermove", event => {
+  self.listen(self.host, "pointermove", event => {
     if self.capturing {
       return
     }
@@ -146,7 +145,7 @@ fn Session::wire(self : Session) -> Unit {
       self.hover(point)
     }
   })
-  self.listen(self.viewport, "pointerup", event => {
+  self.listen(self.host, "pointerup", event => {
     if self.capturing ||
       self.pointer != Some(event.get_with_string("pointerId")) {
       return
@@ -185,13 +184,13 @@ fn Session::wire(self : Session) -> Unit {
       () => self.alive,
     )
   })
-  self.listen(self.viewport, "click", stop)
-  self.listen(self.viewport, "pointercancel", _ => {
+  self.listen(self.host, "click", stop)
+  self.listen(self.host, "pointercancel", _ => {
     if self.pointer is Some(_) {
       self.finish(None)
     }
   })
-  self.listen(self.viewport, "scroll", _ => {
+  self.listen(self.host, "scroll", _ => {
     if self.start is Some(_) || self.capturing {
       self.finish(None)
     } else {
@@ -208,7 +207,7 @@ fn Session::wire(self : Session) -> Unit {
     _ => if self.pointer is Some(_) || self.capturing { self.finish(None) },
     capture=false,
   )
-  let classes : @js.Value = self.viewport.get_with_string("classList")
+  let classes : @js.Value = self.host.get_with_string("classList")
   classes.apply_with_string("add", ["office-region-selecting"])
   let body : @js.Value = document().get_with_string("body")
   body.apply_with_string("append", [self.overlay])
@@ -253,12 +252,10 @@ pub fn start(
       scheduler.add(emit(Some(Err(failure))))
       return
     }
-    let parent : @js.Nullable[@js.Value] = host.get_with_string("parentElement")
     let child : @js.Nullable[@js.Value] = host.get_with_string(
       "firstElementChild",
     )
-    guard parent.to_option() is Some(viewport) &&
-      child.to_option() is Some(root) else {
+    guard child.to_option() is Some(root) else {
       scheduler.add(emit(Some(Err(failure))))
       return
     }
@@ -295,17 +292,16 @@ pub fn start(
         },
       ],
     )
-    let initial_bounds = bounds(viewport)
+    let initial_bounds = bounds(host)
     let resize : @js.Value = @js.globalThis.new_with_string("ResizeObserver", [
       () => {
-        if active.val is Some(session) && bounds(viewport) != initial_bounds {
+        if active.val is Some(session) && bounds(host) != initial_bounds {
           session.finish(None)
         }
       },
     ])
     let session : Session = {
       host,
-      viewport,
       overlay,
       box,
       abort,
@@ -324,7 +320,7 @@ pub fn start(
       target: None,
     }
     active.val = Some(session)
-    resize.apply_with_string("observe", [viewport])
+    resize.apply_with_string("observe", [host])
     if !attempt(() => session.wire()) {
       session.finish(Some(Err(failure)))
     }
