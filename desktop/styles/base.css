@@ -467,8 +467,12 @@ html[data-resizing] :is(.viewer-stack, .viewer-stack *) {
   );
   --topbar-height: max(var(--app-header-height), var(--native-titlebar-height, 0px));
   --titlebar-section-divider: inset 0 -1px var(--color-seam);
+  --titlebar-control-block-inset: max(
+    0px,
+    (var(--topbar-height) - var(--titlebar-control-size)) / 2
+  );
   --sidebar-toggle-inline-inset: max(
-    calc(var(--topbar-inline-padding) - var(--titlebar-control-gap)),
+    var(--titlebar-control-block-inset),
     var(--native-titlebar-left, 0px)
   );
   --sidebar-toggle-trailing-gap: calc(var(--titlebar-control-gap) * 3);
