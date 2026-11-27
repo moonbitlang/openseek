@@ -161,15 +161,23 @@ const WorkerSummary : String = "dead: deleted; seam: exports.mbt (tests of beta 
 /// fail. Each call is recorded with the commit it ran at.
 async fn moon_child(dir : String) -> Unit {
   let args = @env.args()[1:].to_owned()
-  let head = @shell.Cmd("git", ["rev-parse", "HEAD"]).output(timeout_ms=30000)
-  head.check()
+  let head = @async.with_timeout(30000, () => {
+    @process.run(
+      "git",
+      ["rev-parse", "HEAD"],
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Collect,
+      accepted_exit_code=code => code == 0,
+    )
+  })
   let calls = read_calls(dir + "/moon.jsonl")
   append(
     dir + "/moon.jsonl",
     (
       {
         "args": Json::array(args.map(Json::string)),
-        "head": head.stdout().trim(),
+        "head": head.stdout_text().trim(),
         "in_sub": @fs.realpath(".").has_suffix("/sub"),
       } : Json).stringify(),
   )
@@ -181,7 +189,7 @@ async fn moon_child(dir : String) -> Unit {
         1
       let canned = dir + "/analyze-\{turn}.txt"
       if @fs.exists(canned) {
-        println(@fs.read_file(canned).text())
+        println(@fs.read_text(canned))
       }
     }
     ["check", ..] if @fs.exists(dir + "/fail-check") =>
@@ -297,15 +305,20 @@ const NestedAnalysis : String =
 /// Git with a fixed committer, so the script's cherry-pick and the test's
 /// prediction of it make the same commit.
 async fn pinned_git(cwd : String, args : Array[String]) -> String {
-  let output = @shell.Cmd(
-    "git",
-    args,
-    cwd~,
-    env=pinned_env(),
-    inherit_env=false,
-  ).output(timeout_ms=60000)
-  output.check()
-  output.stdout()
+  let output = @async.with_timeout(60000, () => {
+    @process.run(
+      "git",
+      args,
+      cwd~,
+      extra_env=pinned_env(),
+      inherit_env=false,
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Collect,
+      accepted_exit_code=code => code == 0,
+    )
+  })
+  output.stdout_text()
 }
 
 ///|
