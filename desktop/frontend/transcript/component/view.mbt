@@ -848,12 +848,14 @@ fn user_text_nodes(
         let label_text = @mention_context.label(mention)
         let label = @html.span(class="mention-label", label_text)
         let target = @mention_context.target(mention)
-        let title = if mention is Annotation(comment~, ..) {
-          comment
-        } else if mention is @mention_context.BrowserAnnotation(element~) {
-          element.url + "\n" + element.selector.unwrap_or(element.tag)
-        } else if target is Some(target) {
-          if target.range is Some(range) {
+        let comment = match mention {
+          Annotation(comment~, ..) => Some(comment)
+          _ => None
+        }
+        let chip = if target is Some(target) && on_jump is Some(jump) {
+          let title = if comment is Some(text) {
+            text
+          } else if target.range is Some(range) {
             dynamic_text(
               locale,
               DJumpLine(
@@ -864,10 +866,6 @@ fn user_text_nodes(
           } else {
             dynamic_text(locale, DJumpFile(target.file.to_string()))
           }
-        } else {
-          label_text
-        }
-        let chip = if target is Some(target) && on_jump is Some(jump) {
           @html.button(
             class="mention-jump",
             type_="button",
@@ -876,7 +874,7 @@ fn user_text_nodes(
             [glyph, label],
           )
         } else {
-          @html.span(class="mention-body", [glyph, label])
+          @html.span(class="mention-body", title?=comment, [glyph, label])
         }
         chips.push(@html.div(class="mention-chip", [chip]))
       }
@@ -890,7 +888,7 @@ fn user_text_nodes(
       }
       body.push(@html.div(class="mention-tray", chips))
       for mention in parsed.mentions {
-        if mention.comment() is Some(comment) {
+        if mention is OfficeSelection(_) && mention.comment() is Some(comment) {
           body.push(@html.div(class="msg-content", inline_code_nodes(comment)))
         }
       }
