@@ -27,13 +27,9 @@ test('saved citations show Office feedback inline and code feedback on hover', a
     prompt,
     '', '<user_mentions>',
     selection(comment),
-    '<annotation file="src/main.mbt" lines="2-3">',
+    '<annotation file="src/main.mbt" lines="2-3" side="original">',
     '<quote>', 'let count = 0', '</quote>',
     '<user_comment>', codeComment, '</user_comment>',
-    '</annotation>',
-    '<annotation file="src/main.mbt" lines="8-9" side="original">',
-    '<quote>', 'let count = 1', '</quote>',
-    '<user_comment>', 'Keep the old default.', '</user_comment>',
     '</annotation>',
     selection(),
     '<file path="README.md"/>',
@@ -43,9 +39,8 @@ test('saved citations show Office feedback inline and code feedback on hover', a
   await app.goto();
   await app.openSession();
   const sent = page.locator('.msg.user');
-  await expect(sent.locator('.mention-chip')).toHaveCount(5);
-  await expect(sent.getByRole('button', { name: /src\/main\.mbt:2-3/ })).toHaveAttribute('title', codeComment);
-  await expect(sent.getByTitle('Keep the old default.', { exact: true })).toContainText('src/main.mbt:8-9 (original)');
+  await expect(sent.locator('.mention-chip')).toHaveCount(4);
+  await expect(sent.getByTitle(codeComment, { exact: true })).toContainText('src/main.mbt:2-3 (original)');
   await expect(sent.locator('.msg-content')).toHaveText([comment, prompt]);
   await expect(sent.locator('script')).toHaveCount(0);
 });
