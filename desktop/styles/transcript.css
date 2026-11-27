@@ -348,6 +348,15 @@
   text-align: center;
   padding: 2rem var(--space-6);
 }
+/* Center only a lone empty state in the transcript's content box. Auto
+   margins collapse to zero when there isn't room, so the pane can scroll. */
+.transcript > .stream:has(> .empty:only-child) {
+  min-block-size: 100cqb;
+}
+.transcript > .stream > .empty:only-child {
+  min-block-size: 0;
+  margin-block: auto;
+}
 .empty-badge {
   --icon-size: 3em;
   display: grid;

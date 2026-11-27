@@ -50,8 +50,6 @@ a:where(.setting-link) {
   overflow: auto;
 }
 
-/* The signed-out Chats page reuses the new-chat empty state; the
-   transcript's padding places its block where a new chat's starts. */
 .cloud-home {
   padding: 24px;
 }
