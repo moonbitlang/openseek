@@ -24,8 +24,8 @@ export default defineConfig({
   // Every test opens its own page and fixture, so schedule tests rather than
   // files: the largest spec files would otherwise each pin one worker.
   fullyParallel: true,
-  // CI runners have four cores. Local machines usually have more.
-  workers: isCI ? 4 : '50%',
+  // Keep CI concurrency within the two vCPUs available on MoonHub runners.
+  workers: isCI ? 2 : '50%',
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
     { name: 'webkit-indexeddb', testMatch: '**/indexeddb.spec.js', use: { browserName: 'webkit' } },
