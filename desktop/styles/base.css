@@ -426,15 +426,24 @@ html[data-resizing] :is(.viewer-stack, .viewer-stack *) {
   --resize-handle-height: 6px;
   --conversation-width: 820px;
   --sidebar-mode-padding: calc(var(--titlebar-control-gap) / 2);
-  /* Native controls, navigation and the mode switch must all fit. The
-     trailing 13px includes the sidebar inset and its border. */
+  --sidebar-mode-height: calc(
+    var(--titlebar-control-size) + 2 * var(--sidebar-mode-padding)
+  );
+  /* Match the space below the vertically centered switch. */
+  --sidebar-header-inset: max(
+    0px,
+    (var(--topbar-height) - var(--sidebar-mode-height)) / 2
+  );
   --sidebar-mode-width: calc(
     2 * var(--titlebar-control-size) + var(--titlebar-control-gap) +
       2 * var(--sidebar-mode-padding)
   );
   --sidebar-min-width: max(
     calc(1rem * 220 / 15),
-    calc(var(--sidebar-toggle-reserved-width) + var(--sidebar-mode-width) + 13px)
+    calc(
+      var(--sidebar-toggle-reserved-width) + var(--sidebar-mode-width) +
+        var(--sidebar-header-inset) + 1px /* sidebar border */
+    )
   );
   --sidebar-column-width: calc(
     clamp(
@@ -448,9 +457,10 @@ html[data-resizing] :is(.viewer-stack, .viewer-stack *) {
   --titlebar-control-size: calc(var(--titlebar-icon-size) * 24 / 14);
   --titlebar-control-gap: calc(var(--titlebar-icon-size) * 4 / 14);
   --topbar-inline-padding: calc(var(--font-size-base) * 18 / 14);
+  /* The native inset is occupied by caption buttons, not visible spacing. */
   --panel-toggle-inline-inset: max(
     var(--topbar-inline-padding),
-    var(--native-titlebar-right, 0px)
+    calc(var(--native-titlebar-right, 0px) + var(--titlebar-control-block-inset))
   );
   --panel-toggle-reserved-width: calc(
     var(--panel-toggle-inline-inset) + var(--titlebar-control-size) +
@@ -458,8 +468,12 @@ html[data-resizing] :is(.viewer-stack, .viewer-stack *) {
   );
   --topbar-height: max(var(--app-header-height), var(--native-titlebar-height, 0px));
   --titlebar-section-divider: inset 0 -1px var(--color-seam);
+  --titlebar-control-block-inset: max(
+    0px,
+    (var(--topbar-height) - var(--titlebar-control-size)) / 2
+  );
   --sidebar-toggle-inline-inset: max(
-    calc(var(--topbar-inline-padding) - var(--titlebar-control-gap)),
+    var(--titlebar-control-block-inset),
     var(--native-titlebar-left, 0px)
   );
   --sidebar-toggle-trailing-gap: calc(var(--titlebar-control-gap) * 3);

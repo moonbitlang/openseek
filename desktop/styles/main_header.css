@@ -92,10 +92,7 @@ main {
   color: var(--color-text-muted);
   cursor: pointer;
   position: fixed;
-  inset-block-start: max(
-    0px,
-    calc((var(--topbar-height) - var(--titlebar-control-size)) / 2)
-  );
+  inset-block-start: var(--titlebar-control-block-inset);
   inset-inline-start: var(--sidebar-toggle-inline-inset);
   z-index: var(--z-titlebar-control);
   -webkit-app-region: no-drag;
@@ -198,10 +195,7 @@ main {
    flex item at the start of the animation. */
 .right-panel-toggle {
   position: fixed;
-  inset-block-start: max(
-    0px,
-    calc((var(--topbar-height) - var(--titlebar-control-size)) / 2)
-  );
+  inset-block-start: var(--titlebar-control-block-inset);
   inset-inline-end: var(--panel-toggle-inline-inset);
   z-index: var(--z-titlebar-control);
   -webkit-app-region: no-drag;
