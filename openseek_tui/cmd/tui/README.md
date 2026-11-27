@@ -66,7 +66,7 @@ streams still allows interaction when a controlling terminal is available.
 If the terminal cannot be opened, the command reports the failure on stderr
 and exits nonzero. Use `openseek run` / `openseek serve` for headless work.
 
-From the source tree, `moon run cmd/openseek_tui` uses the same `moonx`
+From the TUI module root, `moon run .` uses the same `moonx`
 default, so it needs no engine build of its own; pass `--engine <path>` to try a
 local openseek build instead. The preflight refuses to start the UI until the
 engine is usable.

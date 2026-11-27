@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "moonbitlang/openseek_tui/cmd/openseek_tui"
+package "moonbitlang/openseek_tui"
 
 // Values
 

@@ -44,8 +44,8 @@ inspect *args:
 # command's, with absolute paths to this checkout.
 [no-cd]
 tui *args:
-    moon -C {{ justfile_directory() }} build . openseek_tui/cmd/openseek_tui --target native
-    {{ justfile_directory() }}/_build/native/debug/build/moonbitlang/openseek_tui/cmd/openseek_tui/openseek_tui.exe --engine {{ justfile_directory() }}/_build/native/debug/build/moonbitlang/openseek/openseek.exe {{ args }}
+    moon -C {{ justfile_directory() }} build . openseek_tui --target native
+    {{ justfile_directory() }}/_build/native/debug/build/moonbitlang/openseek_tui/openseek_tui.exe --engine {{ justfile_directory() }}/_build/native/debug/build/moonbitlang/openseek/openseek.exe {{ args }}
 
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
 test: test-moon test-cram test-app-server test-turn-finish test-subagents test-workflows
