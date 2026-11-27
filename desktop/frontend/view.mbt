@@ -2273,6 +2273,16 @@ fn view(
           if model.cloud_identity() is Some(_) {
             @html.button(
               class="panel-toggle",
+              title=shell_text(model.locale, SubagentTranscripts),
+              on_click=dispatch(OpenCloudSubagents(None)),
+              @icons.icon(@icons.icon_organization),
+            )
+          } else {
+            @html.nothing
+          },
+          if model.cloud_identity() is Some(_) {
+            @html.button(
+              class="panel-toggle",
               title=shell_text(model.locale, ExportConversation),
               on_click=dispatch(OpenCloudExport),
               icon(icon_chat_export),

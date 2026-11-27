@@ -853,12 +853,19 @@ fn main {
       terminal_state,
       terminal_emit,
     )
-    let transcript_actions = (slot : String) => {
+    let transcript_actions = (source : TranscriptSlot) => {
+      let slot = source.key()
       (
         {
           open: emit.map(path => TranscriptLinkOpened(slot~, path~)),
           jump: emit.map(target => TranscriptLocationOpened(slot~, target)),
-          open_session: emit.map(session => OpenSessionHere(session)),
+          open_session: emit.map(child => {
+            match source {
+              HostTranscript(channel~, ..) => OpenSession(channel, child)
+              CloudTranscriptSlot(owner) =>
+                OpenCloudTranscriptChild(owner, child)
+            }
+          }),
           fork: emit.map(through => ForkRequested(slot~, through~)),
           edit_user: emit.map(request => {
             let (sequence, draft) = request
@@ -901,7 +908,7 @@ fn main {
             Some(slot) =>
               @transcript_component.component(
                 state.map(model => model.transcript_input()),
-                transcript_actions(slot.key()),
+                transcript_actions(slot),
               )
           }
         },
@@ -1243,8 +1250,14 @@ fn main {
         preview_file: path => emit(PreviewFile(path)),
       },
     )
-    shell.map2(context_menu, (shell, menu) => {
-      @rui.theme(style=["display:contents"], @html.fragment([shell, menu]))
+    let subagents = state
+      .map(model => (model.locale, model.cloud_subagents))
+      .map(input => cloud_subagents_dialog(emit, input.0, input.1))
+    @rabbita.Val::map3(shell, context_menu, subagents, (shell, menu, dialog) => {
+      @rui.theme(
+        style=["display:contents"],
+        @html.fragment([shell, menu, dialog]),
+      )
     })
   })
   app.mount("app")

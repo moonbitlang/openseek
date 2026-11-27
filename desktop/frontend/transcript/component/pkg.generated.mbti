@@ -21,6 +21,8 @@ pub fn preserve_prepend_scroll() -> @cmd.Cmd
 
 pub fn program_calls_view(locale? : @i18n.Locale, @json.Json?, String, origin? : @transcript.TraceOrigin) -> @html.Html?
 
+pub fn saved_items_view(@i18n.Locale, Array[@transcript.TranscriptItem], (String) -> @cmd.Cmd, preview~ : Int32?, toggle~ : (Int32) -> @cmd.Cmd) -> @html.Html
+
 pub fn scroll_to_latest() -> @cmd.Cmd
 
 // Errors

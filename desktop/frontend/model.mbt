@@ -1306,6 +1306,8 @@ priv struct Model {
   api_setup_open : Bool
   session_search : @session_search.Model
   session_import_dialog : @session_import.Model
+  cloud_subagents : CloudSubagents?
+  cloud_subagents_generation : Int32
   export_dialog : @export_dialog.Model
   file_share_dialog : @export_dialog.Model
   downloads : @downloads.Model
@@ -2003,6 +2005,15 @@ priv enum Msg {
   )
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
+  OpenCloudTranscriptChild(@interop.ConversationIdentity, String)
+  OpenCloudSubagents(String?)
+  CloudSubagentsLoaded(
+    Int32,
+    Result[CloudSubagentContent, @cloud_client.Failure],
+  )
+  CloudSubagentMarkdown(Int32)
+  CloudSubagentLink(String)
+  CloseCloudSubagents
   OpenCloudExport
   OpenSessionImport(@interop.ChannelId, @common.Uri)
   OpenCloudImport
@@ -2894,6 +2905,8 @@ fn initial_model(
     api_setup_open: false,
     session_search: @session_search.Model(),
     session_import_dialog: @session_import.Model(),
+    cloud_subagents: None,
+    cloud_subagents_generation: 0,
     export_dialog: @export_dialog.Model(),
     file_share_dialog: @export_dialog.Model(id_prefix="file-share"),
     downloads: @downloads.Model(),

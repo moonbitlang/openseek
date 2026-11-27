@@ -1444,3 +1444,26 @@ pub fn program_calls_view(
     ]),
   )
 }
+
+///|
+/// A saved transcript in a read-only surface, using the same message and tool
+/// views as the main conversation without its edit, fork or subrun actions.
+pub fn saved_items_view(
+  locale : @i18n.Locale,
+  items : Array[@transcript.TranscriptItem],
+  on_open : (String) -> @cmd.Cmd,
+  preview~ : Int32?,
+  toggle~ : (Int32) -> @cmd.Cmd,
+) -> @html.Html {
+  @html.div(
+    class="stream",
+    [
+      for index, item in items => {
+        transcript_item_view(locale~, item, on_open, user_markdown={
+          previewing: preview == Some(index),
+          toggle: toggle(index),
+        })
+      }
+    ],
+  )
+}
