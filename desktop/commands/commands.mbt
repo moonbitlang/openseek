@@ -3,17 +3,11 @@
 // handler; no dynamic request or response union sits between them.
 
 ///|
-pub const ExtensionId = "openseek-desktop"
+const ExtensionId = "openseek-desktop"
 
 ///|
 /// Application menu event, not a bridge endpoint.
 pub const CloseFocusedMenuCommand = "app.close_focused"
-
-///|
-pub let extension_contract : @proton_contract.ExtensionContract = @proton_contract.extension(
-  id=ExtensionId,
-  js_namespace="openseek",
-)
 
 ///|
 /// A target-neutral command identity. The type parameters prevent a caller
@@ -25,13 +19,6 @@ struct Command[Payload, Reply] {
 ///|
 fn[Payload, Reply] Command::Command(name : String) -> Command[Payload, Reply] {
   { descriptor: extension_contract.command(name), }
-}
-
-///|
-pub fn[Payload, Reply] Command::descriptor(
-  self : Command[Payload, Reply],
-) -> @proton_contract.Command[Payload, Reply] {
-  self.descriptor
 }
 
 ///|
@@ -780,11 +767,6 @@ pub let host_reveal_path : Command[
   @protocol.OpenPathPayload,
   @protocol.RevealPathReply,
 ] = Command("host.reveal_path")
-
-///|
-pub let host_connect : Command[@protocol.EmptyPayload, @protocol.EmptyReply] = Command(
-  "host.connect",
-)
 
 ///|
 pub let shell_open_external : Command[
