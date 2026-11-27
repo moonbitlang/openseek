@@ -81,12 +81,12 @@ final class NoRedirect: NSObject, URLSessionTaskDelegate {
     init(window: UIWindow) { self.window = window }
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor { window }
 
-    func start(completion: @escaping (Result<String, Error>) -> Void) {
+    func start(method: SignInMethod?, completion: @escaping (Result<String, Error>) -> Void) {
         self.completion = completion
         do {
             let listener = try CallbackListener(flow: flow)
             self.listener = listener
-            listener.start(ready: { [weak self] port in self?.open(port: port) }, failed: { [weak self] error in self?.finish(.failure(error)) })
+            listener.start(ready: { [weak self] port in self?.open(port: port, method: method) }, failed: { [weak self] error in self?.finish(.failure(error)) })
             timeout = Task { [weak self] in
                 do { try await Task.sleep(for: .seconds(300)) } catch { return }
                 self?.finish(.failure(SignInError.timeout))
@@ -94,8 +94,8 @@ final class NoRedirect: NSObject, URLSessionTaskDelegate {
         } catch { finish(.failure(error)) }
     }
 
-    private func open(port: UInt16) {
-        let session = ASWebAuthenticationSession(url: flow.startURL(port: port), callback: .customScheme(flow.scheme)) { [weak self] url, error in
+    private func open(port: UInt16, method: SignInMethod?) {
+        let session = ASWebAuthenticationSession(url: flow.startURL(port: port, method: method), callback: .customScheme(flow.scheme)) { [weak self] url, error in
             Task { @MainActor [weak self] in
                 guard let self, completion != nil else { return }
                 listener?.stop(); timeout?.cancel()

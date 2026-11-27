@@ -27,10 +27,17 @@ def resource(path, url):
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     if path.suffix in (".js", ".mjs"):
         mime = "text/javascript"
+    data = path.read_bytes()
+    if path == browser / "index.html":
+        # Let the host restore the account before the frontend reads its store.
+        entry = b'<script type="module" src="/assets/frontend.js"></script>'
+        if data.count(entry) != 1:
+            raise ValueError("Cannot identify the packaged console entry module")
+        data = data.replace(entry, b'<link id="seekmoon-entry" rel="modulepreload" href="/assets/frontend.js">')
     return {
         "WebResourceURL": url,
         "WebResourceMIMEType": mime,
-        "WebResourceData": path.read_bytes(),
+        "WebResourceData": data,
     }
 
 

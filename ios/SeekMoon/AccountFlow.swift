@@ -22,28 +22,37 @@ enum SignInError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .callback: return "The sign-in reply did not match this attempt. Please try again."
-        case .denied: return "Sign-in was declined."
-        case .unavailable: return "Unable to start system sign-in. Please try again."
-        case .timeout: return "Sign-in timed out. Please try again."
-        case .exchange(let status): return "The sign-in service returned HTTP \(status)."
-        case .account: return "The sign-in service did not return a valid SeekMoon account."
+        case .callback: return String(localized: "The sign-in reply did not match this attempt. Please try again.")
+        case .denied: return String(localized: "Sign-in was declined.")
+        case .unavailable: return String(localized: "Unable to start system sign-in. Please try again.")
+        case .timeout: return String(localized: "Sign-in timed out. Please try again.")
+        case .exchange(let status): return String(localized: "The sign-in service returned HTTP \(status).")
+        case .account: return String(localized: "The sign-in service did not return a valid SeekMoon account.")
         }
     }
 }
+
+enum SignInMethod { case email, github }
 
 struct AccountFlow {
     let state = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     let verifier = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0).map { String(format: "%02x", $0) }.joined() }
     let scheme: String
 
-    func startURL(port: UInt16) -> URL {
+    func startURL(port: UInt16, method: SignInMethod? = nil) -> URL {
         var parts = URLComponents(url: Console.origin.appending(path: "v2/auth/account/start"), resolvingAgainstBaseURL: false)!
         let challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64EncodedString()
             .replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "+", with: "-")
         parts.queryItems = [URLQueryItem(name: "state", value: state), URLQueryItem(name: "code_challenge", value: challenge),
                             URLQueryItem(name: "code_challenge_method", value: "S256"), URLQueryItem(name: "port", value: String(port))]
-        return parts.url!
+        guard let method else { return parts.url! }
+        // SeekMoon's hosted login page forwards this same local continuation
+        // after email verification or GitHub OAuth.
+        let path = method == .email ? "v2/auth/login" : "v2/auth/github"
+        return Console.origin.appending(path: path).appending(queryItems: [
+            URLQueryItem(name: "prompt", value: "select_account"),
+            URLQueryItem(name: "return_to", value: parts.percentEncodedPath + "?" + parts.percentEncodedQuery!)
+        ])
     }
 
     func browserReturn(target: String) -> URL? {

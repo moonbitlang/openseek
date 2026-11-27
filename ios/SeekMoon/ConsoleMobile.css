@@ -1,0 +1,296 @@
+/* Installed by the iPhone shell in its trusted console document. Keep the
+   document canvas intact so WebKit can extend it into both safe areas. */
+:root {
+    --ios-chat-canvas: light-dark(white, black);
+    --ios-dialog-dim: 50%;
+    --ios-glass: color-mix(in srgb, var(--color-bg-surface) 81%, transparent);
+    --ios-blur: saturate(155%) blur(18px);
+    --ios-edge: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
+    --ios-shadow: inset 0 1px 0 rgb(255 255 255 / 22%), 0 2px 8px rgb(0 0 0 / 8%);
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    :root {
+        --ios-glass: var(--color-bg-surface);
+        --ios-blur: none;
+        --ios-shadow: none;
+        --ios-edge: var(--color-text-muted);
+    }
+}
+:root[data-ios-opaque] {
+    --ios-glass: var(--color-bg-surface);
+    --ios-blur: none;
+    --ios-shadow: none;
+    --ios-edge: var(--color-text-muted);
+}
+
+.cloud-home-downloads, .sidebar-footer [data-ios-download] { display: none !important; }
+
+.app.sidebar-collapsed:has(.sidebar-toggle[data-ios-navigation]) {
+    --ios-navigation-size: max(36px, var(--titlebar-control-size));
+    --sidebar-toggle-reserved-width: calc(var(--sidebar-toggle-inline-inset) + var(--ios-navigation-size) + var(--sidebar-toggle-trailing-gap));
+}
+.sidebar-collapsed .sidebar-toggle[data-ios-navigation] {
+    --titlebar-control-size: var(--ios-navigation-size);
+}
+.sidebar-collapsed .sidebar-toggle[data-ios-navigation] > * { display: none; }
+/* Keep the web anchor measurable while UIKit draws its Liquid Glass button. */
+.sidebar-toggle[data-ios-native-menu] { opacity: 0 !important; }
+.sidebar-collapsed .sidebar-toggle[data-ios-navigation]::before {
+    content: ''; width: 20px; height: 11px;
+    background: linear-gradient(currentColor, currentColor) left top / 20px 2px no-repeat,
+                linear-gradient(currentColor, currentColor) left bottom / 13px 2px no-repeat;
+}
+.sidebar-collapsed .sidebar-toggle[data-ios-navigation]::after {
+    content: ''; position: absolute; width: max(100%, 44px); height: max(100%, 44px);
+}
+.sidebar-collapsed .sidebar-toggle[data-ios-navigation], .topbar button.panel-toggle, .right-panel-toggle,
+:is(#management-dialog, #skill-detail-dialog) [data-slot="dialog-close"] {
+    background: var(--ios-glass) !important;
+    border: 1px solid var(--ios-edge) !important;
+    border-radius: 100px !important;
+    box-shadow: var(--ios-shadow);
+    -webkit-backdrop-filter: var(--ios-blur);
+    backdrop-filter: var(--ios-blur);
+    color: var(--color-text-primary) !important;
+}
+main > .composer .composer-inner {
+    isolation: isolate;
+    background: transparent;
+    border-color: var(--ios-edge);
+    border-radius: 22px;
+    box-shadow: var(--ios-shadow);
+}
+/* Blur the backing only. Attachment and model menus keep their own anchors. */
+main > .composer .composer-inner::before {
+    content: '';
+    position: absolute; inset: 0; z-index: -1;
+    pointer-events: none;
+    background: var(--ios-glass);
+    border-radius: inherit;
+    -webkit-backdrop-filter: var(--ios-blur);
+    backdrop-filter: var(--ios-blur);
+}
+
+:is(#management-dialog, #skill-detail-dialog)[open] {
+    width: 100% !important; max-width: none !important;
+    height: 100% !important; max-height: 100% !important;
+    inset: 0 !important; margin: 0 !important; padding: 0 !important;
+    border: none; border-radius: 0 !important;
+    background: var(--color-bg-canvas) !important;
+    font-family: -apple-system, system-ui, sans-serif;
+}
+:is(#management-dialog, #skill-detail-dialog) [data-slot="dialog-header"] {
+    min-height: 56px; padding: 6px 16px !important; box-sizing: border-box;
+}
+:is(#management-dialog, #skill-detail-dialog) [data-slot="dialog-title"] {
+    font: 600 20px/1.2 -apple-system, system-ui, sans-serif !important;
+}
+:is(#management-dialog, #skill-detail-dialog) [data-slot="dialog-close"] {
+    min-width: 44px; min-height: 44px; align-self: center; margin: 4px 10px !important;
+}
+#management-dialog .settings-tabs {
+    --settings-columns: minmax(0, 1fr);
+    --settings-rows: auto minmax(0, 1fr);
+}
+#management-dialog .settings-tab-list {
+    flex-flow: row nowrap !important; justify-content: flex-start; overflow-x: auto;
+    padding: 4px 12px 8px !important; gap: 4px !important;
+}
+#management-dialog .settings-tab-list .settings-tab { min-height: 44px !important; border-radius: 14px; }
+#management-dialog .settings-tab[aria-selected="true"] {
+    background: var(--ios-glass) !important; box-shadow: inset 0 0 0 1px var(--ios-edge), var(--ios-shadow);
+}
+#management-dialog .settings-tab-panel { padding: 10px 14px 18px; }
+#management-dialog .form-section-body, #management-dialog .skill-row { border-radius: 16px; }
+#management-dialog #settings-panel-account .form-row-controls:has(.console-avatar) {
+    align-items: center; flex-wrap: wrap; gap: 12px;
+}
+#management-dialog #settings-panel-account .console-avatar {
+    width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
+}
+#management-dialog .skills-page { padding: 8px 16px 0; gap: 10px !important; }
+#management-dialog .skills-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+#management-dialog .skills-toolbar { gap: 8px; align-items: stretch; }
+#management-dialog .skills-toolbar .search-field {
+    min-width: 0; flex: 1 1 10em; min-height: 44px; border-radius: 22px; padding-block: 0;
+}
+#management-dialog #skills-search { font-size: max(16px, 1em); min-height: 44px; background: transparent; border: 0; }
+#management-dialog .skills-toolbar [role="tablist"] {
+    flex: 1 1 100%; gap: 3px !important; padding: 3px !important;
+    background: var(--color-bg-subtle); border-radius: 16px;
+}
+#management-dialog .skills-toolbar .skills-tab {
+    flex: 1 !important; justify-content: center; border-radius: 13px;
+}
+#management-dialog .skills-tab[aria-selected="true"] {
+    background: var(--ios-glass) !important; box-shadow: inset 0 0 0 1px var(--ios-edge), var(--ios-shadow);
+}
+#management-dialog .skills-toolbar .skills-tab::after { display: none; }
+#management-dialog :is(.skill-summary, .skills-tab, .skills-library-select button) { min-height: 44px; }
+@media (max-height: 480px) {
+    #management-dialog .skills-toolbar [role="tablist"] {
+        flex-basis: 10em;
+    }
+}
+#skill-detail-dialog .skill-detail-page { min-width: 0; overflow-wrap: anywhere; }
+
+/* The native list header contains the two live catalog tabs. The detail
+   header takes one row and leaves the whole document available for reading. */
+html[data-ios-skills-bar="list"] #management-dialog,
+html[data-ios-skills-bar="detail"] #skill-detail-dialog {
+    --color-bg-canvas: var(--ios-chat-canvas);
+    grid-template-rows: var(--ios-skills-header, 56px) minmax(0, 1fr);
+    border: 0 !important;
+}
+html[data-ios-skills-bar="list"] #management-dialog { --ios-skills-header: 104px; }
+html[data-ios-skills-bar="list"] #management-dialog :is([data-slot="dialog-header"], form:has(> [data-slot="dialog-close"])),
+html[data-ios-skills-bar="detail"] #skill-detail-dialog :is([data-slot="dialog-header"], form:has(> [data-slot="dialog-close"])) {
+    visibility: hidden;
+}
+html[data-ios-skills-bar="list"] #management-dialog :is(.skills-refresh, .skills-toolbar [role="tablist"]) { display: none !important; }
+
+#management-dialog .skills-library-select { flex: 1 1 100%; max-width: none; }
+#management-dialog .skills-toolbar > .setting-select { flex: 0 1 auto; width: auto; }
+#management-dialog .skills-page :is(.search-field, .setting-select-button, button[role="combobox"], .skills-results-meta button, .skill-action, .skill-menu-trigger),
+#skill-detail-dialog :is(.skill-action, .skill-copy-button, .skill-menu-trigger) {
+    min-height: 44px; border-radius: 22px !important;
+    border: 1px solid var(--ios-edge) !important; box-shadow: var(--ios-shadow);
+    background: var(--ios-glass) !important; color: var(--color-text-primary);
+    -webkit-backdrop-filter: var(--ios-blur); backdrop-filter: var(--ios-blur);
+}
+#management-dialog .skills-page :is(.skill-menu-trigger, button[role="switch"]),
+#skill-detail-dialog :is(.skill-menu-trigger, button[role="switch"]) { min-width: 44px; }
+#management-dialog .skills-page .skill-installed-actions,
+#skill-detail-dialog .skill-installed-actions { grid-template-columns: auto auto; }
+#management-dialog .skills-page .menu-surface,
+#skill-detail-dialog .menu-surface {
+    background: var(--ios-glass); border: 1px solid var(--ios-edge); border-radius: 16px;
+    box-shadow: var(--ios-shadow), var(--shadow-surface);
+    -webkit-backdrop-filter: var(--ios-blur); backdrop-filter: var(--ios-blur);
+}
+#management-dialog .skills-page .menu-surface button,
+#skill-detail-dialog .menu-surface button { min-height: 44px; }
+#management-dialog .skills-grid .skill-row, #skill-detail-dialog .skill-detail-header {
+    padding: 14px 16px; border-radius: 20px;
+    border: 1px solid var(--ios-edge);
+    background: var(--ios-glass); box-shadow: var(--ios-shadow);
+}
+#management-dialog .skill-desc { font-size: 1rem; line-height: 1.45; }
+#skill-detail-dialog .skill-detail-header > .skill-header { display: flex; flex-wrap: wrap; }
+#skill-detail-dialog .skill-file-bar { padding-block: 8px; }
+#skill-detail-dialog .dialog-scroll-body { padding: 10px 16px 20px; }
+@media (max-height: 480px) {
+    #management-dialog .skills-page { overflow: auto; grid-template-rows: auto auto auto !important; align-content: start; }
+    #management-dialog :is(.skills-results-region, .skills-results) { display: block; overflow: visible; }
+}
+
+/* Only an empty transcript gets the greeting. The hosted second line can
+   contain the workspace picker, so keep its live contents and focus behavior. */
+#transcript .stream > .empty:has(> .empty-badge):has(> .empty-title) {
+    min-height: 100cqh; gap: 6px; padding: 12px 0;
+    font: 400 max(18px, 1.2rem)/1.4 -apple-system, system-ui, sans-serif;
+    color: var(--color-text-primary);
+}
+#transcript:lang(zh) { --ios-greeting: "欢迎回来"; }
+#transcript:is(:lang(zh-Hant), :lang(zh-TW), :lang(zh-HK)) { --ios-greeting: "歡迎回來"; }
+#transcript:lang(es) { --ios-greeting: "Qué gusto verte"; }
+#transcript:lang(ja) { --ios-greeting: "おかえりなさい"; }
+#transcript .stream > .empty:has(> .empty-badge):has(> .empty-title)::before { content: var(--ios-greeting, "Welcome back"); }
+#transcript .stream > .empty:has(> .empty-title) > .empty-badge { display: none; }
+#transcript .stream > .empty:has(> .empty-badge) > .empty-title {
+    font: inherit; color: var(--color-text-secondary); text-wrap: balance;
+}
+
+#session-import-dialog .session-import-actions :is(button, input) { min-height: 44px; }
+#session-import-dialog .session-import-actions input { font-size: max(16px, 1em); }
+
+/* Match the sidebar's system background; keep raised surfaces and message
+   bubbles on their own palette. The document also supplies WebKit's under-page fill. */
+main:has(> :is(#transcript, .transcript, .composer)) { --color-bg-canvas: var(--ios-chat-canvas); }
+html:has([data-ios-chat-header]), html:has([data-ios-chat-header]) body { background-color: var(--ios-chat-canvas); }
+html[data-ios-chat-dialog] dialog:modal::backdrop { background: rgb(0 0 0 / var(--ios-dialog-dim, 50%)); }
+html[data-ios-chat-dialog]:not([data-ios-glass-composer]) {
+    background-color: color-mix(in srgb, black var(--ios-dialog-dim), var(--ios-chat-canvas));
+}
+
+/* Reserve the navigation button's row above the transcript. UIKit offers
+   the available chat actions on a long press of that same button. */
+.content[data-ios-chat-header] > main > .topbar,
+.content[data-ios-chat-header] > .right-panel-toggle { visibility: hidden; }
+
+/* The chat panes own scrolling, including when WebKit reveals the caret. */
+html[data-ios-glass-composer], html[data-ios-glass-composer] body { height: 100% !important; overflow: clip !important; }
+html[data-ios-glass-composer]:not([data-ios-chat-dialog]) #app { position: absolute; inset: 0 0 auto; height: var(--ios-chat-height, 100%) !important; }
+
+/* WebKit paints the editor contents over a UIKit glass view. Preserve every
+   interactive child, including the editable text, file picker and popovers. */
+main > .composer .composer-inner::before { color: var(--color-bg-canvas); }
+html[data-ios-glass-composer],
+html[data-ios-glass-composer] :is(body, #app, .app, .content, main, main > .composer, main > .composer .composer-inner) {
+    background-color: transparent !important;
+}
+html[data-ios-glass-composer] main > .composer .composer-inner {
+    border-color: transparent;
+    box-shadow: none;
+}
+html[data-ios-glass-composer] main > .composer .composer-inner::before { content: none; }
+main > .composer .composer-input > textarea#task {
+    background: transparent; box-shadow: none; border-color: transparent; font-size: max(16px, var(--composer-input-font-size));
+}
+main > .composer #composer-followup-select {
+    min-height: 44px; background: transparent; border: 0; box-shadow: none;
+    border-radius: 22px; -webkit-tap-highlight-color: transparent;
+}
+main > .composer #composer-followup-select:is(:active, [aria-expanded="true"]) { color: var(--color-text-primary); }
+main > .composer #composer-followup-select:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+
+/* This extra flex item is presentation only. The hosted renderer can still
+   replace its keyed children, and owns the original draft through a rejection. */
+#stream[data-ios-outgoing] > .empty { display: none; }
+#stream[data-ios-outgoing]::after {
+    content: attr(data-ios-outgoing); align-self: flex-end; max-width: 85%;
+    margin-top: 8px; padding: 13px 17px; border-radius: var(--radius-surface);
+    background: var(--color-bg-content); color: var(--color-text-primary);
+    font-size: var(--font-size-md); line-height: var(--line-height-relaxed);
+    white-space: pre-wrap; overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: no-preference) {
+    #stream[data-ios-outgoing]::after { animation: riseIn 160ms ease-out; }
+}
+#stream .msg.user[data-ios-admitted] { animation: none; }
+.composer-inner[data-ios-sending] .composer-input:not(:focus-within) {
+    position: relative;
+}
+.composer-inner[data-ios-sending] .composer-input:not(:focus-within) > #task {
+    opacity: 0; height: var(--composer-control-size) !important; min-height: 0;
+}
+.composer-inner[data-ios-sending] .composer-input:not(:focus-within) > .mention-tray { display: none; }
+.composer-inner[data-ios-sending] .composer-input:not(:focus-within)::after {
+    content: var(--ios-sending, "Sending…"); pointer-events: none;
+    position: absolute; inset: 0; display: flex; align-items: center; padding-inline: var(--space-2);
+    color: var(--color-text-muted); font-size: var(--composer-input-font-size);
+}
+.composer:lang(zh) { --ios-sending: "正在发送…"; }
+.composer:is(:lang(zh-Hant), :lang(zh-TW), :lang(zh-HK)) { --ios-sending: "正在傳送…"; }
+.composer:lang(ja) { --ios-sending: "送信中…"; }
+.composer:lang(es) { --ios-sending: "Enviando…"; }
+
+/* Hosted-only settings such as the engine can have text fields and secrets.
+   Keep their editors in WebKit and give forms room to wrap on iPhone. */
+#management-dialog .settings-tab-panel .form-row {
+    flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 14px;
+}
+#management-dialog .settings-tab-panel .form-row :is(input:not([type=checkbox]), textarea) { font-size: max(16px, 1em); }
+#management-dialog .form-row-controls { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+
+/* The 56pt hosted header reserves the native toolbar's space. Keep its
+   original controls mounted so selection and dismissal use the same actions. */
+html[data-ios-settings-bar] #management-dialog :is([data-slot="dialog-header"], [data-slot="dialog-close"]) {
+    visibility: hidden;
+}
+html[data-ios-settings-bar] #management-dialog .settings-tab-list { display: none !important; }
+html[data-ios-settings-bar] #management-dialog .settings-tabs { --settings-rows: minmax(0,1fr); }
+html[data-ios-settings-bar] #management-dialog .form-layout > h2:first-child { display: none; }
+#settings-panel-archived-chats .archived-chat-row { flex-wrap: wrap; row-gap: 8px; }
+#settings-panel-archived-chats .archived-chat-actions button { min-height: 44px; }

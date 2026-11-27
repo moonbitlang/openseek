@@ -4,7 +4,7 @@
 	classes = {};
 	objectVersion = 77;
 	objects = {
-		100000000000000000000001 = {isa = PBXProject; buildConfigurationList = 100000000000000000000011; developmentRegion = en; knownRegions = (en, Base); mainGroup = 100000000000000000000002; productRefGroup = 100000000000000000000003; projectDirPath = ""; projectRoot = ""; preferredProjectObjectVersion = 77; targets = (100000000000000000000004, 100000000000000000000005, 100000000000000000000041); };
+		100000000000000000000001 = {isa = PBXProject; buildConfigurationList = 100000000000000000000011; developmentRegion = en; knownRegions = (en, Base, "zh-Hans"); mainGroup = 100000000000000000000002; productRefGroup = 100000000000000000000003; projectDirPath = ""; projectRoot = ""; preferredProjectObjectVersion = 77; targets = (100000000000000000000004, 100000000000000000000005, 100000000000000000000041); };
 		100000000000000000000002 = {isa = PBXGroup; children = (100000000000000000000006, 100000000000000000000007, 100000000000000000000042, 100000000000000000000003); sourceTree = "<group>"; };
 		100000000000000000000003 = {isa = PBXGroup; name = Products; children = (100000000000000000000008, 100000000000000000000009, 100000000000000000000043); sourceTree = "<group>"; };
 		100000000000000000000004 = {isa = PBXNativeTarget; buildConfigurationList = 100000000000000000000012; buildPhases = (100000000000000000000021, 100000000000000000000022, 100000000000000000000050); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (100000000000000000000006); name = SeekMoon; productName = SeekMoon; productReference = 100000000000000000000008; productType = "com.apple.product-type.application"; };
