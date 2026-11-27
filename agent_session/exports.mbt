@@ -40,7 +40,7 @@ pub fn ToolResult::brief(self : ToolResult) -> String? {
 /// in `Image(image)` parts. Production callers name `Content` instead (see
 /// `content.mbt`); tests of other packages reach the protocol image
 /// constructors as `@agent_session.Image::from_bytes` / `from_base64`:
-/// `agent` (`read_image_test.mbt`, `images_test.mbt`, `ptc_test.mbt`), `viz`
+/// `agent` (`image_test.mbt`, `images_test.mbt`, `ptc_test.mbt`), `viz`
 /// (`viz_test.mbt`), `inspect` (`main_wbtest.mbt`),
 /// `internal/openseek/serve` (`state_wbtest.mbt`), and
 /// `agent_session/store` (`images_test.mbt`, `images_realworld_test.mbt`,

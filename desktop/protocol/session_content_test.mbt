@@ -17,7 +17,7 @@ test "session message content preserves blocks and accepts legacy strings" {
           "content": content,
           "tool_calls": [],
           "tool_call_id": "call-one",
-          "tool_name": "read_image",
+          "tool_name": "image",
           "is_error": false,
         },
       }

@@ -9,7 +9,7 @@ pub struct CallResult {
   /// text.
   data : Json?
   /// Files the host saved the tool's images in. Show one to the model by
-  /// passing its path to `@openseek_tools.call("read_image", { "path": path })`.
+  /// passing its path to `@openseek_tools.call("image", { "path": path })`.
   images : Array[String]
 }
 

@@ -28,7 +28,7 @@ async test "realworld inline user and tool images are recognized" {
     [
       ChatMessage(User, content=[Text(prompt)]),
       ChatMessage(Assistant, content=[], tool_calls=[
-        ToolCall(id="call-image", name="read_image", arguments="{}"),
+        ToolCall(id="call-image", name="image", arguments="{}"),
       ]),
       ChatMessage(
         Tool("call-image"),

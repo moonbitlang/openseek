@@ -7,9 +7,7 @@ async test "background PTC images survive source removal job completion repeat r
     @async.with_timeout(30000, () => {
       @async.with_task_group(group => {
         @fs.write_binary("\{ws}/picture", bytes)
-        let tools = @agent_tool.Tools([
-          @read_image.definition(workspace_root=ws),
-        ])
+        let tools = @agent_tool.Tools([@image.definition(workspace_root=ws)])
         tools.set_image_input_supported(true)
         let service = @ptc.Service::start(group, tools, image_directory=() => {
           Some(ws)
@@ -33,7 +31,7 @@ async test "background PTC images survive source removal job completion repeat r
             #|---
             #|async fn main {
             #|  @async.sleep(150)
-            #|  let result = @tools.call("read_image", { "path": "picture" })
+            #|  let result = @tools.call("image", { "path": "picture" })
             #|  if result.is_error { fail(result.content) }
             #|}
           ),
@@ -63,7 +61,7 @@ async test "background PTC images survive source removal job completion repeat r
         retained = path
       })
     })
-    let tool = @read_image.definition(workspace_root=ws)
+    let tool = @image.definition(workspace_root=ws)
     let restored = dispatch(tool, { "path": retained })
     assert_true(restored.images is [saved] && saved == image)
   })
@@ -80,7 +78,7 @@ async test "foreground PTC retires image files and trace paths on success failur
           @fs.write_binary("\{ws}/picture", bytes)
           let ready : @async.Queue[Unit] = Queue(kind=Unbounded)
           let tools = @agent_tool.Tools([
-            @read_image.definition(workspace_root=ws),
+            @image.definition(workspace_root=ws),
             AgentToolDefinition(
               name="ready",
               description="signal completed image capture",
@@ -122,7 +120,7 @@ async test "foreground PTC retires image files and trace paths on success failur
             $|import { "moonbitlang/openseek_tools@0.4.2" @tools, "moonbitlang/core/async" }
             $|---
             $|async fn main {
-            $|  let result = @tools.call("read_image", { "path": "picture" })
+            $|  let result = @tools.call("image", { "path": "picture" })
             $|  if result.is_error { fail(result.content) }
             $|  ignore(@tools.call("ready", {}))
             $|  \{ending}

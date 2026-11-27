@@ -525,7 +525,7 @@ pub async fn discover(
 ///|
 /// Proxy a tool call to the MCP server and map the result into a tool action:
 /// the rendered text as content, image content as image input (the same way
-/// `read_image` returns it), and any `structuredContent` as data.
+/// `image` returns it), and any `structuredContent` as data.
 /// A JSON-RPC / transport failure, and a call the server does not answer
 /// within `timeout_ms`, becomes an error response; a tool-level failure is
 /// surfaced via `is_error`.

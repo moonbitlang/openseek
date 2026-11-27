@@ -65,8 +65,8 @@ test('minimal images open by default and preserve manual collapse across updates
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture image previews' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
-      { id: 'picture', name: 'read_image', arguments: '{"path":"PARAMETER_SENTINEL.png"}' },
-      { id: 'missing', name: 'read_image', arguments: '{}' },
+      { id: 'picture', name: 'image', arguments: '{"path":"PARAMETER_SENTINEL.png"}' },
+      { id: 'missing', name: 'image', arguments: '{}' },
       { id: 'ptc', name: 'mbtx', arguments: '{"description":"Inspect generated images"}' },
     ] } } },
   ];
@@ -78,7 +78,7 @@ test('minimal images open by default and preserve manual collapse across updates
   await expect(rows).toHaveCount(3);
   await expect(stream.locator('.minimal-image-call')).toHaveCount(0);
   app.append('tool_result', {
-    tool_call_id: 'picture', tool_name: 'read_image', brief: 'read_image preview.png', is_error: false,
+    tool_call_id: 'picture', tool_name: 'image', brief: 'image preview.png', is_error: false,
     content: [{ type: 'text', text: 'OUTPUT_SENTINEL' }, image, image],
   });
   const preview = rows.first().locator('.minimal-image-call');
@@ -91,7 +91,7 @@ test('minimal images open by default and preserve manual collapse across updates
   await page.keyboard.press('Enter');
   await expect(preview.locator('img').first()).toBeHidden();
   app.append('tool_result', {
-    tool_call_id: 'missing', tool_name: 'read_image', brief: 'Cannot read missing.png', is_error: true,
+    tool_call_id: 'missing', tool_name: 'image', brief: 'Cannot read missing.png', is_error: true,
     content: 'OUTPUT_SENTINEL',
   });
   await expect(rows.nth(1).locator('.tool-status.failed')).toHaveCount(0);
@@ -101,7 +101,7 @@ test('minimal images open by default and preserve manual collapse across updates
     tool_call_id: 'ptc', tool_name: 'mbtx', brief: 'mbtx (exit=0)', is_error: false,
     content: [image],
     data: { ptc_calls: [{
-      name: 'read_image', arguments: { path: 'preview.png' }, status: 'done',
+      name: 'image', arguments: { path: 'preview.png' }, status: 'done',
       result: { version: 1, content: 'OUTPUT_SENTINEL', is_error: false },
     }] },
   });
@@ -142,10 +142,10 @@ for (const retired of [false, true]) test(`minimal image collapse survives prece
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture stable image rows' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
       { id: 'earlier', name: 'mbtx', arguments: '{"description":"Earlier script"}' },
-      { id: 'picture', name: 'read_image', arguments: '{}' },
+      { id: 'picture', name: 'image', arguments: '{}' },
     ] } } },
     { sequence: 3, item: { kind: 'tool_result', payload: {
-      tool_call_id: 'picture', tool_name: 'read_image', brief: 'read_image later.png', is_error: false,
+      tool_call_id: 'picture', tool_name: 'image', brief: 'image later.png', is_error: false,
       content: [{ type: 'image', media_type: 'image/png', data: png }],
     } } },
   ];
@@ -164,11 +164,11 @@ for (const retired of [false, true]) test(`minimal image collapse survives prece
   app.append('tool_result', {
     tool_call_id: 'earlier', tool_name: 'mbtx', content: '', is_error: false,
     data: { ptc_calls: [{
-      name: 'read_image', arguments: { path: 'earlier.png' }, status: 'done',
+      name: 'image', arguments: { path: 'earlier.png' }, status: 'done',
       result: { version: 1, content: 'Earlier image metadata', is_error: false },
     }] },
   });
-  await expect(page.locator('.minimal-call-caption')).toHaveText(['Earlier script', 'read_image', 'read_image later.png']);
+  await expect(page.locator('.minimal-call-caption')).toHaveText(['Earlier script', 'image', 'image later.png']);
   await expect(preview).not.toHaveAttribute('open', '');
   expect(await original.evaluate(node => node.isConnected)).toBe(true);
   await expect(preview.locator('img')).toBeHidden();

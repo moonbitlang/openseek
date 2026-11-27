@@ -1,15 +1,13 @@
 ///|
-async test "read_image retains bytes independently of the source and detects extension-less formats" {
-  let root = @fs.tmpdir(prefix="openseek-read-image-")
+async test "image retains bytes independently of the source and detects extension-less formats" {
+  let root = @fs.tmpdir(prefix="openseek-image-")
   defer @fs.remove(root, recursive=true)
   let bytes = @fs.read_binary("deepseek/client/testdata/two-colors.png")
   @fs.write_binary("\{root}/picture", bytes)
-  let tools = @agent_tool.Tools([@read_image.definition(workspace_root=root)])
+  let tools = @agent_tool.Tools([@image.definition(workspace_root=root)])
   tools.set_image_input_supported(true)
   let action = @agent_tool.execute_tool_call(
-    @agent_tool.AgentToolCall::from_arguments("read_image", {
-      "path": "picture",
-    }),
+    @agent_tool.AgentToolCall::from_arguments("image", { "path": "picture" }),
     tools,
   )
   guard action is Respond(output) else { fail("expected image response") }
@@ -22,9 +20,7 @@ async test "read_image retains bytes independently of the source and detects ext
   assert_false(output.content.contains("base64"))
   tools.set_image_input_supported(false)
   let blocked = @agent_tool.execute_tool_call(
-    @agent_tool.AgentToolCall::from_arguments("read_image", {
-      "path": "picture",
-    }),
+    @agent_tool.AgentToolCall::from_arguments("image", { "path": "picture" }),
     tools,
   )
   guard blocked is Respond(output) else { fail("expected refusal") }
@@ -34,7 +30,7 @@ async test "read_image retains bytes independently of the source and detects ext
 }
 
 ///|
-async test "read_image reports missing paths directories invalid bytes and oversize files" {
+async test "image reports missing paths directories invalid bytes and oversize files" {
   let root = @fs.tmpdir(prefix="openseek-image-errors-")
   defer @fs.remove(root, recursive=true)
   @fs.write_text("\{root}/invalid.png", "not an image")
@@ -42,11 +38,11 @@ async test "read_image reports missing paths directories invalid bytes and overs
     "\{root}/large.png",
     Bytes::make(20 * 1024 * 1024 + 1, b'\x00'),
   )
-  let tools = @agent_tool.Tools([@read_image.definition(workspace_root=root)])
+  let tools = @agent_tool.Tools([@image.definition(workspace_root=root)])
   tools.set_image_input_supported(true)
   for path in ["missing.png", ".", "invalid.png", "large.png", " "] {
     let action = @agent_tool.execute_tool_call(
-      @agent_tool.AgentToolCall::from_arguments("read_image", { "path": path }),
+      @agent_tool.AgentToolCall::from_arguments("image", { "path": path }),
       tools,
     )
     guard action is Respond(output) else { fail("expected failure response") }

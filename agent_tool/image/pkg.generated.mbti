@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "moonbitlang/openseek/agent_tool/read_image"
+package "moonbitlang/openseek/agent_tool/image"
 
 import {
   "moonbitlang/openseek/agent_tool",

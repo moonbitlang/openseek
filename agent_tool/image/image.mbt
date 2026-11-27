@@ -2,7 +2,7 @@
 /// Read one local raster image relative to the host's workspace.
 pub fn definition(workspace_root~ : String) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
-    name="read_image",
+    name="image",
     description="Read a local PNG, JPEG, GIF, or WebP image (at most \{@protocol.MaxImageBytes / 1024 / 1024} MiB) and return the image itself. Paths are relative to the workspace unless absolute. Format is detected from bytes, including extension-less files. Requires an image-capable model route. PTC calls attach images automatically; do not print base64.",
     schema=JsonSchema({
       "type": "object",
@@ -16,7 +16,7 @@ pub fn definition(workspace_root~ : String) -> @agent_tool.AgentToolDefinition {
     execute=Async(arguments => {
       guard arguments is { "path": String(path), .. } && !path.is_blank() else {
         return @agent_tool.respond(
-          "error: read_image requires a non-blank path",
+          "error: image requires a non-blank path",
           is_error=true,
         )
       }
@@ -25,7 +25,7 @@ pub fn definition(workspace_root~ : String) -> @agent_tool.AgentToolDefinition {
       @agent_tool.respond(
         "Image: \{resolved}\n\{image.media_type}, \{image.bytes.length()} bytes",
         images=[image],
-        brief="read_image \{@agent_tool.brief_basename(path)}",
+        brief="image \{@agent_tool.brief_basename(path)}",
         data={
           "path": resolved,
           "media_type": image.media_type,

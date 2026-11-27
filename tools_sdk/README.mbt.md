@@ -155,7 +155,7 @@ from `search`, and sends nothing.
 
 A reply is JSON, so a tool's images do not travel in it: the host saves each
 in a file, names the file in `content`, and lists the paths in `images`. Pass
-a path to `@openseek_tools.call("read_image", { "path": path })` to show the
+a path to `@openseek_tools.call("image", { "path": path })` to show the
 image to the model.
 
 Both use the v1 result envelope. `call` sends

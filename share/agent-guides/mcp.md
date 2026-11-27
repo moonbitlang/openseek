@@ -50,7 +50,7 @@ content blocks as text. A tool can return either or both. `data` is absent
 when the server supplies no structured result or it exceeds the reply budget.
 Use `content` for text results. For a read that needs structured data, narrow
 an oversized query or reduce its page size. Images are saved as files listed
-in `images`; pass a path to `@openseek_tools.call("read_image", { "path": path })`
+in `images`; pass a path to `@openseek_tools.call("image", { "path": path })`
 to view one. To apply a known operation across catalog entries, such as the
 same check on every server, iterate over `page.tools` in one script. Each
 record has `server`, `name`, `description`, `input_schema`, and `output_schema`.

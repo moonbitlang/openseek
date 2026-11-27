@@ -50,7 +50,7 @@ supported_targets = "+wasm+native"
 import {
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/agent_tool/job_output",
-  "moonbitlang/openseek/agent_tool/read_image",
+  "moonbitlang/openseek/agent_tool/image",
   "moonbitlang/openseek_protocol",
   "moonbitlang/core/async",
   "moonbitlang/core/json",

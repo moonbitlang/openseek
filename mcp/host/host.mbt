@@ -323,7 +323,7 @@ fn list_reply(snapshot : Snapshot, cursor : Int32) -> Json raise InvalidList {
 /// A tool's result as a script receives it. A reply is JSON, so images
 /// cannot travel in it: each is saved to a file, its path is named in the
 /// text and listed in `images`, and the script shows it to the model with
-/// `read_image`. Images are saved under `image_directory`.
+/// `image`. Images are saved under `image_directory`.
 async fn call_reply(
   output : @agent_tool.ToolOutput,
   image_directory? : String,
@@ -334,7 +334,7 @@ async fn call_reply(
     match save_image(image, image_directory?) {
       Ok(path) => {
         notes.push(
-          "[image \{image.media_type} saved to \{path}; show it to the model with read_image]",
+          "[image \{image.media_type} saved to \{path}; show it to the model with image]",
         )
         paths.push(Json(path))
       }

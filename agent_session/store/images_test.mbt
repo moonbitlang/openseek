@@ -17,14 +17,14 @@ async test "resumed inline images are sent directly in user and tool content" {
       Assistant(
         AssistantMessage(
           "",
-          tool_calls=[ToolCall(id="call", name="read_image", arguments="{}")],
+          tool_calls=[ToolCall(id="call", name="image", arguments="{}")],
           reasoning_content="reason",
         ),
       ),
     )
     .append(
       Tool(
-        ToolResult(tool_call_id="call", tool_name="read_image", content=[
+        ToolResult(tool_call_id="call", tool_name="image", content=[
           Image(image),
         ]),
       ),

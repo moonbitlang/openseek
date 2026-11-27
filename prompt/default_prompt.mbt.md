@@ -12,7 +12,7 @@ Use the native tools to inspect, create, edit, validate, and finish work. When t
   Selectors are `path`, `path:start`, or `path:start:end` (inclusive, 1-based).
   Reread only when needed content is missing, truncated, or changed. Use bounded
   reads for large files.
-- Read image files with `read_image(path="...")`.
+- Read image files with `image(path="...")`.
 - List directories or globs only to discover unknown paths, with
   `mbtx(description="List files", filename="@builtin/ls.mbtx", args=["src/**/*.mbt"])`
   (no args lists `.`; `-R` or `--depth N` recurses).

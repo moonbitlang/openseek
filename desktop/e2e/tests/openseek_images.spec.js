@@ -134,14 +134,14 @@ test('durable user and tool content render images between their text parts', asy
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
-      { id: 'mixed', name: 'read_image', arguments: '{}' },
-      { id: 'picture', name: 'read_image', arguments: '{}' },
+      { id: 'mixed', name: 'image', arguments: '{}' },
+      { id: 'picture', name: 'image', arguments: '{}' },
     ] } } },
     { sequence: 3, item: { kind: 'tool_result', payload: {
-      tool_call_id: 'mixed', tool_name: 'read_image', content, is_error: false,
+      tool_call_id: 'mixed', tool_name: 'image', content, is_error: false,
     } } },
     { sequence: 4, item: { kind: 'tool_result', payload: {
-      tool_call_id: 'picture', tool_name: 'read_image', content: [part], is_error: false,
+      tool_call_id: 'picture', tool_name: 'image', content: [part], is_error: false,
     } } },
   ];
   await app.install();
@@ -165,28 +165,28 @@ test('durable user and tool content render images between their text parts', asy
   expect(sections).toEqual([expect.stringContaining('Show the browser fixture before picture'), 'image', expect.stringContaining('After picture')]);
 });
 
-test('read_image and PTC results display images when committed and after reload', async ({ page }) => {
+test('image and PTC results display images when committed and after reload', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [{ sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture' } } }, { sequence: 2, item: { kind: 'assistant', payload: {
     content: '', tool_calls: [
-      { id: 'direct-image', name: 'read_image', arguments: '{"path":"picture.png"}' },
+      { id: 'direct-image', name: 'image', arguments: '{"path":"picture.png"}' },
       { id: 'ptc-image', name: 'mbtx', arguments: '{"source":"image inspection"}' },
     ],
   } } }];
   await app.install();
   await app.goto();
   await app.openSession();
-  for (const [index, [id, name]] of [['direct-image', 'read_image'], ['ptc-image', 'mbtx']].entries()) {
+  for (const [index, [id, name]] of [['direct-image', 'image'], ['ptc-image', 'mbtx']].entries()) {
     const event = { sequence: index + 3, item: { kind: 'tool_result', payload: {
       tool_call_id: id, tool_name: name, is_error: false,
-      brief: name === 'read_image' ? 'read_image picture.png' : 'image inspection',
+      brief: name === 'image' ? 'image picture.png' : 'image inspection',
       content: [
         { type: 'text', text: 'Image: /workspace/picture.png' },
         { type: 'image', media_type: 'image/png', data: png },
       ],
       ...(name === 'mbtx' ? { data: { ptc_calls: [{
-        name: 'read_image', arguments: { path: 'picture.png' }, status: 'done',
+        name: 'image', arguments: { path: 'picture.png' }, status: 'done',
         result: { version: 1, content: 'Image: /workspace/picture.png', is_error: false },
       }] } } : {}),
     } } };

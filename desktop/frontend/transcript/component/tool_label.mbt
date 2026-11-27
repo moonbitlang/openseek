@@ -48,7 +48,7 @@ fn tool_display_label(
 fn tool_caption_icon(name : String) -> @html.Html? {
   match name {
     "mbtx" => Some(@icons.icon_terminal())
-    "read_image" => Some(@icons.icon_file_media())
+    "image" | "read_image" => Some(@icons.icon_file_media())
     "edit" => Some(@icons.icon_edit())
     "multi_edit" => Some(@icons.icon_diff_multiple())
     "job_output" => Some(@icons.icon_arrow_down())
@@ -67,6 +67,7 @@ fn tool_caption_text(name : String, label : String) -> String {
     "edit" => ["edit", "edited"]
     "job_output" => ["job_output", "job"]
     "mbtx"
+    | "image"
     | "read_image"
     | "multi_edit"
     | "job_wait"
