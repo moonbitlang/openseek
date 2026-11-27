@@ -1471,6 +1471,7 @@ priv struct Model {
   // in-flight actions, the last failure — which only that page can see.
   schedules : SchedulePage
   connectors : @connectors.State
+  cloud_connectors : @connectors.State
   skills : @skills.State
   // The focused host's skills library. Root-owned rather than page-owned
   // because the composer's `$` completion reads the same list, which is why
@@ -1918,6 +1919,7 @@ priv enum Msg {
   OpenSkills
   // Everything the Skills page does with itself once it is open.
   Connectors(@connectors.Msg)
+  CloudConnectors(Int32, @connectors.Msg)
   Skills(@skills.Msg)
   Send
   SendFollowup(@composer.FollowupChoice)
@@ -2880,6 +2882,7 @@ fn initial_model(
     codex: @codex.State(),
     schedules: SchedulePage::empty(),
     connectors: @connectors.State::empty(),
+    cloud_connectors: @connectors.State::empty(),
     skills: @skills.State::empty(),
     installed_skills: [],
     cloud_skills: [],

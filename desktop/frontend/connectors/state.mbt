@@ -46,10 +46,21 @@ fn request(
   epoch : Int32,
   id? : String,
   attempt? : String,
+  cloud_token? : String,
 ) -> @cmd.Cmd {
   @cmd.perform(reply => emit(Received(epoch, id, reply)), () => {
     try {
-      if operation == "list" {
+      if cloud_token is Some(token) {
+        @json.from_json(
+          @cloud_client.request(
+            @cloud_client.CloudOrigin,
+            "/v1/me/connectors/" + operation,
+            Post,
+            token~,
+            body={ "id": Json(id.unwrap_or("")), "attempt": Json(attempt) },
+          ),
+        )
+      } else if operation == "list" {
         @interop.bridge_request(
           Local,
           @commands.connectors_list,
@@ -83,6 +94,7 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   msg : Msg,
   state : State,
+  cloud_token? : String,
   open_external~ : (String) -> @cmd.Cmd,
 ) -> (@cmd.Cmd, State) {
   match msg {
@@ -92,7 +104,7 @@ pub fn update(
       }
       let epoch = state.epoch + 1
       (
-        request(emit, "list", epoch),
+        request(emit, "list", epoch, cloud_token?),
         { ..state, epoch, operation: Loading, error: None, },
       )
     }
@@ -110,6 +122,7 @@ pub fn update(
           },
           epoch,
           id~,
+          cloud_token?,
         ),
         {
           ..state,
@@ -129,7 +142,14 @@ pub fn update(
       }
       let epoch = state.epoch + 1
       (
-        request(emit, "cancel", epoch, id~, attempt=authorization.attempt),
+        request(
+          emit,
+          "cancel",
+          epoch,
+          id~,
+          attempt=authorization.attempt,
+          cloud_token?,
+        ),
         { ..state, epoch, operation: Changing(id), error: None, },
       )
     }
@@ -137,7 +157,7 @@ pub fn update(
       guard epoch == state.epoch && state.operation is Waiting(_, _) else {
         return (@cmd.none, state)
       }
-      (request(emit, "poll", epoch, id~, attempt~), state)
+      (request(emit, "poll", epoch, id~, attempt~, cloud_token?), state)
     }
     Received(epoch, id, reply) => {
       guard epoch == state.epoch else { return (@cmd.none, state) }

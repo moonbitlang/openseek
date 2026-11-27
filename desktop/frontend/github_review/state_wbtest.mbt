@@ -3,7 +3,7 @@ fn current_pr() -> @github.State {
   {
     ..@github.State::empty(),
     scope: Some({
-      channel: @interop.Local,
+      host: Desktop(@interop.Local),
       cwd: "/checkout",
       branch: Some("feature"),
       head: Some("head"),
@@ -76,7 +76,7 @@ test "shared checkout changes retire old discussions and file reads" {
   let checkout = current_pr().scope.unwrap()
   for
     next_checkout in [
-      { ..checkout, channel: @interop.Remote("device"), },
+      { ..checkout, host: Desktop(@interop.Remote("device")), },
       { ..checkout, cwd: "/other", },
       { ..checkout, branch: Some("other"), },
       { ..checkout, head: Some("new-head"), },

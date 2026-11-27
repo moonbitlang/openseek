@@ -2100,31 +2100,52 @@ fn update(
   } else {
     model
   }
+  let model = if model.cloud.epoch != previous.cloud.epoch {
+    { ..model, cloud_connectors: @connectors.State::empty(), }
+  } else {
+    model
+  }
   let ctx = file_ctx(model)
   let owns_panel = model.file_panel.owner == Some(ctx.owner)
   let source : (@github.GithubHost, String)? = match ctx.owner {
-    Host(owner) => ctx.placement.bind(placement => placement.checkout_root())
+    Host(owner) =>
+      ctx.placement
+      .bind(placement => placement.checkout_root())
       .map(root => (@github.Desktop(owner.channel), root.path))
-    Cloud(account~, session~) => ctx.cloud_files.map(files =>
-      (@github.Cloud(account~, session~, token=files.token), "/"))
+    Cloud(account~, session~) =>
+      ctx.cloud_files.map(files => {
+        (@github.Cloud(account~, session~, token=files.token), "/")
+      })
   }
   let checkout = source.map(source => {
     let (host, cwd) = source
-    let previous = model.github.scope.filter(scope => scope.host == host && scope.cwd == cwd)
+    let previous = model.github.scope.filter(scope => {
+      scope.host == host && scope.cwd == cwd
+    })
     @github.CheckoutScope::{
-      host, cwd,
-      head: if owns_panel { model.file_panel.git_actual_head } else { previous.bind(scope => scope.head) },
+      host,
+      cwd,
+      head: if owns_panel {
+        model.file_panel.git_actual_head
+      } else {
+        previous.bind(scope => scope.head)
+      },
       branch: match (owns_panel, model.file_panel.git_graph) {
         (true, GitGraphReady(snapshot~, ..)) => snapshot.branch
         _ => previous.bind(scope => scope.branch)
       },
     }
   })
-  let github_visible = model.file_panel_visible() && (match ctx.owner {
-    Cloud(..) => ctx.cloud_files is Some(_)
-    Host(owner) => model.devices.any(dev =>
-      dev.channel == owner.channel && dev.bridge is Connected && dev.reconnect_failures == 0)
-  })
+  let github_visible = model.file_panel_visible() &&
+    (match ctx.owner {
+      Cloud(..) => ctx.cloud_files is Some(_)
+      Host(owner) =>
+        model.devices.any(dev => {
+          dev.channel == owner.channel &&
+          dev.bridge is Connected &&
+          dev.reconnect_failures == 0
+        })
+    })
   let (github_cmd, github) = @github.reconcile(
     dispatch.map(msg => Github(msg)),
     model.github,
@@ -4984,6 +5005,19 @@ fn update_msg(
           select_menu: None,
         },
       )
+    CloudConnectors(epoch, msg) => {
+      guard model.cloud.epoch == epoch && model.account is Some(account) else {
+        return (@cmd.none, model)
+      }
+      let (cmd, cloud_connectors) = @connectors.update(
+        dispatch.map(msg => CloudConnectors(epoch, msg)),
+        msg,
+        model.cloud_connectors,
+        cloud_token=account.token,
+        open_external=url => open_external_link(dispatch, url),
+      )
+      (cmd, { ..model, cloud_connectors, })
+    }
     SettingsSectionSelected(Connectors) => {
       let (cmd, connectors) = @connectors.update(
         dispatch.map(msg => Connectors(msg)),
@@ -4992,7 +5026,19 @@ fn update_msg(
         open_external=url => open_external_link(dispatch, url),
       )
       (
-        @cmd.batch([cmd, @dialog.close("api-setup-dialog")]),
+        @cmd.batch([
+          if model.is_desktop {
+            cmd
+          } else {
+            @cmd.none
+          },
+          if model.account is Some(_) {
+            dispatch(CloudConnectors(model.cloud.epoch, Refresh))
+          } else {
+            @cmd.none
+          },
+          @dialog.close("api-setup-dialog"),
+        ]),
         {
           ..model,
           connectors,

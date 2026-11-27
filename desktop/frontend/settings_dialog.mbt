@@ -35,7 +35,8 @@ fn SettingsSection::available(self : SettingsSection, model : Model) -> Bool {
     General | Account | ArchivedChats => true
     Devices => !model.is_desktop && model.account is Some(_)
     Engine => model.has_host()
-    Connections | Connectors | SystemSettings => model.is_desktop
+    Connectors => model.is_desktop || model.account is Some(_)
+    Connections | SystemSettings => model.is_desktop
   }
 }
 
@@ -126,11 +127,25 @@ fn settings_page(
       Devices => [settings_devices(dispatch, model)]
       Connectors =>
         [
-          @connectors.view(
-            dispatch.map(msg => Connectors(msg)),
-            model.connectors,
-            model.locale,
-          ),
+          if model.is_desktop {
+            @connectors.view(
+              dispatch.map(msg => Connectors(msg)),
+              model.connectors,
+              model.locale,
+            )
+          } else {
+            @html.nothing
+          },
+          if model.account is Some(_) {
+            @connectors.view(
+              dispatch.map(msg => CloudConnectors(model.cloud.epoch, msg)),
+              model.cloud_connectors,
+              model.locale,
+              cloud=true,
+            )
+          } else {
+            @html.nothing
+          },
         ]
       Connections =>
         [
