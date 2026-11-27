@@ -9,6 +9,7 @@ fn controls_fixture() -> State {
         id: "session",
         title: None,
         updated_at: None,
+        pull_requests: [],
         generating: true,
         archived: false,
         approval: "ask",

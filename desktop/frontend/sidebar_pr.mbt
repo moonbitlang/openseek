@@ -104,12 +104,20 @@ fn Model::sidebar_pull_request_badge(
   session_id : String,
 ) -> @conversation.PullRequestBadge? {
   guard self.device_state(channel) is Some(dev) else { return None }
-  let urls = dev.pull_requests_for(session_id)
+  self.pull_request_badge(dev.pull_requests_for(session_id))
+}
+
+///|
+fn Model::pull_request_badge(
+  self : Model,
+  urls : Array[String],
+  owner? : @interop.ConversationIdentity,
+) -> @conversation.PullRequestBadge? {
   guard !urls.is_empty() else { return None }
   let mut tone : @conversation.PullRequestTone = Unknown
   let lines : Array[String] = []
   for url in urls {
-    match self.changes.summary(url) {
+    match self.changes.summary(url, owner?) {
       Some(pr) => {
         let next = sidebar_pr_tone_of(pr.state)
         if sidebar_pr_tone_rank(next) > sidebar_pr_tone_rank(tone) {
@@ -161,7 +169,7 @@ fn batch_lookup_pull_requests(
   guard !urls.is_empty() else { return (@cmd.none, model) }
   let (cmd, changes) = @session_changes.update(
     dispatch.map(msg => Changes(msg)),
-    BatchLookup(channel~, urls~, force~),
+    BatchLookup(host=@github.Desktop(channel), urls~, force~),
     model.changes,
   )
   (cmd, { ..model, changes, })

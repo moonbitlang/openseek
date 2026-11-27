@@ -77,6 +77,7 @@ fn live_test_session() -> Session {
     id: "session",
     title: None,
     updated_at: None,
+    pull_requests: [],
     generating: false,
     archived: false,
     approval: "ask",

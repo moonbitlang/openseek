@@ -69,7 +69,7 @@ test "sidebar PR badges aggregate multi-PR state by priority and show unknown un
   ])
   let (_, summarized) = update(
     dispatch,
-    Changes(BatchSummarized(Ok({ pull_requests: summaries, }))),
+    Changes(BatchSummarized(None, Ok({ pull_requests: summaries, }))),
     loaded,
   )
   assert_eq(
@@ -135,6 +135,7 @@ test "synced artifact changes update a sidebar row live and ignore branch-only a
     dispatch,
     Changes(
       BatchSummarized(
+        None,
         Ok({
           pull_requests: Map([(pr_url, sidebar_pr_fixture(205, "merged"))]),
         }),
@@ -174,6 +175,7 @@ test "session_component_input wires PR badge for conversations" {
     dispatch,
     Changes(
       BatchSummarized(
+        None,
         Ok({ pull_requests: Map([(pr_url, sidebar_pr_fixture(301, "open"))]), }),
       ),
     ),

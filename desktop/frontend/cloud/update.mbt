@@ -652,6 +652,7 @@ pub fn update(
             id: entry.session,
             title: Some(entry.label),
             updated_at: None,
+            pull_requests: [],
             generating: false,
             archived: false,
             approval: "ask",
@@ -729,6 +730,7 @@ pub fn update(
           id,
           title: None,
           updated_at: None,
+          pull_requests: [],
           generating: false,
           archived: false,
           approval: creation.approval,
@@ -1094,11 +1096,10 @@ pub fn update(
             seq > last else {
             return (state, @cmd.none, None)
           }
-          (
-            state.replace(id, { ..conversation, last_seq: Some(seq), }),
-            @cmd.none,
-            None,
-          )
+          let (next, command) = state
+            .replace(id, { ..conversation, last_seq: Some(seq), })
+            .list(token, emit)
+          (next, command, None)
         }
         EngineFailed(session~, seq~, error~) => {
           guard session == id &&

@@ -1,10 +1,10 @@
 ///|
-pub async fn[Payload : ToJson, Reply : FromJson] CheckoutScope::request(
-  self : CheckoutScope,
+pub async fn[Payload : ToJson, Reply : FromJson] GithubHost::request(
+  self : GithubHost,
   command : @commands.Command[Payload, Reply],
   payload : Payload,
 ) -> Reply {
-  match self.host {
+  match self {
     Desktop(channel) => @interop.bridge_request(channel, command, payload)
     Cloud(session~, token~, ..) => {
       let body = payload.to_json()

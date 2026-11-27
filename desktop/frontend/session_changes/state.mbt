@@ -42,21 +42,20 @@ pub(all) enum Msg {
   /// generation `generation`. `Ok(None)` means the address is not a pull
   /// request GitHub knows how to describe.
   Summarized(
-    url~ : String,
+    key~ : String,
     generation~ : Int32,
     Result[@protocol.GitPullRequest?, String],
   )
   /// Resolve pull request summaries in bulk (for sidebar badges) on `channel`.
   /// When `force` is false, pull requests already known to be `Merged` are
   /// skipped since merged pull requests do not change state.
-  BatchLookup(
-    channel~ : @interop.ChannelId,
-    urls~ : Array[String],
-    force~ : Bool,
-  )
+  BatchLookup(host~ : @github.GithubHost, urls~ : Array[String], force~ : Bool)
   /// GitHub answered a batch summary request. Failed lookups leave cached
   /// summaries standing.
-  BatchSummarized(Result[@protocol.GithubPullRequestSummariesReply, String])
+  BatchSummarized(
+    @interop.ConversationIdentity?,
+    Result[@protocol.GithubPullRequestSummariesReply, String],
+  )
   /// Seed the shared summary cache from another lookup (e.g. checkout PR probe).
   RecordSummary(PullRequest)
 }
@@ -129,8 +128,20 @@ pub extend Lookup with Eq::{equal, not_equal}
 
 ///|
 /// What GitHub last said about the pull request at `url`.
-pub fn State::summary(self : State, url : String) -> PullRequest? {
-  self.lookups.get(url).bind(lookup => lookup.summary)
+fn lookup_key(url : String, owner : @interop.ConversationIdentity?) -> String {
+  match owner {
+    Some(Cloud(..) as conversation) => conversation.key() + "\n" + url
+    _ => url
+  }
+}
+
+///|
+pub fn State::summary(
+  self : State,
+  url : String,
+  owner? : @interop.ConversationIdentity,
+) -> PullRequest? {
+  self.lookups.get(lookup_key(url, owner)).bind(lookup => lookup.summary)
 }
 
 ///|
@@ -258,15 +269,15 @@ pub fn update(
     }
     // An answer a later lookup of the same address superseded is dropped. A
     // failed lookup keeps what an earlier one found.
-    Summarized(url~, generation~, result) => {
-      guard state.lookups.get(url) is Some(lookup) &&
+    Summarized(key~, generation~, result) => {
+      guard state.lookups.get(key) is Some(lookup) &&
         lookup.generation == generation else {
         return (@cmd.none, state)
       }
       match result {
         Ok(found) => {
           let lookups = state.lookups.copy()
-          lookups[url] = {
+          lookups[key] = {
             ..lookup,
             summary: found.bind(PullRequest::from_reply),
           }
@@ -275,11 +286,16 @@ pub fn update(
         Err(_) => (@cmd.none, state)
       }
     }
-    BatchLookup(channel~, urls~, force~) => {
+    BatchLookup(host~, urls~, force~) => {
+      let owner = match host {
+        Desktop(_) => None
+        Cloud(account~, session~, ..) =>
+          Some(@interop.Cloud(account~, session~))
+      }
       let to_fetch : Array[String] = []
       for url in urls {
         guard !url.is_blank() && !to_fetch.contains(url) else { continue }
-        if !force && state.summary(url) is Some({ state: Merged, .. }) {
+        if !force && state.summary(url, owner?) is Some({ state: Merged, .. }) {
           continue
         }
         to_fetch.push(url)
@@ -287,32 +303,33 @@ pub fn update(
       guard !to_fetch.is_empty() else { return (@cmd.none, state) }
       let cmd = @cmd.attempt(
         result => {
-          emit(BatchSummarized(result.map_err(@interop.bridge_error_text)))
+          emit(
+            BatchSummarized(owner, result.map_err(@interop.bridge_error_text)),
+          )
         },
         () => {
-          @interop.bridge_request(
-            channel,
-            @commands.github_pull_request_summaries,
-            { urls: to_fetch, },
-          )
+          host.request(@commands.github_pull_request_summaries, {
+            urls: to_fetch,
+          })
         },
       )
       (cmd, state)
     }
-    BatchSummarized(result) =>
+    BatchSummarized(owner, result) =>
       match result {
         Ok(reply) => {
           let lookups = state.lookups.copy()
           let mut changed = false
           for url, pr in reply.pull_requests {
+            let key = lookup_key(url, owner)
             guard PullRequest::from_reply(pr) is Some(summary) else { continue }
             let generation = lookups
-              .get(url)
+              .get(key)
               .map(lookup => lookup.generation)
               .unwrap_or(0)
             let next : Lookup = { generation, summary: Some(summary), }
-            if lookups.get(url) != Some(next) {
-              lookups[url] = next
+            if lookups.get(key) != Some(next) {
+              lookups[key] = next
               changed = true
             }
           }
@@ -418,19 +435,20 @@ fn look_up(
   for artifact in artifacts {
     guard artifact.type_ is PullRequest else { continue }
     let url = artifact.url
+    let key = lookup_key(url, Some(conversation))
     // A new lookup keeps what the last one found until it answers.
-    let summary = match lookups.get(url) {
+    let summary = match lookups.get(key) {
       Some(lookup) if lookup.generation == generation => continue
       Some(lookup) => lookup.summary
       None => None
     }
-    lookups[url] = { generation, summary, }
+    lookups[key] = { generation, summary, }
     commands.push(
       @cmd.attempt(
         result => {
           emit(
             Summarized(
-              url~,
+              key~,
               generation~,
               result
               .map((reply : @protocol.GithubPullRequestSummaryReply) => {

@@ -196,7 +196,9 @@ fn request(
         Listed(state.epoch, kind, result.map_err(@interop.bridge_error_text)),
       )
     },
-    () => owner.request(@commands.github_list, { cwd: owner.cwd, kind, limit, }),
+    () => {
+      owner.host.request(@commands.github_list, { cwd: owner.cwd, kind, limit, })
+    },
   )
   (command, state.with_group(kind, { ..group, loading: true, error: None, }))
 }
@@ -489,7 +491,7 @@ fn request_detail(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
       emit(DetailLoaded(epoch, result.map_err(@interop.bridge_error_text)))
     },
     () => {
-      owner.request(@commands.github_pull_request, {
+      owner.host.request(@commands.github_pull_request, {
         cwd: owner.cwd,
         repository_url: detail.repository_url,
         number: detail.item.number,
@@ -571,7 +573,7 @@ fn request_checkout(
       emit(CheckedOut(epoch, result.map_err(@interop.bridge_error_text)))
     },
     () => {
-      owner.request(@commands.github_checkout, {
+      owner.host.request(@commands.github_checkout, {
         cwd: owner.cwd,
         repository_url: checkout.repository_url,
         number: checkout.number,
@@ -604,7 +606,9 @@ fn request_current(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
       emit(CurrentLoaded(epoch, result.map_err(@interop.bridge_error_text)))
     },
     () => {
-      checkout.request(@commands.github_checkout_status, { cwd: checkout.cwd, })
+      checkout.host.request(@commands.github_checkout_status, {
+        cwd: checkout.cwd,
+      })
     },
   )
   (command, { ..state, current_epoch: epoch, current_loading: true, })

@@ -620,12 +620,12 @@ fn refresh_cloud_git(
     result => dispatch(CloudGitLoaded(generation, result)),
     () => {
       try {
-        let pr = checkout.request(@commands.git_pull_request, {
+        let pr = checkout.host.request(@commands.git_pull_request, {
           session,
           cwd: None,
           branch_hint: checkout.branch,
         })
-        let details = checkout.request(@commands.git_branch, {
+        let details = checkout.host.request(@commands.git_branch, {
           session,
           cwd: None,
           base_hint: pr.pull_request.map(p => p.base),

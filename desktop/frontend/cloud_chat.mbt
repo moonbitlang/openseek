@@ -272,6 +272,27 @@ fn update_cloud(
     changes = refreshed
     file_commands.push(cmd)
   }
+  if message is @cloud.Listed(epoch, request, _) &&
+    epoch == cloud.epoch &&
+    request == before.list_request &&
+    model.account is Some(auth) &&
+    cloud.user_id == Some(auth.user.user_id) {
+    for session in cloud.sessions {
+      guard !session.pull_requests.is_empty() else { continue }
+      let host = @github.Cloud(
+        account=auth.user.user_id,
+        session=session.id,
+        token=auth.token,
+      )
+      let (cmd, next_changes) = @session_changes.update(
+        dispatch.map(msg => Changes(msg)),
+        BatchLookup(host~, urls=session.pull_requests, force=false),
+        changes,
+      )
+      file_commands.push(cmd)
+      changes = next_changes
+    }
+  }
   if before.epoch != cloud.epoch && before.user_id is Some(account) {
     let (panel, clear) = @fileeditor.forget_cloud_files(file_panel, account)
     file_panel = panel
@@ -712,7 +733,10 @@ fn Model::cloud_chat_rows(
         } else {
           []
         },
-        pull_request: None,
+        pull_request: self.pull_request_badge(
+          item.pull_requests,
+          owner=@interop.Cloud(account~, session=item.id),
+        ),
         run_mark: @conversation.RunMark::for_task(
           running=item.generating ||
             conversation.map_or(false, conversation => {
