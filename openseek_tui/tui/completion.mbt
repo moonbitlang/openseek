@@ -86,8 +86,28 @@ fn slash_command_invocation_for_composer(
   if commands.is_empty() {
     return None
   }
-  guard single_line_input_text(composer) is Some(text) else { return None }
-  @slash.SlashCommandInvocation::parse(text)
+  match single_line_input_text(composer) {
+    Some(text) => @slash.SlashCommandInvocation::parse(text)
+    None => registered_multiline_invocation(commands, composer)
+  }
+}
+
+///|
+/// A multi-line entry whose first word names a configured command, such as
+/// `/ultrareview` followed by Shift-Enter and a focus paragraph. Its arguments
+/// keep their line breaks. Only a registered name counts, so a multi-line
+/// prompt that merely begins with a path (`/usr/lib/...`) stays a prompt.
+fn registered_multiline_invocation(
+  commands : @slash.SlashCommands,
+  composer : @composer.Model,
+) -> @slash.SlashCommandInvocation? {
+  guard composer.mode().is_input() else { return None }
+  guard @slash.SlashCommandInvocation::parse(composer.text())
+    is Some(invocation) &&
+    commands.get(invocation.name()) is Some(_) else {
+    return None
+  }
+  Some(invocation)
 }
 
 ///|
@@ -222,8 +242,9 @@ async fn Ui::accept_completion(self : Self) -> Event? {
 
 ///|
 /// Whether the composer holds a slash-command entry: the feature is enabled and
-/// the single-line input begins with `/`. Such a line is completed or dispatched
-/// on Enter, never queued as a prompt — not even a lone `/`, which is not yet a
+/// either the single-line input begins with `/`, or a multi-line input begins
+/// with a configured command name. Such an entry is completed or dispatched on
+/// Enter, never queued as a prompt — not even a lone `/`, which is not yet a
 /// valid invocation but must not be queued as literal text.
 fn composer_is_slash_entry(
   commands : @slash.SlashCommands,
@@ -232,8 +253,10 @@ fn composer_is_slash_entry(
   if commands.is_empty() {
     return false
   }
-  guard single_line_input_text(composer) is Some(text) else { return false }
-  text.has_prefix("/")
+  match single_line_input_text(composer) {
+    Some(text) => text.has_prefix("/")
+    None => registered_multiline_invocation(commands, composer) is Some(_)
+  }
 }
 
 ///|
@@ -368,6 +391,30 @@ test "enter dispatches the accepted command name with no arguments" {
     assert_eq(name, "compact")
     assert_eq(arguments, "")
   }
+}
+
+///|
+test "a multi-line entry dispatches only a registered command" {
+  let specs = command_specs()
+  guard ui_enter_decision(
+      specs,
+      composer_with("/compact\nfirst line\nsecond line"),
+      CompletionState(),
+      menu_visible=true,
+    )
+    is RunSlashCommand(name~, arguments~) else {
+    fail("expected the multi-line /compact entry to dispatch")
+  }
+  assert_eq(name, "compact")
+  assert_eq(arguments, "first line\nsecond line")
+  assert_true(composer_is_slash_entry(specs, composer_with("/compact\nfocus")))
+  // A multi-line prompt that only starts with a slash is still a prompt.
+  let path = composer_with("/usr/lib/libfoo.so is missing\nwhy?")
+  assert_true(
+    ui_enter_decision(specs, path, CompletionState(), menu_visible=true)
+    is SubmitInput,
+  )
+  assert_true(!composer_is_slash_entry(specs, path))
 }
 
 ///|
@@ -540,8 +587,9 @@ test "a slash-command line is never queued as a prompt" {
   assert_true(composer_is_slash_entry(specs, composer_with("/")))
   // Ordinary text is not.
   assert_false(composer_is_slash_entry(specs, composer_with("hello")))
-  // Multi-line input is never a slash entry.
-  assert_false(composer_is_slash_entry(specs, composer_with("/compact\nx")))
+  // Multi-line input is a slash entry only when it names a registered command.
+  assert_true(composer_is_slash_entry(specs, composer_with("/compact\nx")))
+  assert_false(composer_is_slash_entry(specs, composer_with("/path\nx")))
   // With the feature disabled, a slash line is ordinary input (queueable).
   let no_commands : @slash.SlashCommands = []
   assert_false(composer_is_slash_entry(no_commands, composer_with("/path")))
