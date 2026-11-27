@@ -29,6 +29,10 @@ priv struct AgentLoop {
   /// first non-replay `Assistant` item — so every `usage` event lands in the
   /// log exactly once, whichever path records the response.
   mut unrecorded_usage : @deepseek.Usage?
+  /// When the step's request was issued, until `record_assistant` stamps it on
+  /// the answer. A reader of the log can then draw the wait for the model
+  /// instead of inferring it from the previous event.
+  mut request_started_ms : Int64?
 }
 
 ///|
@@ -65,6 +69,7 @@ fn AgentLoop::AgentLoop(
     ),
     last_session: session,
     unrecorded_usage: None,
+    request_started_ms: None,
   }
 }
 
@@ -373,7 +378,12 @@ async fn AgentLoop::record_assistant(
   let session = self.append(
     session,
     Assistant(
-      AssistantMessage(response.content, tool_calls?, reasoning_content?),
+      AssistantMessage(
+        response.content,
+        tool_calls?,
+        reasoning_content?,
+        started_at_ms?=self.take_request_start(),
+      ),
     ),
   )
   self.messages.push(
@@ -385,6 +395,15 @@ async fn AgentLoop::record_assistant(
     ),
   )
   session
+}
+
+///|
+/// When the step's request was issued, for the first durable record of its
+/// answer. A replay or a second copy of an already recorded answer gets none.
+fn AgentLoop::take_request_start(self : Self) -> Int64? {
+  let started = self.request_started_ms
+  self.request_started_ms = None
+  started
 }
 
 ///|
@@ -508,6 +527,7 @@ async fn AgentLoop::prepare_step(
 ///|
 async fn AgentLoop::chat(self : Self, step : Int32) -> @deepseek.ChatResponse {
   @emit.emit(AgentStep(step=step + 1))
+  let request_started_ms = @env.now().reinterpret_as_int64()
   let response = self.client.chat(
     self.messages,
     tools=self.tools.function_tools(),
@@ -531,6 +551,7 @@ async fn AgentLoop::chat(self : Self, step : Int32) -> @deepseek.ChatResponse {
     ),
   )
   self.unrecorded_usage = Some(response.usage)
+  self.request_started_ms = Some(request_started_ms)
   response.log_and_reasoning_content()
 }
 
@@ -1438,6 +1459,11 @@ async fn AgentLoop::finish_turn(
             answer,
             reasoning_content?,
             is_replay=answer_already_durable,
+            started_at_ms?=if answer_already_durable {
+              None
+            } else {
+              self.take_request_start()
+            },
           ),
         ),
       )
@@ -1470,7 +1496,13 @@ async fn AgentLoop::finish_turn(
   let session = if !answer_already_durable {
     self.append(
       session,
-      Assistant(AssistantMessage(answer, reasoning_content?)),
+      Assistant(
+        AssistantMessage(
+          answer,
+          reasoning_content?,
+          started_at_ms?=self.take_request_start(),
+        ),
+      ),
     )
   } else {
     session

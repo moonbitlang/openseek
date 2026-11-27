@@ -28,6 +28,7 @@ import {
   "moonbitlang/openseek_protocol/emit",
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
+  "moonbitlang/core/env",
 }
 
 import {

@@ -632,3 +632,23 @@ test "a fork needs something that precedes the unfinished turn" {
     [1],
   )
 }
+
+///|
+test "the request clock is durable, sparse, and optional in older logs" {
+  // A message from a log written before the request clock still decodes.
+  let older : @agent_session.AssistantMessage = @json.from_json(
+    @json.parse("{\"content\":\"answer\",\"tool_calls\":[]}"),
+  )
+  assert_eq(older.started_at_ms(), None)
+  assert_false(ToJson::to_json(older).stringify().contains("started_at_ms"))
+  let recorded = @agent_session.AssistantMessage(
+    "answer",
+    started_at_ms=1781144351000L,
+  )
+  assert_eq(recorded.started_at_ms(), Some(1781144351000L))
+  let round_trip : @agent_session.AssistantMessage = @json.from_json(
+    ToJson::to_json(recorded),
+  )
+  assert_eq(round_trip.started_at_ms(), Some(1781144351000L))
+  assert_eq(round_trip, recorded)
+}

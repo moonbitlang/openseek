@@ -63,6 +63,7 @@ test "parse round-trips every event kind" {
       #|          reasoning_content: Some("The user wants a directory listing."),
       #|          is_replay: None,
       #|          usage: None,
+      #|          started_at_ms: None,
       #|        },
       #|      ),
       #|    },
