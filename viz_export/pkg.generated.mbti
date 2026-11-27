@@ -1,20 +1,49 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek/viz_export"
 
+import {
+  "moonbitlang/openseek/trajectory",
+}
+
 // Values
+pub fn bake_run(Array[RunSource], String) -> TrajectoryDocument?
+
+pub fn bake_runs(Array[RunSource]) -> Array[TrajectoryDocument]
+
+pub fn bake_runs_with_roots(Array[RunSource]) -> (Array[TrajectoryDocument], Map[String, String])
+
+pub fn child_session_ids(String) -> Array[String]
+
+pub fn job_record(session_id~ : String, job_id~ : String, started_at_ms~ : Int64, finished_at_ms~ : Int64?, exited~ : Int32?, interrupted~ : Bool) -> @trajectory.JobMetadata
 
 // Errors
 
 // Types and methods
+pub(all) struct RunSource {
+  id : String
+  store : String
+  first_prompt : String
+  text : String
+  jobs : Array[@trajectory.JobMetadata]
+}
+pub fn RunSource::RunSource(id~ : String, store~ : String, first_prompt~ : String, text~ : String, jobs? : Array[@trajectory.JobMetadata]) -> Self
+
 type Session
-pub fn Session::Session(key~ : String, id~ : String, root~ : String, root_label~ : String, is_marker~ : Bool, last_active~ : Double?, first_prompt~ : String, events~ : String, artifacts? : Map[String, String]) -> Self
+pub fn Session::Session(key~ : String, id~ : String, root~ : String, root_label~ : String, is_marker~ : Bool, last_active~ : Double?, first_prompt~ : String, events~ : String, artifacts? : Map[String, String], run_root? : String) -> Self
 
 type StandaloneExport
 pub fn StandaloneExport::StandaloneExport(String, String) -> Self
-pub fn StandaloneExport::json(Self, Array[Session]) -> String
-pub fn StandaloneExport::render(Self, Array[Session]) -> String raise
+pub fn StandaloneExport::json(Self, Array[Session], runs? : Array[TrajectoryDocument]) -> String
+pub fn StandaloneExport::render(Self, Array[Session], runs? : Array[TrajectoryDocument]) -> String raise
 pub fn StandaloneExport::render_json(Self, String) -> String raise
 
+pub(all) struct TrajectoryDocument {
+  root_id : String
+  body : String
+}
+pub fn TrajectoryDocument::TrajectoryDocument(root_id~ : String, body~ : String) -> Self
+
 // Type aliases
+pub using @trajectory {type JobMetadata as JobRecord}
 
 // Traits

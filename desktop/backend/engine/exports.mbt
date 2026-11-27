@@ -77,7 +77,8 @@ pub async fn ssh_model_credentials(
 pub fn ConversationExport::ConversationExport(
   exporter : @viz_export.StandaloneExport,
   sessions : Array[@viz_export.Session],
+  runs? : Array[@viz_export.TrajectoryDocument],
 ) -> ConversationExport raise {
-  let json = exporter.json(sessions)
+  let json = exporter.json(sessions, runs?)
   { html: exporter.render_json(json), json, }
 }
