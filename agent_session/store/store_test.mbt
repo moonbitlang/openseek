@@ -1130,13 +1130,13 @@ async test "legacy JSONL can append and replay embedded images and text" {
     appended,
     Assistant(
       AssistantMessage("", tool_calls=[
-        ToolCall(id="image-call", name="read_image", arguments="{}"),
+        ToolCall(id="image-call", name="image", arguments="{}"),
       ]),
     ),
   )
   let result = @agent_session.ToolResult(
     tool_call_id="image-call",
-    tool_name="read_image",
+    tool_name="image",
     content=[Text("result: "), Image(image)],
   )
   let _ = store.append(appended, Tool(result))

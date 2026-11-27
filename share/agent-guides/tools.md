@@ -80,7 +80,7 @@ later call needs it; save it in session scratch and pass its absolute path as
 A mbtx script can call the host's own tools.
 `@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
 JSON object the direct tool takes, forwarded unchanged: validation and
-defaults stay in the host. `read_image`, `edit`, `multi_edit`, `write`, `remove`,
+defaults stay in the host. `image`, `edit`, `multi_edit`, `write`, `remove`,
 and `web_search` (when registered) are callable. `finish`,
 `goal`, `plan`, the job controls, and a recursive `mbtx` are not.
 
@@ -100,13 +100,13 @@ Invalid arguments, missing edit matches, parse failures, and unsupported targets
 are errors to fix, not reasons to request more permission. Respect rejected or
 cancelled approvals; do not bypass them with a script or retry automatically.
 
-Use `read_image({ "path": "chart.png" })` to inspect local PNG/JPEG/GIF/WebP
+Use `image({ "path": "chart.png" })` to inspect local PNG/JPEG/GIF/WebP
 files up to 20 MiB on image-capable model routes. The host detects the format
 from bytes, including extension-less files. Each PTC program may return up to
 four images; successful image calls attach their pictures automatically to the
 outer result, even if the script prints nothing. For a background program,
 read them with `job_output`. The SDK returns text and metadata, not base64.
-Background job metadata also records retained image paths, which `read_image`
+Background job metadata also records retained image paths, which `image`
 can reopen after the source has changed or disappeared.
 
 The SDK exposes this interface:

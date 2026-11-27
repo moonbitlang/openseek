@@ -198,8 +198,8 @@ async test "a call's reply saves its images and names their files" {
     content,
     (
       $|took it
-      $|[image image/png saved to \{first}; show it to the model with read_image]
-      $|[image image/png saved to \{second}; show it to the model with read_image]
+      $|[image image/png saved to \{first}; show it to the model with image]
+      $|[image image/png saved to \{second}; show it to the model with image]
     ),
   )
   for path in [first, second] {

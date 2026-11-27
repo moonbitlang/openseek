@@ -431,6 +431,8 @@ test "registered built-ins and normalized operations have deliberate categories"
     ("remove", Some("Remove files")),
     ("mbtx", Some("Execute mbtx scripts")),
     ("shell", Some("Execute commands")),
+    ("image", Some("View images")),
+    ("read_image", Some("View images")),
     ("imageView", Some("View images")),
     ("imageGeneration", Some("Generate images")),
     ("enteredReviewMode", Some("Review code")),

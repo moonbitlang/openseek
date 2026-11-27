@@ -40,7 +40,7 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
 ///|
 /// Build the agent's standard tool registry bound to `runtime` and `scope`.
 ///
-/// The returned registry contains the built-in local tools: `read_image`, `edit`,
+/// The returned registry contains the built-in local tools: `image`, `edit`,
 /// `multi_edit`, `write`, `remove`, `plan`, `goal`, `mbtx`, `job_output`,
 /// `job_stop`, and `finish`. Commands are `mbtx`'s job — it compiles and
 /// runs a MoonBit program that spawns processes through the shell-free
@@ -212,7 +212,7 @@ pub async fn build_tools(
   }
   let image_input_supported = Ref(false)
   let file_tools = [
-    @read_image.definition(workspace_root~),
+    @image.definition(workspace_root~),
     @edit.definition(workspace_root~, file_state~),
     @multi_edit.definition(workspace_root~, file_state~),
     @write.definition(

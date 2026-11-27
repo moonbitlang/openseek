@@ -29,7 +29,7 @@ fn MinimalCall::from_tool(
     "mbtx" => Some(ui(locale, ExecuteMbtx))
     "shell" => Some(ui(locale, ExecuteCommands))
     "web_search" | "webSearch" => Some(ui(locale, SearchWeb))
-    "read_image" | "imageView" => Some(ui(locale, ViewImages))
+    "image" | "read_image" | "imageView" => Some(ui(locale, ViewImages))
     "imageGeneration" => Some(ui(locale, GenerateImages))
     "enteredReviewMode" | "exitedReviewMode" => Some(ui(locale, ReviewCode))
     "review" | "spawn_agent" => Some(ui(locale, CreateSubagents))

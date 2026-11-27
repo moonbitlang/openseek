@@ -15,13 +15,13 @@ async test "direct and unprinted PTC image results reach the next request and re
             #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
             #|---
             #|async fn main {
-            #|  let result = @tools.call("read_image", { "path": "picture" })
+            #|  let result = @tools.call("image", { "path": "picture" })
             #|  if result.is_error { fail(result.content) }
             #|}
           ),
         )
       } else {
-        wait_call_payload("read_image", { "path": "picture" })
+        wait_call_payload("image", { "path": "picture" })
       }
       guard goal_check_test_server(group, bodies, [
           first,
@@ -37,7 +37,7 @@ async test "direct and unprinted PTC image results reach the next request and re
         api_key="offline",
         model=Deepseek(V4Flash),
         api_url=url,
-        session=Session(SessionId("read-image"), system_prompt="system"),
+        session=Session(SessionId("image"), system_prompt="system"),
         content=Content([Text("inspect picture")]),
         max_steps=3,
         append_item=(session, item) => session.append(item),
@@ -46,7 +46,7 @@ async test "direct and unprinted PTC image results reach the next request and re
       assert_true(bodies[1].contains(image.data_url()), msg=bodies[1])
       @fs.remove("\{root}/picture")
       let mut replay = @agent_session.Session(
-        SessionId("read-image"),
+        SessionId("image"),
         system_prompt="system",
       )
       for event in session.events() {
