@@ -320,6 +320,10 @@ async fn run_tui(config : AppConfig, initial : String?) -> Unit {
         description="standing goal: /goal | /goal set <text> | /goal clear",
       ),
       SlashCommandSpec(
+        name="ultrareview",
+        description="review this branch with the review swarm: /ultrareview [focus]",
+      ),
+      SlashCommandSpec(
         name="inspect",
         description="watch this session live in the browser (starts the session viewer)",
       ),
