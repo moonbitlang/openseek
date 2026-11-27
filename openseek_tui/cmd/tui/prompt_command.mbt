@@ -53,6 +53,9 @@ test "ultrareview starts a turn with the review swarm prompt" {
   }
   assert_eq(text, UltrareviewPrompt)
   assert_eq(shown, text)
+  // The contract the agent acts on, independent of the constant's wording.
+  assert_true(text.contains("\"@builtin/review.mbtx\""))
+  assert_true(text.contains("[\"--swarm\", \"--sha\", <merge base>, \"--\""))
   assert_true(state.run is Running(_))
 }
 
