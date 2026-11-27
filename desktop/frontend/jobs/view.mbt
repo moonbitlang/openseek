@@ -162,16 +162,14 @@ pub fn panel(
     ),
   ])
   let body : Array[@html.Html] = [header]
-  if state.owner is Some(owner) {
+  let cloud = state.owner is Some(Cloud(_, _))
+  if state.owner is Some(Host(channel, scope)) {
     body.push(
       @html.div(
         class="jobs-host",
         dynamic_text(
           locale,
-          DHost(
-            owner.channel.uri_authority().to_string(),
-            owner.scope.session.to_string(),
-          ),
+          DHost(channel.uri_authority().to_string(), scope.session.to_string()),
         ),
       ),
     )
@@ -203,7 +201,11 @@ pub fn panel(
             ui(locale, NoJobs)
           },
         ),
-        @html.p(ui(locale, JobsDescription)),
+        if cloud {
+          @html.nothing
+        } else {
+          @html.p(ui(locale, JobsDescription))
+        },
       ]),
     )
   } else {
@@ -394,7 +396,7 @@ pub fn panel(
           ui(locale, CopyId),
         ),
       ]
-      if job.subagent is Some(info) {
+      if !cloud && job.subagent is Some(info) {
         actions.push(
           @html.button(
             class="jobs-action",
@@ -528,7 +530,9 @@ pub fn panel(
       } else {
         note
       }
-      details.push(@html.div(class="jobs-output-note", note))
+      if !cloud {
+        details.push(@html.div(class="jobs-output-note", note))
+      }
       if view.output_path is Some(_) {
         details.push(
           @html.div(
@@ -563,9 +567,11 @@ pub fn panel(
           ),
         )
       }
-      details.push(
-        @html.div(class="jobs-footnote", ui(locale, StopDescription)),
-      )
+      if !cloud {
+        details.push(
+          @html.div(class="jobs-footnote", ui(locale, StopDescription)),
+        )
+      }
       body.push(@html.div(class="jobs-detail", details))
     }
   }

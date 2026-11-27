@@ -1,8 +1,8 @@
 ///|
 #derive(Eq)
-pub(all) struct Owner {
-  channel : @interop.ChannelId
-  scope : @protocol.JobsScope
+pub(all) enum Owner {
+  Host(@interop.ChannelId, @protocol.JobsScope)
+  Cloud(String, @cloud.JobConnection?)
 }
 
 ///|
@@ -124,8 +124,11 @@ fn output_complete(state : State, job : @wire.JobRecord) -> Bool {
 }
 
 ///|
-fn target(owner : Owner, key : (String, String)) -> @protocol.JobTarget {
-  { scope: owner.scope, generation: key.0, job_id: key.1, }
+fn target(
+  scope : @protocol.JobsScope,
+  key : (String, String),
+) -> @protocol.JobTarget {
+  { scope, generation: key.0, job_id: key.1, }
 }
 
 ///|
@@ -146,11 +149,16 @@ fn request_list(
       )
     },
     () => {
-      @interop.bridge_request(owner.channel, @commands.jobs_list, {
-        scope: owner.scope,
-        offset,
-        selected: state.selected.map(key => target(owner, key)),
-      })
+      match owner {
+        Host(channel, scope) =>
+          @interop.bridge_request(channel, @commands.jobs_list, {
+            scope,
+            offset,
+            selected: state.selected.map(key => target(scope, key)),
+          })
+        Cloud(_, Some(connection)) => connection.list_jobs()
+        Cloud(_, None) => raise Failure("Jobs disconnected")
+      }
     },
   )
   (cmd, { ..state, listing: true, })
@@ -161,7 +169,7 @@ fn request_read(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
   guard state.watch is Panel &&
     !state.reading &&
     state.read_budget > 0 &&
-    state.owner is Some(owner) &&
+    state.owner is Some(Host(channel, scope)) &&
     state.selected is Some(key) &&
     selected_job(state) is Some(view) &&
     view.output_path is Some(_) &&
@@ -176,8 +184,8 @@ fn request_read(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
       )
     },
     () => {
-      @interop.bridge_request(owner.channel, @commands.jobs_read, {
-        target: target(owner, key),
+      @interop.bridge_request(channel, @commands.jobs_read, {
+        target: target(scope, key),
         offset: state.cursor,
         limit: 65536,
       })
@@ -493,11 +501,16 @@ pub fn update(
           )
         },
         () => {
-          @interop.bridge_request(
-            owner.channel,
-            @commands.jobs_stop,
-            target(owner, key),
-          )
+          match owner {
+            Host(channel, scope) =>
+              @interop.bridge_request(
+                channel,
+                @commands.jobs_stop,
+                target(scope, key),
+              )
+            Cloud(_, Some(connection)) => connection.stop_job(key.0, key.1)
+            Cloud(_, None) => raise Failure("Jobs disconnected")
+          }
         },
       )
       (cmd, { ..state, stopping: true, control_error: None, })

@@ -1,9 +1,10 @@
 ///|
 fn fixture_owner(session : String) -> Owner {
-  {
-    channel: Remote("device-a"),
-    scope: { session, workspace: Some("/workspace"), archived: false, },
-  }
+  Host(Remote("device-a"), {
+    session,
+    workspace: Some("/workspace"),
+    archived: false,
+  })
 }
 
 ///|

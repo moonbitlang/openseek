@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/cloud"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/sub",
+  "moonbitlang/async/aqueue",
   "moonbitlang/async/http",
   "moonbitlang/core/json",
   "moonbitlang/openseek/deepseek",
@@ -220,6 +221,7 @@ pub fn Conversation::control_primary_action(Self, @composer.RunningSubmit) -> @c
 pub fn Conversation::equal(Self, Self) -> Bool
 pub fn Conversation::extends_history_backward(Self, Self) -> Bool
 pub fn Conversation::items(Self, @i18n.Locale) -> Array[@transcript.TranscriptItem]
+pub fn Conversation::job_connection(Self, String, String) -> JobConnection?
 pub fn Conversation::not_equal(Self, Self) -> Bool
 pub fn Conversation::prediction_source(Self, ready~ : Bool) -> Int32?
 pub fn Conversation::published_approval(Self, Self) -> ControlApproval?
@@ -280,6 +282,17 @@ pub struct HistoryWindow {
 }
 pub fn HistoryWindow::equal(Self, Self) -> Bool
 pub fn HistoryWindow::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
+pub struct JobConnection {
+  token : String
+  session : String
+  stream : StreamLease
+}
+pub fn JobConnection::equal(Self, Self) -> Bool
+pub async fn JobConnection::list_jobs(Self) -> @protocol.JobsListReply
+pub fn JobConnection::not_equal(Self, Self) -> Bool
+pub async fn JobConnection::stop_job(Self, String, String) -> @protocol.JobStopReply
 
 #derive(Eq)
 pub struct MetadataSave {
@@ -495,6 +508,7 @@ pub fn SteerStatus::not_equal(Self, Self) -> Bool
 pub impl @json.FromJson for SteerStatus
 
 pub struct StreamLease {
+  job_replies : Map[String, @aqueue.Queue[@openseek_protocol.Event]]
   mut active : Bool
   mut client : @http.Client?
 }

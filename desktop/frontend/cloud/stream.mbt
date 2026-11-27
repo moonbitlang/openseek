@@ -2,13 +2,14 @@
 /// Owns only the client response stream. Closing it never cancels the Cloud
 /// task: revisiting that session recovers history and a fresh control snapshot.
 pub struct StreamLease {
+  job_replies : Map[String, @async.Queue[@wire.Event]]
   mut active : Bool
   mut client : @http.Client?
 }
 
 ///|
 fn StreamLease::new() -> StreamLease {
-  { active: true, client: None, }
+  { active: true, client: None, job_replies: {}, }
 }
 
 ///|
@@ -19,6 +20,10 @@ impl Eq for StreamLease with fn equal(a, b) {
 ///|
 fn StreamLease::close(self : StreamLease) -> Unit {
   self.active = false
+  for _, reply in self.job_replies {
+    reply.close()
+  }
+  self.job_replies.clear()
   if self.client is Some(client) {
     client.close()
   }

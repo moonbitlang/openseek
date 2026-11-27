@@ -1796,9 +1796,9 @@ fn Model::overview_background(
   dispatch : @cmd.Emit[Msg],
   conv : Conversation,
 ) -> @conversation_overview.Background? {
-  let own_jobs = self.jobs.owner is Some(owner) &&
-    owner.channel == conv.device &&
-    owner.scope.session == conv.session_id
+  let own_jobs = self.jobs.owner is Some(Host(channel, scope)) &&
+    channel == conv.device &&
+    scope.session == conv.session_id
   let tasks = @conversation_overview.BackgroundTasks::from_listing(
     jobs=if own_jobs { self.jobs.jobs } else { [] },
     more_jobs=own_jobs && self.jobs.next_offset is Some(_),

@@ -2172,12 +2172,16 @@ fn update(
   )
   let model = { ..model, terminal, }
   let owner = model.jobs_owner()
-  let connected = owner is Some(owner) &&
-    model.devices.any(dev => {
-      dev.channel == owner.channel &&
-      dev.bridge is Connected &&
-      dev.reconnect_failures == 0
-    })
+  let connected = match owner {
+    Some(Cloud(_, connection)) => connection is Some(_)
+    Some(Host(channel, _)) =>
+      model.devices.any(dev => {
+        dev.channel == channel &&
+        dev.bridge is Connected &&
+        dev.reconnect_failures == 0
+      })
+    None => false
+  }
   // The Jobs panel reads the listing and the selected job's output; the
   // overview's background tasks card reads only the listing. Both describe
   // the conversation on screen, which is the jobs owner's.
@@ -7287,10 +7291,8 @@ fn update_msg(
     // the archive, in the parent's workspace.
     Jobs(OpenSession(session_id)) =>
       match (model.jobs.owner, model.host_selection()) {
-        (
-          Some({ scope: { archived: true, session: parent, .. }, .. }),
-          Some(selected),
-        ) if selected.session == parent =>
+        (Some(Host(_, { archived: true, session: parent, .. })), Some(selected)) if selected.session ==
+          parent =>
           update(
             dispatch,
             OpenArchivedSession(
@@ -10465,9 +10467,9 @@ fn update_device_msg(
         Err(_) => (@cmd.none, model)
       }
     JobsChanged(session) => {
-      let (jobs_cmd, model) = if model.jobs.owner is Some(owner) &&
-        owner.channel == channel &&
-        owner.scope.session == session {
+      let (jobs_cmd, model) = if model.jobs.owner is Some(Host(host, scope)) &&
+        host == channel &&
+        scope.session == session {
         let (cmd, jobs) = @jobs.update(
           locale=model.locale,
           dispatch.map(msg => Jobs(msg)),
@@ -25434,14 +25436,13 @@ test "a subagent of an archived conversation opens from the archive" {
     ),
     jobs: {
       ..model.jobs,
-      owner: Some({
-        channel: Local,
-        scope: {
+      owner: Some(
+        Host(Local, {
           session: "desktop-parent",
           workspace: Some(workspace.to_string()),
           archived: true,
-        },
-      }),
+        }),
+      ),
     },
   }
   let (_, next) = update(
