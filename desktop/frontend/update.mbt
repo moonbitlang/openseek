@@ -2758,6 +2758,22 @@ fn update_msg(
         let selected = model.cloud_identity() == Some(action.identity().owner) ||
           model.cloud_draft_identity() == Some(action.identity().owner)
         match action {
+          @composer.ContextContinueRequested(identity~) => {
+            guard selected &&
+              model.cloud_display_status() is Some(Finished(ContextYield)) &&
+              model.cloud_conversation() is Some({ queue_edit: None, .. }) else {
+              return (@cmd.none, model)
+            }
+            return update_cloud(
+              dispatch,
+              @cloud.Submit(identity.owner, {
+                task: shell_text(model.locale, ContinuePrompt),
+                mentions: [],
+                images: [],
+              }),
+              model,
+            )
+          }
           @composer.ShellCommandSubmitted(identity~, command~) =>
             return submit_cloud_shell(dispatch, model, identity.owner, command)
           @composer.ShellTerminalRequested(identity~, index~) => {

@@ -413,6 +413,7 @@ fn ApprovalNotice::render(
 fn ContextComponent::render(
   locale~ : @i18n.Locale,
   self : ContextComponent,
+  holds_draft~ : Bool,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html? {
@@ -647,7 +648,7 @@ fn ContextComponent::render(
       ]
       // Continuing sends a prompt of the composer's own making, so the offer
       // is only a button while nothing of the person's draft is in the way.
-      if continue_available {
+      if continue_available && !holds_draft {
         row.push(
           @html.button(
             class="composer-notice-btn",

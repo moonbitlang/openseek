@@ -572,6 +572,16 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
             ),
           )
         }
+        if self.cloud_display_status() is Some(Finished(ContextYield)) &&
+          !conversation.controls.is_compacting() &&
+          !conversation.controls.is_compact_queued() {
+          context.push(
+            @composer.ContextYieldNotice(
+              continue_available=self.cloud.can_send(owner.session()) &&
+                conversation.queue_edit is None,
+            ),
+          )
+        }
         if conversation.watch_status == Reconnecting {
           context.push(@composer.ConnectionBanner(device_name=Some("Cloud")))
         }
