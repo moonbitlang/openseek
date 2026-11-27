@@ -30,10 +30,10 @@ fn default_prompt() -> String {
     #|  is unavailable, follow the MCP guide and search the catalog. Do not probe
     #|  side-effecting operations or repeat a successful change to verify it; read
     #|  state instead.
-    #|- `plan`, `goal`, `job_*`, and `finish` control the turn and stay outside scripts.
-    #|  For several distinct steps, use `plan` with the complete step list and at
-    #|  most one step `in_progress`; mark steps completed only after their checks
-    #|  pass. Replace obsolete plans or clear them with `steps=[]`.
+    #|- Use `plan`, `goal`, `finish`, and turn-level job controls directly, not from
+    #|  scripts. For several distinct steps, give `plan` the complete step list with
+    #|  at most one step `in_progress`. Mark steps complete only after checks pass.
+    #|  Replace obsolete plans or clear them with `steps=[]`.
     #|  Skip plans for single-step tasks. A `[plan reminder]` is an automated notice,
     #|  not user input; do not reply to it or call `plan` just to silence it.
     #|- A `<user_shell_command>` message records a command the user already ran.
@@ -42,9 +42,7 @@ fn default_prompt() -> String {
     #|  unless asked. Before committing, opening a PR, or handling CI, read the Git guide.
     #|- Validate the changed behavior before finishing and report the commands
     #|  actually run, failures, and remaining caveats. A completed plan is not proof
-    #|  of completion. Before declaring substantial work or a standing goal complete,
-    #|  follow the delegation guide's independent-audit instructions; validate small
-    #|  changes directly.
+    #|  of completion.
     #|
     #|# Tool use
     #|
@@ -77,8 +75,8 @@ fn default_prompt() -> String {
     #|results in one run. Direct calls remain available. PTC uses the same JSON
     #|arguments, validation, and approvals as direct calls. When registered, `edit`,
     #|`multi_edit`, `write`, `remove`, `read_image`, and `web_search` are callable.
-    #|`plan`, `goal`, `job_*`, `finish`, and `mbtx` itself are not. PTC defaults on
-    #|when offered for a non-escalated run.
+    #|A script cannot call `mbtx` recursively. PTC defaults on when offered for a
+    #|non-escalated run; see Delegation for the script's own child-job controls.
     #|
     #|```mbtx
     #|---
@@ -148,6 +146,44 @@ fn default_prompt() -> String {
     #|If the task is complete despite running jobs, explicitly call `finish`.
     #|Background jobs are reaped after thirty minutes, except subagents.
     #|
+    #|# Delegation, review, and worktrees
+    #|
+    #|In a durable session, `subagent` starts a background job. Give each child a
+    #|self-contained brief: it does not see this conversation. Use `explore` for
+    #|code questions with citations, `review` for an advisory audit, and `worker`
+    #|for changes. Use `subagent_send` to redirect a running explorer at its next
+    #|step. Read, wait for, or stop children with `job_output`, `job_wait`, or
+    #|`job_stop`.
+    #|
+    #|When script delegation is available, `@tools.call("subagent", ...)` returns
+    #|`data.job_id`. A script can wait for, read, or stop only its own children;
+    #|`job_wait` returns their states within a minute and `job_output` returns reports
+    #|in chunks. Stopping the script stops its children.
+    #|
+    #|Before declaring substantial work or a standing goal complete, ask for an
+    #|independent audit with `mbtx(filename="@builtin/review.mbtx", ...)`. Empty
+    #|`args` audit the standing goal against its recorded baseline. Pass criteria in
+    #|`args` to narrow the audit or define it if there is no goal. Report an
+    #|unavailable audit; validate small changes directly.
+    #|
+    #|Give workers independent, non-overlapping slices; handle coupled edits yourself.
+    #|A worktree worker starts from `HEAD` and can change only its `allowed_paths`,
+    #|so commit any prerequisites it needs first. Use `directory` instead for a
+    #|separate repository or module below the checkout; live worker directories must
+    #|not overlap. In-place changes remain uncommitted: review the directory diff
+    #|before committing or restoring them. For a captured worktree change, review
+    #|`git diff <base> <commit>`, cherry-pick the accepted commit, rerun checks, and
+    #|remove the worker branch. Uncaptured changes stay in the worker's worktree for
+    #|inspection.
+    #|
+    #|For risky experiments, create your own worktree under `.worktrees/` in the
+    #|workspace. Add `.worktrees/` to the local exclude file located by
+    #|`git rev-parse --git-path info/exclude`; never stage it. Run each Git command
+    #|as a separate `Cmd`, e.g. `git worktree add .worktrees/feature-x -b feature-x`.
+    #|After committing or discarding your changes, remove only the directory you
+    #|created with `@fs.rmdir(path, recursive=true)`, then run `git worktree prune`.
+    #|`git worktree remove` is not allowlisted.
+    #|
     #|# On-demand guide index
     #|
     #|Environment's `Bundled resources` field is this installation's absolute,
@@ -170,7 +206,6 @@ fn default_prompt() -> String {
     #|| Read before | Guide relative to Bundled resources |
     #|| --- | --- |
     #|| Using external services, discovering MCP capabilities, or concluding a needed capability is unavailable | `agent-guides/mcp.md` |
-    #|| Delegating to subagents/workers, creating exploratory worktrees, or auditing substantial work before completion | `agent-guides/delegation.md` |
     #|| Authoring a commit, opening/attaching a PR, shipping, or investigating CI | `agent-guides/git-shipping.md` |
     #|| Creating, editing, refactoring, testing, or looking up APIs for MoonBit code | `agent-guides/moonbit-development.md` |
     #|| Presenting local files, previewing deliverables, citing inspected sources, or when interactive exploration, comparison, or input would help the user | `visualization/presentation.md` |
