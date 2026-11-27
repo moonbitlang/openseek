@@ -57,7 +57,6 @@ pub(all) struct CheckoutScope {
 }
 pub fn CheckoutScope::equal(Self, Self) -> Bool
 pub fn CheckoutScope::not_equal(Self, Self) -> Bool
-pub async fn[Payload : @json.ToJson, Reply : @json.FromJson] CheckoutScope::request(Self, @commands.Command[Payload, Reply], Payload) -> Reply
 
 #derive(Eq)
 pub(all) struct Detail {
@@ -77,6 +76,7 @@ pub(all) enum GithubHost {
 }
 pub fn GithubHost::equal(Self, Self) -> Bool
 pub fn GithubHost::not_equal(Self, Self) -> Bool
+pub async fn[Payload : @json.ToJson, Reply : @json.FromJson] GithubHost::request(Self, @commands.Command[Payload, Reply], Payload) -> Reply
 
 #derive(Eq)
 pub(all) struct Group {

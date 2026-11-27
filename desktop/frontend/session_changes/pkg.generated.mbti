@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/github",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -57,9 +58,9 @@ pub(all) enum Msg {
   Remove(@interop.ConversationIdentity, @protocol.SessionArtifact)
   RemoveAll(@interop.ConversationIdentity, Array[@protocol.SessionArtifact])
   Removed(@interop.ConversationIdentity, @protocol.SessionArtifact, Result[@protocol.SessionArtifacts, String])
-  Summarized(url~ : String, generation~ : Int32, Result[@protocol.GitPullRequest?, String])
-  BatchLookup(channel~ : @interop.ChannelId, urls~ : Array[String], force~ : Bool)
-  BatchSummarized(Result[@protocol.GithubPullRequestSummariesReply, String])
+  Summarized(key~ : String, generation~ : Int32, Result[@protocol.GitPullRequest?, String])
+  BatchLookup(host~ : @github.GithubHost, urls~ : Array[String], force~ : Bool)
+  BatchSummarized(@interop.ConversationIdentity?, Result[@protocol.GithubPullRequestSummariesReply, String])
   RecordSummary(PullRequest)
 }
 
@@ -112,7 +113,7 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::initial() -> Self
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::phase_for(Self, @interop.ConversationIdentity) -> Phase
-pub fn State::summary(Self, String) -> PullRequest?
+pub fn State::summary(Self, String, owner? : @interop.ConversationIdentity) -> PullRequest?
 
 // Type aliases
 
