@@ -100,7 +100,6 @@ Set `ptc=false` when the current tool supports `ptc`; otherwise omit it.
 | Task | Guide ID |
 | --- | --- |
 | Develop or refactor a MoonBit project | `moonbit-development` |
-| Build a Rabbita web frontend or a Proton desktop app | `frontend-rabbita` or `desktop-proton`, respectively |
 | Discover or use an external service through MCP | `mcp` |
 | Commit, push, open a PR, or investigate CI | `git-shipping` |
 | Deliver a session artifact or build an interactive HTML/SVG answer | `artifacts` |
