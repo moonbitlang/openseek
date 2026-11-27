@@ -13,6 +13,19 @@ const UltrareviewPrompt : String =
   #|Focus:
 
 ///|
+/// What `/simplify [focus]` sends. It ends on `Focus:`, which the text typed
+/// after the command completes. Kept word for word with Desktop's copy in
+/// `desktop/frontend/composer_input.mbt`.
+const SimplifyPrompt : String =
+  #|Sweep this repository for safe simplifications with the bundled simplify workflow.
+  #|
+  #|1. Call the `mbtx` tool with `filename: "@builtin/simplify.mbtx"` and `args: ["--", <focus>]`, where the focus is the Focus text below; when it is empty, pass no args.
+  #|2. Wait for the job with `job_wait` and read it with `job_output`. If the sweep stops before starting (not at the repository root, uncommitted changes, HEAD not on the default branch, gh not signed in), report why and stop: do not commit, stash or push anything to get past it.
+  #|3. Report the pull requests it opened, the changes the reviewers rejected, and the packages it skipped and why.
+  #|
+  #|Focus:
+
+///|
 /// Run a prompt command such as `/ultrareview [focus]`: start a turn whose
 /// prompt is `prompt` followed by the typed `arguments`. The expanded prompt is
 /// what the transcript shows, as a resumed session will show it too.
@@ -73,6 +86,22 @@ test "ultrareview appends the typed focus after the prompt" {
 }
 
 ///|
+test "simplify starts a turn with the simplify sweep prompt" {
+  let state = drain_test_state()
+  let cmds = update(
+    state,
+    UiInput(SlashCommand(name="simplify", arguments="openseek_tui")),
+  )
+  guard cmds is [AppendItem(Input(Prompt(shown))), StartAgent(text, ..)] else {
+    fail("expected an echo and a started turn, got \{cmds.length()} commands")
+  }
+  assert_eq(text, "\{SimplifyPrompt} openseek_tui")
+  assert_eq(shown, text)
+  let busy = update(state, UiInput(SlashCommand(name="simplify", arguments="")))
+  assert_eq(error_item_count(busy), 1)
+}
+
+///|
 test "ultrareview is rejected while a turn runs" {
   let state = drain_test_state()
   let _ = update(state, UiInput(Steer(Prompt("busy"))))
@@ -94,5 +123,5 @@ test "prompt commands take multi-line focus text" {
     .map(spec => spec.name())
   // A command that takes no text, like `/exit`, keeps a pasted `/exit` and a
   // newline an ordinary prompt.
-  assert_eq(takes_text, ["ultrareview"])
+  assert_eq(takes_text, ["ultrareview", "simplify"])
 }

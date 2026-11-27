@@ -325,6 +325,11 @@ fn tui_slash_commands() -> Array[@ui.SlashCommandSpec] {
       multiline_arguments=true,
     ),
     SlashCommandSpec(
+      name="simplify",
+      description="sweep the repository for simplifications, one PR per package: /simplify [focus]",
+      multiline_arguments=true,
+    ),
+    SlashCommandSpec(
       name="inspect",
       description="watch this session live in the browser (starts the session viewer)",
     ),
