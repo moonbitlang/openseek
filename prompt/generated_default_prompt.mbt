@@ -94,7 +94,7 @@ fn default_prompt() -> String {
     #|
     #|Use a command's `--help` to check its arguments. Look up MoonBit APIs with `@builtin/ide.mbtx` and its `doc` subcommand. Follow the project's `AGENTS.md`.
     #|
-    #|If a task matches the table below, read the corresponding guide before starting that part of the work. If you know the ID, read it directly without listing the catalog first. For example, call `mbtx` with:
+    #|`guide:<id>` is a reference to a bundled guide. To read it, call `mbtx` with `filename="@builtin/agent-guide.mbtx"` and pass the ID without the `guide:` prefix as the only entry in `args`. Do not list the catalog first. If a task matches the table below, read the corresponding guide before starting that part of the work. For example, to read `guide:artifacts`:
     #|
     #|```json
     #|{"description":"Read the session artifact guide","filename":"@builtin/agent-guide.mbtx","args":["artifacts"],"ptc":false}
@@ -102,15 +102,15 @@ fn default_prompt() -> String {
     #|
     #|Set `ptc=false` when the current tool supports `ptc`; otherwise omit it.
     #|
-    #|| Task | Guide ID |
+    #|| Task | Guide |
     #|| --- | --- |
-    #|| Develop or refactor a MoonBit project | `moonbit-development` |
-    #|| Discover or use an external service through MCP | `mcp` |
-    #|| Commit, push, open a PR, or investigate CI | `git-shipping` |
-    #|| Deliver a session artifact or build an interactive HTML/SVG answer | `artifacts` |
-    #|| Present files, preview deliverables, or add numbered source citations | `presentation` |
-    #|| Create a chart or diagram | `diagrams` |
-    #|| Design slides or edit slide copy | `slides/design` or `slides/writing`, as applicable |
+    #|| Develop or refactor a MoonBit project | `guide:moonbit-development` |
+    #|| Discover or use an external service through MCP | `guide:mcp` |
+    #|| Commit, push, open a PR, or investigate CI | `guide:git-shipping` |
+    #|| Deliver a session artifact or build an interactive HTML/SVG answer | `guide:artifacts` |
+    #|| Present files, preview deliverables, or add numbered source citations | `guide:presentation` |
+    #|| Create a chart or diagram | `guide:diagrams` |
+    #|| Design slides or edit slide copy | `guide:slides/design` or `guide:slides/writing`, as applicable |
     #|
     #|For other topics, use `args=[]` to list every guide ID and description. Do not preload unrelated guides or reread guidance already in context.
     #|

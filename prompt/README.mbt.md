@@ -35,7 +35,10 @@ documentation updater generate or check both outputs.
 
 ## On-demand guides
 
-A guide's stable ID is its path relative to `prompt/guides/` without `.md`.
+A guide ID is the file's path relative to `prompt/guides/` without `.md`.
+Write references as `guide:<id>` in prose and tables. For example,
+`guide:diagrams/katex` is read with `args=["diagrams/katex"]` in
+`@builtin/agent-guide.mbtx`; the prefix is not part of the ID.
 Register the file in the `agent_guide` inputs in `agent_tool/mbtx/moon.pkg`.
 Write its description in the first paragraph, then a blank line and the Markdown
 body. A heading is optional.

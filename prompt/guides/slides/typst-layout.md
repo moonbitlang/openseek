@@ -10,8 +10,7 @@ Run the CLI directly with `moonx cli/typst`:
 moonx cli/typst compile slide.typ slide.pdf
 ```
 
-Run this from the directory containing `slide.typ`. `moonx` resolves and runs
-the CLI; there is no need to search SDK caches or create a MoonBit project.
+Run this from the directory containing `slide.typ`. `moonx` resolves and runs the CLI; there is no need to search SDK caches or create a MoonBit project.
 
 ## Paragraph Justification
 

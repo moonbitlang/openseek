@@ -20,13 +20,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|      #|## Storage and references
           #|      #|
-          #|      #|Write completed files under `<session scratch>/artifact/`, using the actual
-          #|      #|scratch path shown in Environment and its existing write permissions. Pass
-          #|      #|paths explicitly to scripts and create the directory when needed.
-          #|      #|User-requested project files still belong at the requested workspace paths.
+          #|      #|Write completed files under `<session scratch>/artifact/`, using the actual scratch path shown in Environment and its existing write permissions. Pass paths explicitly to scripts and create the directory when needed. User-requested project files still belong at the requested workspace paths.
           #|      #|
-          #|      #|Use a new descriptive filename for every revision. Insert the finished file
-          #|      #|where it belongs in the answer:
+          #|      #|Use a new descriptive filename for every revision. Insert the finished file where it belongs in the answer:
           #|      #|
           #|      #|````markdown
           #|      #|```openseek-file artifact
@@ -34,59 +30,29 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|```
           #|      #|````
           #|      #|
-          #|      #|Paths beginning with `scratch/artifact/` resolve within the owning session.
-          #|      #|An ordinary `openseek-file` fence displays a file card, including for HTML.
-          #|      #|Add `artifact` to the fence info to render self-contained HTML/SVG in an isolated
-          #|      #|iframe after the final answer is confirmed. The same marker works for files
-          #|      #|at ordinary workspace paths. Other types use file cards.
+          #|      #|Paths beginning with `scratch/artifact/` resolve within the owning session. An ordinary `openseek-file` fence displays a file card, including for HTML. Add `artifact` to the fence info to render self-contained HTML/SVG in an isolated iframe after the final answer is confirmed. The same marker works for files at ordinary workspace paths. Other types use file cards.
           #|      #|
-          #|      #|The artifact subtree is retained across calls, saved-session restarts and
-          #|      #|archive/restore. A fork copies it into its own scratch directory; working
-          #|      #|projects outside that subtree stay with the original session. Permanent session
-          #|      #|deletion removes its retained files.
+          #|      #|The artifact subtree is retained across calls, saved-session restarts and archive/restore. A fork copies it into its own scratch directory; working projects outside that subtree stay with the original session. Permanent session deletion removes its retained files.
           #|      #|
           #|      #|## Interactive answers
           #|      #|
-          #|      #|Use an interactive component when changing a parameter, comparing alternatives,
-          #|      #|or stepping through a process helps answer the user's question. Each component
-          #|      #|should address one question and show a useful result immediately. Prefer a few
-          #|      #|clearly labelled controls with visible current values, accessible native inputs,
-          #|      #|and a reset action. Keep conclusions, assumptions, caveats and source citations
-          #|      #|in the surrounding answer. Choose controls that directly support the explanation.
+          #|      #|Use an interactive component when changing a parameter, comparing alternatives, or stepping through a process helps answer the user's question. Each component should address one question and show a useful result immediately. Prefer a few clearly labelled controls with visible current values, accessible native inputs, and a reset action. Keep conclusions, assumptions, caveats and source citations in the surrounding answer. Choose controls that directly support the explanation.
           #|      #|
-          #|      #|Generate ordinary MoonBit/Rabbita source files with local state and events.
-          #|      #|Reopening a page restores its authored initial state.
+          #|      #|Generate ordinary MoonBit/Rabbita source files with local state and events. Reopening a page restores its authored initial state.
           #|      #|
           #|      #|### Author, check, build, reference
           #|      #|
-          #|      #|The starter files under `<bundled-resources>/artifact/rabbita/` are `moon.mod`,
-          #|      #|`moon.pkg`, `model.mbt`, `main.mbt`, `model_wbtest.mbt`, `bridge.mbt` and
-          #|      #|`index.html`. Read these files directly.
+          #|      #|The starter files under `<bundled-resources>/artifact/rabbita/` are `moon.mod`, `moon.pkg`, `model.mbt`, `main.mbt`, `model_wbtest.mbt`, `bridge.mbt` and `index.html`. Read these files directly.
           #|      #|
-          #|      #|Run installed helpers from `<bundled-resources>/artifact/` by setting `filename`
-          #|      #|and `args`. The mbtx tool's `source` field is for authoring a new script.
+          #|      #|Run installed helpers from `<bundled-resources>/artifact/` by setting `filename` and `args`. The mbtx tool's `source` field is for authoring a new script.
           #|      #|
-          #|      #|For a fresh project, call `init.mbtx` with
-          #|      #|`args=["<session scratch>", "<bundled-resources>/artifact/rabbita", "linear"]`.
-          #|      #|Use the actual scratch path from Environment. The script copies the starter to
-          #|      #|`component-work/linear` in scratch and prints the project path.
+          #|      #|For a fresh project, call `init.mbtx` with `args=["<session scratch>", "<bundled-resources>/artifact/rabbita", "linear"]`. Use the actual scratch path from Environment. The script copies the starter to `component-work/linear` in scratch and prints the project path.
           #|      #|
-          #|      #|Write generated text to fresh files in a staging directory in scratch, using
-          #|      #|normal file tools or mbtx file I/O. Then call `write.mbtx` with
-          #|      #|`args=[SCRATCH_DIRECTORY, PROJECT, "model.mbt", MODEL_SOURCE_FILE, "main.mbt", VIEW_SOURCE_FILE, ...]`.
-          #|      #|Each `SOURCE_FILE` is the absolute path of an existing scratch file. Apply
-          #|      #|related files in one batch, then check the project. You can also use mbtx file
-          #|      #|I/O for scratch files and normal edit/write tools for workspace sources.
+          #|      #|Write generated text to fresh files in a staging directory in scratch, using normal file tools or mbtx file I/O. Then call `write.mbtx` with `args=[SCRATCH_DIRECTORY, PROJECT, "model.mbt", MODEL_SOURCE_FILE, "main.mbt", VIEW_SOURCE_FILE, ...]`. Each `SOURCE_FILE` is the absolute path of an existing scratch file. Apply related files in one batch, then check the project. You can also use mbtx file I/O for scratch files and normal edit/write tools for workspace sources.
           #|      #|
-          #|      #|1. Adapt the question, model and view in the scratch working project to the
-          #|      #|   user's question. The `rabbita/` starter illustrates Amdahl's law with two
-          #|      #|   inputs, an immediate answer and an interactive mathplotlib chart. Clicking a
-          #|      #|   point selects its worker count for the answer and follow-up. Adapt the chart,
-          #|      #|   data and state to the question.
-          #|      #|2. Run `moon -C PROJECT check --target js --deny-warn` and relevant model tests
-          #|      #|   (`moon -C PROJECT test --target js` when a JS runtime is available).
-          #|      #|3. Package the project with `build.mbtx` as described below, then insert its
-          #|      #|   printed file fence where the component answers the question.
+          #|      #|1. Adapt the question, model and view in the scratch working project to the user's question. The `rabbita/` starter illustrates Amdahl's law with two inputs, an immediate answer and an interactive mathplotlib chart. Clicking a point selects its worker count for the answer and follow-up. Adapt the chart, data and state to the question.
+          #|      #|2. Run `moon -C PROJECT check --target js --deny-warn` and relevant model tests (`moon -C PROJECT test --target js` when a JS runtime is available).
+          #|      #|3. Package the project with `build.mbtx` as described below, then insert its printed file fence where the component answers the question.
           #|      #|
           #|      #|### Continuing with selected state
           #|      #|
@@ -99,24 +65,13 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|});
           #|      #|```
           #|      #|
-          #|      #|`rabbita/bridge.mbt` demonstrates publishing state after rendering and on state
-          #|      #|updates. Adapt the title and JSON fields to the question; the bridge is optional.
-          #|      #|Capture the inputs and derived values needed for the follow-up, using a title
-          #|      #|up to 160 UTF-16 units and a JSON payload up to 12 KiB.
+          #|      #|`rabbita/bridge.mbt` demonstrates publishing state after rendering and on state updates. Adapt the title and JSON fields to the question; the bridge is optional. Capture the inputs and derived values needed for the follow-up, using a title up to 160 UTF-16 units and a JSON payload up to 12 KiB.
           #|      #|
-          #|      #|The user can select **Ask with current settings** to attach a snapshot to the
-          #|      #|composer and send it with a follow-up. Selecting again updates the snapshot;
-          #|      #|otherwise it stays fixed. The message carries it as an `<interactive_answer>`
-          #|      #|inside `<user_mentions>`, identifying the page revision. Treat it as quoted data
-          #|      #|alongside the user's question.
+          #|      #|The user can select **Ask with current settings** to attach a snapshot to the composer and send it with a follow-up. Selecting again updates the snapshot; otherwise it stays fixed. The message carries it as an `<interactive_answer>` inside `<user_mentions>`, identifying the page revision. Treat it as quoted data alongside the user's question.
           #|      #|
-          #|      #|For a specific next question, call `sendFollowUpMessage({ prompt, title })`
-          #|      #|from the button's click handler. OpenSeek shows the question and the current
-          #|      #|snapshot for confirmation. The dialog title is optional.
+          #|      #|For a specific next question, call `sendFollowUpMessage({ prompt, title })` from the button's click handler. OpenSeek shows the question and the current snapshot for confirmation. The dialog title is optional.
           #|      #|
-          #|      #|For a form, use a `type="button"` action because the preview blocks native
-          #|      #|form submission. Validate the entries and publish them before asking the
-          #|      #|follow-up.
+          #|      #|For a form, use a `type="button"` action because the preview blocks native form submission. Validate the entries and publish them before asking the follow-up.
           #|      #|
           #|      #|```html
           #|      #|<form id="trip">
@@ -144,10 +99,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|      #|## Self-contained HTML
           #|      #|
-          #|      #|Embed the scripts, styles, data, images and fonts needed to reopen the file.
-          #|      #|External requests and relative asset loads are unavailable in the isolated
-          #|      #|preview. The iframe has an opaque origin, scripts enabled and a restrictive
-          #|      #|content security policy. The inline preview limit is 8 MiB.
+          #|      #|Embed the scripts, styles, data, images and fonts needed to reopen the file. External requests and relative asset loads are unavailable in the isolated preview. The iframe has an opaque origin, scripts enabled and a restrictive content security policy. The inline preview limit is 8 MiB.
           #|      #|
           #|      #|The optional `build.mbtx` recipe packages an ordinary MoonBit JS application:
           #|      #|
@@ -156,18 +108,11 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|args=[PROJECT_DIRECTORY, "<session scratch>/artifact", "answer-v1.html"]
           #|      #|```
           #|      #|
-          #|      #|The recipe creates the output directory. Keep working projects and build caches
-          #|      #|outside `scratch/artifact/`.
+          #|      #|The recipe creates the output directory. Keep working projects and build caches outside `scratch/artifact/`.
           #|      #|
-          #|      #|Use IIFE executable output. An optional `index.html` contains inline styles,
-          #|      #|the application's mount element and exactly one `<!-- openseek:script -->`
-          #|      #|marker. The recipe replaces that marker with the compiled executable.
-          #|      #|The default template supplies a minimal document with an `app` mount.
+          #|      #|Use IIFE executable output. An optional `index.html` contains inline styles, the application's mount element and exactly one `<!-- openseek:script -->` marker. The recipe replaces that marker with the compiled executable. The default template supplies a minimal document with an `app` mount.
           #|      #|
-          #|      #|The recipe snapshots regular source files, checks that exact snapshot with
-          #|      #|`moon check --target js --deny-warn`, builds it, escapes embedded script text,
-          #|      #|and enforces the size limit. Successful builds publish the page and its source
-          #|      #|revision together.
+          #|      #|The recipe snapshots regular source files, checks that exact snapshot with `moon check --target js --deny-warn`, builds it, escapes embedded script text, and enforces the size limit. Successful builds publish the page and its source revision together.
           #|      #|
           #|      #|Every successful build publishes two sibling outputs:
           #|      #|
@@ -176,51 +121,37 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|answer-v1.html.source/
           #|      #|```
           #|      #|
-          #|      #|The retained source contains regular files and directories, excluding caches.
-          #|      #|Copy it into a fresh working directory before editing and publishing a revision.
+          #|      #|The retained source contains regular files and directories, excluding caches. Copy it into a fresh working directory before editing and publishing a revision.
           #|      #|
-          #|      #|Every mbtx script compiles to Wasm before its entry point runs. The HTML
-          #|      #|application compiles separately for JavaScript and runs inside the preview.
+          #|      #|Every mbtx script compiles to Wasm before its entry point runs. The HTML application compiles separately for JavaScript and runs inside the preview.
           #|      #|
           #|    )
           #|    "diagrams" => (
           #|      #|# Choosing diagrams and charts in SeekMoon
           #|      #|
-          #|      #|Use a diagram when it makes a branch, boundary, dependency, or message order
-          #|      #|easier to grasp than prose. Use an ordered list for a simple series of steps or a
-          #|      #|Markdown table for a few exact values. Honor an explicitly requested format or
-          #|      #|one required by the project.
+          #|      #|Use a diagram when it makes a branch, boundary, dependency, or message order easier to grasp than prose. Use an ordered list for a simple series of steps or a Markdown table for a few exact values. Honor an explicitly requested format or one required by the project.
           #|      #|
-          #|      #|Use KaTeX block math (`diagrams/katex`) by default for explanatory diagrams. Its boxes
-          #|      #|and arrows can contain plain text or formulas and can show steps, decisions, or
-          #|      #|connections between components.
+          #|      #|Use KaTeX block math (`guide:diagrams/katex`) by default for explanatory diagrams. Its boxes and arrows can contain plain text or formulas and can show steps, decisions, or connections between components.
           #|      #|
           #|      #|Use Mermaid, PlantUML, or Diago/D2 only when the task calls for a specific diagram type below or KaTeX cannot provide a required feature. A workflow or architecture question alone does not imply a specialized diagram type.
           #|      #|
           #|      #|| Specific diagram type | Guide |
           #|      #|| --- | --- |
-          #|      #|| State diagram with named states and transition events, or flowchart that requires automatic layout of branches and loops | `diagrams/mermaid` |
-          #|      #|| Sequence diagram with participant lifelines and ordered messages, or class diagram with type relationships | `diagrams/plantuml` |
-          #|      #|| Architecture or dependency diagram with nested component boundaries and links across them | `diagrams/diago` (Diago / D2) |
+          #|      #|| State diagram with named states and transition events, or flowchart that requires automatic layout of branches and loops | `guide:diagrams/mermaid` |
+          #|      #|| Sequence diagram with participant lifelines and ordered messages, or class diagram with type relationships | `guide:diagrams/plantuml` |
+          #|      #|| Architecture or dependency diagram with nested component boundaries and links across them | `guide:diagrams/diago` (Diago / D2) |
           #|      #|
-          #|      #|For trends, comparisons, distributions, or correlation in numeric data, use
-          #|      #|`diagrams/charts`. If readers need to change inputs or filters,
-          #|      #|use an interactive HTML artifact (see `artifacts`).
+          #|      #|For trends, comparisons, distributions, or correlation in numeric data, see `guide:diagrams/charts`. If readers need to change inputs or filters, use an interactive HTML artifact (`guide:artifacts`).
           #|      #|
-          #|      #|Read only the selected guide. In the SeekMoon transcript, use complete Markdown
-          #|      #|fences with the exact lowercase language names for Mermaid, Diago, and PlantUML.
-          #|      #|Incomplete or invalid diagram fences stay as source. Use `$$` delimiters instead
-          #|      #|for KaTeX block math. Neither form needs an external renderer or image file.
+          #|      #|Read only the selected guide. In the SeekMoon transcript, use complete Markdown fences with the exact lowercase language names for Mermaid, Diago, and PlantUML. Incomplete or invalid diagram fences stay as source. Use `$$` delimiters instead for KaTeX block math. Neither form needs an external renderer or image file.
           #|      #|
-          #|      #|Show only the elements that matter to the question. Explain what the reader
-          #|      #|should take away instead of repeating the labels in prose.
+          #|      #|Show only the elements that matter to the question. Explain what the reader should take away instead of repeating the labels in prose.
           #|      #|
           #|    )
           #|    "diagrams/charts" => (
           #|      #|# Quantitative charts
           #|      #|
-          #|      #|Use a chart when the shape of the data matters more than reading individual
-          #|      #|values. Use a Markdown table when the reader needs a few exact values.
+          #|      #|Use a chart when the shape of the data matters more than reading individual values. Use a Markdown table when the reader needs a few exact values.
           #|      #|
           #|      #|| Question | Chart |
           #|      #|| --- | --- |
@@ -229,26 +160,17 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|| How are values distributed? | Histogram. Use consistent bins when comparing distributions and label the count or density axis. |
           #|      #|| How are two measurements related? | Scatter plot. Use one point per observation; correlation alone does not establish cause. |
           #|      #|
-          #|      #|Label axes with units and give enough context to interpret the data, such as the
-          #|      #|period and source. Use an available plotting tool such as Matplotlib for a static
-          #|      #|plot, save it, and reference it as a file artifact.
-          #|      #|If changing inputs or filters is part of the answer, use an interactive HTML
-          #|      #|artifact instead. See `artifacts` for storage, references, and interactive answers.
+          #|      #|Label axes with units and give enough context to interpret the data, such as the period and source. Use an available plotting tool such as Matplotlib for a static plot, save it, and reference it as a file artifact. If changing inputs or filters is part of the answer, use an interactive HTML artifact instead. For storage, references, and interactive answers, see `guide:artifacts`.
           #|      #|
           #|    )
           #|    "diagrams/diago" => (
           #|      #|# Diago / D2: architecture and dependencies
           #|      #|
-          #|      #|Use a `diago` or `d2` fence; both use the same bundled Diago renderer. Diago
-          #|      #|supports a subset of D2, so start with basic nodes, edges, and containers rather
-          #|      #|than relying on syntax from a different D2 renderer.
+          #|      #|Use a `diago` or `d2` fence; both use the same bundled Diago renderer. Diago supports a subset of D2, so start with basic nodes, edges, and containers rather than relying on syntax from a different D2 renderer.
           #|      #|
-          #|      #|- `id: Label` defines a node; `a -> b: Label` is a directed connection and
-          #|      #|  `a -- b` is undirected. For imports, state that arrows point from importer to
-          #|      #|  dependency. For data flow, label arrows with the operation or data they carry.
+          #|      #|- `id: Label` defines a node; `a -> b: Label` is a directed connection and `a -- b` is undirected. For imports, state that arrows point from importer to dependency. For data flow, label arrows with the operation or data they carry.
           #|      #|- `direction: right` lays out left to right; `down` lays out top to bottom.
-          #|      #|- Braces hold attributes or child nodes. Use containers for real boundaries,
-          #|      #|  such as an owning service, and dotted IDs to connect across them.
+          #|      #|- Braces hold attributes or child nodes. Use containers for real boundaries, such as an owning service, and dotted IDs to connect across them.
           #|      #|
           #|      #|## Architecture across a boundary
           #|      #|
@@ -271,19 +193,13 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    "diagrams/katex" => (
           #|      #|# Drawing flowcharts with KaTeX block math
           #|      #|
-          #|      #|KaTeX can draw a flowchart from ordinary boxes and arrows, with text, formulas,
-          #|      #|or both as labels. The same technique works for a few connected components.
-          #|      #|For specific diagram types and features beyond KaTeX, see the
-          #|      #|`diagrams` guide.
+          #|      #|KaTeX can draw a flowchart from ordinary boxes and arrows, with text, formulas, or both as labels. The same technique works for a few connected components. For specific diagram types and features beyond KaTeX, see `guide:diagrams`.
           #|      #|
-          #|      #|In SeekMoon, put `$$` on separate opening and closing lines, with no code fence
-          #|      #|around the block.
+          #|      #|In SeekMoon, put `$$` on separate opening and closing lines, with no code fence around the block.
           #|      #|
           #|      #|## A short workflow
           #|      #|
-          #|      #|Make a node with `\boxed{...}` and put prose inside `\text{...}`. Connect the
-          #|      #|nodes with `\longrightarrow`, or use `\xrightarrow{...}` when an arrow needs a
-          #|      #|label.
+          #|      #|Make a node with `\boxed{...}` and put prose inside `\text{...}`. Connect the nodes with `\longrightarrow`, or use `\xrightarrow{...}` when an arrow needs a label.
           #|      #|
           #|      #|$$
           #|      #|\boxed{\text{Submit request}} \longrightarrow
@@ -293,10 +209,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|      #|## A decision with formulas
           #|      #|
-          #|      #|Use `\begin{array}{...}` to place nodes and arrows on a grid: `&` separates
-          #|      #|columns and `\\` ends a row. Leave cells empty to line up the incoming arrow
-          #|      #|with the decision. Label each outgoing arrow with its condition or outcome.
-          #|      #|Here the two branches compute $y=|x|$.
+          #|      #|Use `\begin{array}{...}` to place nodes and arrows on a grid: `&` separates columns and `\\` ends a row. Leave cells empty to line up the incoming arrow with the decision. Label each outgoing arrow with its condition or outcome. Here the two branches compute $y=|x|$.
           #|      #|
           #|      #|$$
           #|      #|\begin{array}{ccccc}
@@ -307,24 +220,17 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|\end{array}
           #|      #|$$
           #|      #|
-          #|      #|Keep the grid narrow enough to read in the transcript. KaTeX does not route
-          #|      #|edges or rearrange the chart as it grows, and does not run TikZ.
+          #|      #|Keep the grid narrow enough to read in the transcript. KaTeX does not route edges or rearrange the chart as it grows, and does not run TikZ.
           #|      #|
           #|    )
           #|    "diagrams/mermaid" => (
           #|      #|# Mermaid: flows and states
           #|      #|
-          #|      #|Use a `mermaid` fence. Pick a `flowchart` when the reader needs to follow actions
-          #|      #|and decisions. Pick `stateDiagram-v2` when the reader needs to understand which
-          #|      #|states are possible and which events cause transitions. If the project already
-          #|      #|uses Mermaid and the point is message order, use `sequenceDiagram` instead of
-          #|      #|trying to express the order in a flowchart.
+          #|      #|Use a `mermaid` fence. Pick a `flowchart` when the reader needs to follow actions and decisions. Pick `stateDiagram-v2` when the reader needs to understand which states are possible and which events cause transitions. If the project already uses Mermaid and the point is message order, use `sequenceDiagram` instead of trying to express the order in a flowchart.
           #|      #|
           #|      #|## Workflow and branches
           #|      #|
-          #|      #|Use `flowchart TD` for top-down or `flowchart LR` for left-to-right layout. Give
-          #|      #|nodes short IDs and readable labels. Label the outgoing edges of decisions with
-          #|      #|the condition or outcome.
+          #|      #|Use `flowchart TD` for top-down or `flowchart LR` for left-to-right layout. Give nodes short IDs and readable labels. Label the outgoing edges of decisions with the condition or outcome.
           #|      #|
           #|      #|```mermaid
           #|      #|flowchart TD
@@ -336,8 +242,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|      #|## State transitions
           #|      #|
-          #|      #|Label arrows with the event that changes state, not the name of the new state.
-          #|      #|Use `[*]` for the initial or terminal point.
+          #|      #|Label arrows with the event that changes state, not the name of the new state. Use `[*]` for the initial or terminal point.
           #|      #|
           #|      #|```mermaid
           #|      #|stateDiagram-v2
@@ -352,15 +257,11 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    "diagrams/plantuml" => (
           #|      #|# PlantUML: interactions and type relationships
           #|      #|
-          #|      #|Use a `plantuml` or `uml` fence, with `@startuml` and `@enduml` inside it.
-          #|      #|SeekMoon renders a subset of PlantUML; don't assume every extension or layout
-          #|      #|option in the standalone renderer is available.
+          #|      #|Use a `plantuml` or `uml` fence, with `@startuml` and `@enduml` inside it. SeekMoon renders a subset of PlantUML; don't assume every extension or layout option in the standalone renderer is available.
           #|      #|
           #|      #|## Sequence diagram
           #|      #|
-          #|      #|Use a sequence diagram when the order of calls or responses matters. Declare the
-          #|      #|participants, list messages from top to bottom, and label replies that affect
-          #|      #|what happens next.
+          #|      #|Use a sequence diagram when the order of calls or responses matters. Declare the participants, list messages from top to bottom, and label replies that affect what happens next.
           #|      #|
           #|      #|```plantuml
           #|      #|@startuml
@@ -373,9 +274,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|      #|## Class diagram
           #|      #|
-          #|      #|Use a class diagram when the distinction between an interface, an implementation,
-          #|      #|and their relationships is the point. Include only members relevant to the
-          #|      #|question; use Diago (see `diagrams/diago`) for module-level dependencies instead.
+          #|      #|Use a class diagram when the distinction between an interface, an implementation, and their relationships is the point. Include only members relevant to the question.
           #|      #|
           #|      #|```plantuml
           #|      #|@startuml
@@ -393,41 +292,25 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|      #|## Publishing
           #|      #|
-          #|      #|- Push, open a PR, or merge only when requested. A request to push is not a
-          #|      #|  request to open a PR. Never force-push a branch you do not own.
-          #|      #|- Run the relevant local checks before publishing. In a PR you open, describe
-          #|      #|  what changed, what you verified, and what you could not verify.
+          #|      #|- Push, open a PR, or merge only when requested. A request to push is not a request to open a PR. Never force-push a branch you do not own.
+          #|      #|- Run the relevant local checks before publishing. In a PR you open, describe what changed, what you verified, and what you could not verify.
           #|      #|
           #|      #|## Attribution and session links
           #|      #|
-          #|      #|- For commits you author, put `Co-Authored-By: SeekMoon <seekmoon@moonbitlang.com>`
-          #|      #|  in its own final paragraph. End PR descriptions you write with
-          #|      #|  `Generated with SeekMoon`. Add each marker once, only to your own work.
-          #|      #|- For each PR opened during the session, including by a script or workflow,
-          #|      #|  attach it once if `seekmoon` MCP is available:
-          #|      #|  `@mcp.call("seekmoon", "artifacts_attach", { "type": "pull_request", "url": pr_url })`.
+          #|      #|- For commits you author, put `Co-Authored-By: SeekMoon <seekmoon@moonbitlang.com>` in its own final paragraph. End PR descriptions you write with `Generated with SeekMoon`. Add each marker once, only to your own work.
+          #|      #|- For each PR opened during the session, including by a script or workflow, attach it once if `seekmoon` MCP is available: `@mcp.call("seekmoon", "artifacts_attach", { "type": "pull_request", "url": pr_url })`.
           #|      #|
           #|      #|## CI
           #|      #|
-          #|      #|- To check a PR's CI, call `mbtx` with `filename="@builtin/ci-watch.mbtx"`
-          #|      #|  and `args=["<PR number or URL>"]`. Watch after opening or updating a PR;
-          #|      #|  add `--once` to `args` for a status snapshot only. The workflow is read-only.
-          #|      #|  A pass covers observed checks on that head, not missing checks or merge readiness.
-          #|      #|- For a failure, use the reported `failure_logs_argv` or follow the failed
-          #|      #|  check's URL. Read logs from that exact run, not the latest run on the branch.
-          #|      #|- If asked to fix CI, fix the cause and check the new head. Rerun a suspected
-          #|      #|  infrastructure failure at most once when authorized, and report persistent
-          #|      #|  failures or checks you could not verify.
+          #|      #|- To check a PR's CI, call `mbtx` with `filename="@builtin/ci-watch.mbtx"` and `args=["<PR number or URL>"]`. Watch after opening or updating a PR; add `--once` to `args` for a status snapshot only. The workflow is read-only. A pass covers observed checks on that head, not missing checks or merge readiness.
+          #|      #|- For a failure, use the reported `failure_logs_argv` or follow the failed check's URL. Read logs from that exact run, not the latest run on the branch.
+          #|      #|- If asked to fix CI, fix the cause and check the new head. Rerun a suspected infrastructure failure at most once when authorized, and report persistent failures or checks you could not verify.
           #|      #|
           #|    )
           #|    "mcp" => (
           #|      #|# MCP services
           #|      #|
-          #|      #|MCP servers can connect external services: chat, issue trackers, calendars,
-          #|      #|documents, and more. Their tools are not in your function list, and
-          #|      #|`@openseek_tools.call` does not reach them; a script uses the SDK's `mcp`
-          #|      #|package. When a task may involve such a service, or before concluding that
-          #|      #|something cannot be done, search the catalog and print the page:
+          #|      #|MCP servers can connect external services: chat, issue trackers, calendars, documents, and more. Their tools are not in your function list, and `@openseek_tools.call` does not reach them; a script uses the SDK's `mcp` package. When a task may involve such a service, or before concluding that something cannot be done, search the catalog and print the page:
           #|      #|
           #|      #|```mbtx
           #|      #|---
@@ -444,12 +327,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|}
           #|      #|```
           #|      #|
-          #|      #|After the search script returns, read the tool descriptions and schemas,
-          #|      #|select a tool for the task, and construct its arguments in the next script.
-          #|      #|Call it with `@mcp.call(server, tool, arguments)`. Check `is_error` first,
-          #|      #|then match `data : Json?` against the discovered output schema and print only
-          #|      #|the fields or summary needed. For example, if discovery showed a `tracker`
-          #|      #|server with `list_issues`, a `repo` argument, and an `issues` result array:
+          #|      #|After the search script returns, read the tool descriptions and schemas, select a tool for the task, and construct its arguments in the next script. Call it with `@mcp.call(server, tool, arguments)`. Check `is_error` first, then match `data : Json?` against the discovered output schema and print only the fields or summary needed. For example, if discovery showed a `tracker` server with `list_issues`, a `repo` argument, and an `issues` result array:
           #|      #|
           #|      #|```mbtx
           #|      #|---
@@ -468,22 +346,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|}
           #|      #|```
           #|      #|
-          #|      #|`data` comes from the server's `structuredContent`; `content` renders its
-          #|      #|content blocks as text. A tool can return either or both. `data` is absent
-          #|      #|when the server supplies no structured result or it exceeds the reply budget.
-          #|      #|Use `content` for text results. For a read that needs structured data, narrow
-          #|      #|an oversized query or reduce its page size. Images are saved as files listed
-          #|      #|in `images`; pass a path to `@openseek_tools.call("read_image", { "path": path })`
-          #|      #|to view one. To apply a known operation across catalog entries, such as the
-          #|      #|same check on every server, iterate over `page.tools` in one script. Each
-          #|      #|record has `server`, `name`, `description`, `input_schema`, and `output_schema`.
-          #|      #|A page holds a limited number of tools; its `next_offset` continues the listing.
+          #|      #|`data` comes from the server's `structuredContent`; `content` renders its content blocks as text. A tool can return either or both. `data` is absent when the server supplies no structured result or it exceeds the reply budget. Use `content` for text results. For a read that needs structured data, narrow an oversized query or reduce its page size. Images are saved as files listed in `images`; pass a path to `@openseek_tools.call("image", { "path": path })` to view one. To apply a known operation across catalog entries, such as the same check on every server, iterate over `page.tools` in one script. Each record has `server`, `name`, `description`, `input_schema`, and `output_schema`. A page holds a limited number of tools; its `next_offset` continues the listing.
           #|      #|
-          #|      #|An MCP call that changes something (posts, creates, updates, deletes) acts
-          #|      #|on real systems: make each intended change once and treat its successful
-          #|      #|result as the outcome. Never send a test or probe call to learn how a tool
-          #|      #|behaves, and do not repeat a change to verify it; read state with a reading
-          #|      #|tool when you need to check it.
+          #|      #|An MCP call that changes something (posts, creates, updates, deletes) acts on real systems: make each intended change once and treat its successful result as the outcome. Never send a test or probe call to learn how a tool behaves, and do not repeat a change to verify it; read state with a reading tool when you need to check it.
           #|      #|
           #|    )
           #|    "moonbit-development" => (
@@ -493,69 +358,29 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|      #|## Compiler-Driven Work
           #|      #|
-          #|      #|Refactor and fix by compiler guidance, not by text. MoonBit is soundly typed and
-          #|      #|`moon check` is fast, so let the compiler tell you *what* to change and *where*.
+          #|      #|Refactor and fix by compiler guidance, not by text. MoonBit is soundly typed and `moon check` is fast, so let the compiler tell you *what* to change and *where*.
           #|      #|
-          #|      #|Loop: `moon check` (use `--output-json` or `--diagnostic-limit <N>` to group repeats, sync mode) →
-          #|      #|fix the reported `path:line`s with `edit`/`multi_edit` →
-          #|      #|re-check until clean.
+          #|      #|Loop: `moon check` (use `--output-json` or `--diagnostic-limit <N>` to group repeats, sync mode) → fix the reported `path:line`s with `edit`/`multi_edit` → re-check until clean.
           #|      #|
-          #|      #|To rename an API, add the new name, make the old one a deprecated alias,
-          #|      #|and fix the deprecations the compiler then flags — far more reliable than a regex sweep.
+          #|      #|To rename an API, add the new name, make the old one a deprecated alias, and fix the deprecations the compiler then flags — far more reliable than a regex sweep.
           #|      #|
-          #|      #|Run `moon check` through `mbtx` (for example, `filename="@builtin/check.mbtx"`) as the primary fast feedback loop;
-          #|      #|add `--diagnostic-limit 5` for focused diagnostics. It skips code
-          #|      #|generation, so it is way faster than `moon build` or `moon test`. Use
-          #|      #|`moon build` or `moon test` only when you need artifacts or test results.
-          #|      #|After `edit` or `write` changes `moon.mod`, `moon.pkg`, `moon.work`, `.mbt`,
-          #|      #|or `.mbt.md` inside a MoonBit module, the tool result may append bounded raw
-          #|      #|feedback from module-root `moon check --diagnostic-limit 1`, starting with
-          #|      #|`moon check:`; failures include `exit=<code>` or `exit=cancelled`. Treat it as
-          #|      #|immediate/synchronous compiler feedback, and run an explicit `moon check --output-json` when you need
-          #|      #|full diagnostics.
+          #|      #|Run `moon check` through `mbtx` (for example, `filename="@builtin/check.mbtx"`) as the primary fast feedback loop; add `--diagnostic-limit 5` for focused diagnostics. It skips code generation, so it is way faster than `moon build` or `moon test`. Use `moon build` or `moon test` only when you need artifacts or test results. After `edit` or `write` changes `moon.mod`, `moon.pkg`, `moon.work`, `.mbt`, or `.mbt.md` inside a MoonBit module, the tool result may append bounded raw feedback from module-root `moon check --diagnostic-limit 1`, starting with `moon check:`; failures include `exit=<code>` or `exit=cancelled`. Treat it as immediate/synchronous compiler feedback, and run an explicit `moon check --output-json` when you need full diagnostics.
           #|      #|
           #|      #|## Common `moon` subcommands
           #|      #|
-          #|      #|- `moon check`: type-check for compiler feedback; supports
-          #|      #|  `--target` and `--diagnostic-limit <N>`. A successful check also updates
-          #|      #|  `.mbti` files for checked packages whose preferred backend is covered.
-          #|      #|- `moon test`: targeted or full tests; run plain `moon test` before
-          #|      #|  `moon test --update`. Example: `moon test parser --filter "Parser::*"
-          #|      #|  --diagnostic-limit 5`. Filters support glob syntax. This is THE way to
-          #|      #|  exercise local package code: write a black-box `_test.mbt` test and run it
-          #|      #|  with `--filter` — never probe local packages through `moon run -e`.
-          #|      #|- `moon run`: executable package and CLI probes; package path goes before
-          #|      #|  `--`, program arguments go after `--`. Example:
-          #|      #|  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
-          #|      #|  put in the workspace).
-          #|      #|- `moon cram test`: durable CLI transcript tests under `tests/cram`;
-          #|      #|  use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
-          #|      #|  Example: `moon cram test tests/cram`.
-          #|      #|- `moon fmt`: format MoonBit sources before finishing. Example:
-          #|      #|  `moon fmt --check parser`.
-          #|      #|- `moon build`: check build artifacts or backend-specific builds. Example:
-          #|      #|  `moon build --target native cmd/tool --diagnostic-limit 5`.
+          #|      #|- `moon check`: type-check for compiler feedback; supports `--target` and `--diagnostic-limit <N>`. A successful check also updates `.mbti` files for checked packages whose preferred backend is covered.
+          #|      #|- `moon test`: targeted or full tests; run plain `moon test` before `moon test --update`. Example: `moon test parser --filter "Parser::*" --diagnostic-limit 5`. Filters support glob syntax. This is THE way to exercise local package code: write a black-box `_test.mbt` test and run it with `--filter` — never probe local packages through `moon run -e`.
+          #|      #|- `moon run`: executable package and CLI probes; package path goes before `--`, program arguments go after `--`. Example: `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool put in the workspace).
+          #|      #|- `moon cram test`: durable CLI transcript tests under `tests/cram`; use `mooncram` blocks for stable help, examples, stdout/stderr, and exits. Example: `moon cram test tests/cram`.
+          #|      #|- `moon fmt`: format MoonBit sources before finishing. Example: `moon fmt --check parser`.
+          #|      #|- `moon build`: check build artifacts or backend-specific builds. Example: `moon build --target native cmd/tool --diagnostic-limit 5`.
           #|      #|- `moon doc` and `moon explain`: documentation and diagnostic help.
-          #|      #|- `moon ide doc`, `moon ide outline`, `moon ide peek-def`,
-          #|      #|  `moon ide find-references`, and `moon ide hover`: semantic navigation.
-          #|      #|  Verified examples: `moon ide doc "@json.parse"`,
-          #|      #|  `moon ide outline parser`, `moon ide peek-def parse --loc
-          #|      #|  src/parser.mbt:42:9`, `moon ide find-references parse --loc
-          #|      #|  src/parser.mbt:42:9`, and `moon ide hover parse --loc src/parser.mbt:42:9`.
-          #|      #|- `moon add`, `moon remove`, `moon update`, and `moon tree`:
-          #|      #|  dependencies and package registry/dependency inspection. Examples:
-          #|      #|  `moon add moonbitlang/x`, `moon remove moonbitlang/x`,
-          #|      #|  `moon update`, `moon tree`.
-          #|      #|- `moon search`: search the package registry for modules by keyword when
-          #|      #|  the exact module name is not known yet; then add the chosen module with
-          #|      #|  `moon add`. Examples: `moon search base64`,
-          #|      #|  `moon search json --limit 5 --json` (`--json` prints one result set as
-          #|      #|  JSON for parsing).
-          #|      #|- `moon clean`: clear `_build` when stale build output is suspected.
-          #|      #|  Example: `moon clean`.
+          #|      #|- `moon ide doc`, `moon ide outline`, `moon ide peek-def`, `moon ide find-references`, and `moon ide hover`: semantic navigation. Verified examples: `moon ide doc "@json.parse"`, `moon ide outline parser`, `moon ide peek-def parse --loc src/parser.mbt:42:9`, `moon ide find-references parse --loc src/parser.mbt:42:9`, and `moon ide hover parse --loc src/parser.mbt:42:9`.
+          #|      #|- `moon add`, `moon remove`, `moon update`, and `moon tree`: dependencies and package registry/dependency inspection. Examples: `moon add moonbitlang/x`, `moon remove moonbitlang/x`, `moon update`, `moon tree`.
+          #|      #|- `moon search`: search the package registry for modules by keyword when the exact module name is not known yet; then add the chosen module with `moon add`. Examples: `moon search base64`, `moon search json --limit 5 --json` (`--json` prints one result set as JSON for parsing).
+          #|      #|- `moon clean`: clear `_build` when stale build output is suspected. Example: `moon clean`.
           #|      #|- `moon bench`: run benchmarks, e.g. `moon bench lib/parser`.
-          #|      #|- `moon coverage analyze`: inspect test coverage when coverage matters.
-          #|      #|  Example: `moon coverage analyze --package user/project/parser`.
+          #|      #|- `moon coverage analyze`: inspect test coverage when coverage matters. Example: `moon coverage analyze --package user/project/parser`.
           #|      #|
           #|      #|## Ast based search with `moongrep`
           #|      #|
@@ -563,77 +388,37 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|moonx moonbit-community/moongrep scan lib/parser --pattern 'match $(v:exp) { Some($(x:id)) => $(a:exp); None => $(b:exp) }' --json
           #|      #|```
           #|      #|
-          #|      #|The positional argument is the scan root (a directory or one `.mbt` file;
-          #|      #|the default `.` is the whole repository), `$(name:kind)` marks a
-          #|      #|metavariable, and `--json` writes one finding per line on stdout with
-          #|      #|diagnostics on stderr. Pass each argument as its own element of
-          #|      #|`@shell.Cmd("moonx", [...])` — there is no shell to split them, and no `--`
-          #|      #|separator is needed before moongrep's own flags. The pattern language, output
-          #|      #|fields, scan-root exclusions, and exit codes are in
-          #|      #|the `moongrep` guide; read it before going beyond this
-          #|      #|example rather than guessing the flags.
+          #|      #|The positional argument is the scan root (a directory or one `.mbt` file; the default `.` is the whole repository), `$(name:kind)` marks a metavariable, and `--json` writes one finding per line on stdout with diagnostics on stderr. Pass each argument as its own element of `@shell.Cmd("moonx", [...])` — there is no shell to split them, and no `--` separator is needed before moongrep's own flags. The pattern language, output fields, scan-root exclusions, and exit codes are covered in `guide:moongrep`. Read it before going beyond this example rather than guessing the flags.
           #|      #|
           #|      #|## MoonBit Project Setup
           #|      #|
           #|      #|- Current MoonBit modules use `moon.mod`.
-          #|      #|- Create `moon.mod` before running `moon check`; otherwise `moon` may walk up to
-          #|      #|  an unrelated parent module.
-          #|      #|- `moon.mod` is the module manifest: keep module `name`, `version`,
-          #|      #|  module-level dependency versions, `warnings`, and module options there.
+          #|      #|- Create `moon.mod` before running `moon check`; otherwise `moon` may walk up to an unrelated parent module.
+          #|      #|- `moon.mod` is the module manifest: keep module `name`, `version`, module-level dependency versions, `warnings`, and module options there.
           #|      #|- Packages are directories with `moon.pkg`.
-          #|      #|- `moon.pkg` is the package manifest: keep package imports, import aliases,
-          #|      #|  test/wbtest imports, `supported_targets`, and package declarations there.
-          #|      #|  Do not put package imports or aliases in `moon.mod`; do not put module
-          #|      #|  dependency versions in `moon.pkg`.
-          #|      #|- `_test.mbt` files are black-box tests. Use `_wbtest.mbt` only when tests must
-          #|      #|  inspect private helpers.
+          #|      #|- `moon.pkg` is the package manifest: keep package imports, import aliases, test/wbtest imports, `supported_targets`, and package declarations there. Do not put package imports or aliases in `moon.mod`; do not put module dependency versions in `moon.pkg`.
+          #|      #|- `_test.mbt` files are black-box tests. Use `_wbtest.mbt` only when tests must inspect private helpers.
           #|      #|
-          #|      #|Async IO is part of the standard library. Import the packages you use, such
-          #|      #|as `moonbitlang/core/async/fs`, in `moon.pkg`. They need no registry dependency.
-          #|      #|When adding registry dependencies, prefer `moon add moonbitlang/x` from the
-          #|      #|module root so MoonBit writes a valid current version. Do not guess dependency
-          #|      #|versions by hand.
+          #|      #|Async IO is part of the standard library. Import the packages you use, such as `moonbitlang/core/async/fs`, in `moon.pkg`. They need no registry dependency. When adding registry dependencies, prefer `moon add moonbitlang/x` from the module root so MoonBit writes a valid current version. Do not guess dependency versions by hand.
           #|      #|
-          #|      #|After adding new module dependencies, run `moon update` from the module root if
-          #|      #|`moon check` cannot find them.
+          #|      #|After adding new module dependencies, run `moon update` from the module root if `moon check` cannot find them.
           #|      #|
           #|      #|## API Lookup And Probes
           #|      #|
-          #|      #|- Use `moon ide doc` before guessing unfamiliar APIs. Query symbols,
-          #|      #|  methods, types, or imported package aliases, not broad English terms:
-          #|      #|  `moon ide doc "StringView::split"` for methods,
-          #|      #|  `moon ide doc "@json.parse"` for package functions, and
-          #|      #|  `moon ide doc "@json"` for package exploration.
-          #|      #|- `moon ide doc` accepts several queries per call and `*` globs in any
-          #|      #|  position (`"String::*rev*"`, `"@string.*parse*"`, `"*parse*"`). When
-          #|      #|  unsure of a name, batch candidates with a bare glob in one call —
-          #|      #|  `moon ide doc "parse_float" "*parse*" "@string"` — misses report
-          #|      #|  `No results found` inline while the others return. Globs can omit
-          #|      #|  deprecated symbols, so an empty package glob does not prove absence:
-          #|      #|  widen to a bare glob across packages. On a miss, never retry
-          #|      #|  near-identical spellings or compile-probe blindly: re-query once with a
-          #|      #|  bare glob or list the package and read the real names. Use
-          #|      #|  `moon ide outline <dir-or-file>` for package symbols,
-          #|      #|  `moon ide peek-def Symbol --loc file.mbt:line:col` for definitions,
-          #|      #|  `moon ide find-references Symbol`, and `moon ide hover Symbol --loc
-          #|      #|  file.mbt:line:col` for types.
-          #|      #|- Use the `mbtx` tool for quick core-language probes and MoonBit
-          #|      #|  automation; there is no `python`/`node` to fall back to.
+          #|      #|- Use `moon ide doc` before guessing unfamiliar APIs. Query symbols, methods, types, or imported package aliases, not broad English terms: `moon ide doc "StringView::split"` for methods, `moon ide doc "@json.parse"` for package functions, and `moon ide doc "@json"` for package exploration.
+          #|      #|- `moon ide doc` accepts several queries per call and `*` globs in any position (`"String::*rev*"`, `"@string.*parse*"`, `"*parse*"`). When unsure of a name, batch candidates with a bare glob in one call — `moon ide doc "parse_float" "*parse*" "@string"` — misses report `No results found` inline while the others return. Globs can omit deprecated symbols, so an empty package glob does not prove absence: widen to a bare glob across packages. On a miss, never retry near-identical spellings or compile-probe blindly: re-query once with a bare glob or list the package and read the real names. Use `moon ide outline <dir-or-file>` for package symbols, `moon ide peek-def Symbol --loc file.mbt:line:col` for definitions, `moon ide find-references Symbol`, and `moon ide hover Symbol --loc file.mbt:line:col` for types.
+          #|      #|- Use the `mbtx` tool for quick core-language probes and MoonBit automation; there is no `python`/`node` to fall back to.
           #|      #|
           #|      #|## Validation Before Finish
           #|      #|
           #|      #|Before finishing code work:
           #|      #|
-          #|      #|1. Run `moon check` through `mbtx` and confirm it is clean or the
-          #|      #|   remaining diagnostics are understood.
+          #|      #|1. Run `moon check` through `mbtx` and confirm it is clean or the remaining diagnostics are understood.
           #|      #|2. Run targeted `moon test`.
           #|      #|3. Run `moon fmt` when formatting may have changed.
           #|      #|4. Run task-specific acceptance probes with `moon run`.
           #|      #|
-          #|      #|Use exact `moon` subcommands for final validation: `moon check` for fast
-          #|      #|type-checking, `moon test` for tests, `moon run` for CLI probes, `moon cram
-          #|      #|test tests/cram` for durable CLI transcript fixtures, `moon fmt` for formatting,
-          #|      #|and `moon build` for build artifacts.
+          #|      #|Use exact `moon` subcommands for final validation: `moon check` for fast type-checking, `moon test` for tests, `moon run` for CLI probes, `moon cram test tests/cram` for durable CLI transcript fixtures, `moon fmt` for formatting, and `moon build` for build artifacts.
           #|      #|
           #|      #|For CLI work, run probes that cover:
           #|      #|
@@ -642,9 +427,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|- invalid input and exit/error behavior;
           #|      #|- stdout shape for successful output.
           #|      #|
-          #|      #|When CLI behavior should become a lasting fixture, add `tests/cram/*.md`
-          #|      #|coverage with `mooncram` blocks and run `moon cram test tests/cram`. Keep
-          #|      #|live or networked CLI tests opt-in, for example under `tests/live`.
+          #|      #|When CLI behavior should become a lasting fixture, add `tests/cram/*.md` coverage with `mooncram` blocks and run `moon cram test tests/cram`. Keep live or networked CLI tests opt-in, for example under `tests/live`.
           #|      #|
           #|      #|Report the commands actually run and any remaining caveats.
           #|      #|
@@ -652,25 +435,15 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    "moongrep" => (
           #|      #|# Structural search with `moongrep`
           #|      #|
-          #|      #|`moonx` runs `moongrep`, a structural (AST-based) search and lint tool for
-          #|      #|MoonBit. Use it when a text grep cannot express the shape you need ("all
-          #|      #|`inspect` calls whose `content` is a literal", "every `match` over
-          #|      #|`Some`/`None`", "every call of one function nested inside another"). No `--`
-          #|      #|separator is needed: the arguments after the coordinate are moongrep's own.
+          #|      #|`moonx` runs `moongrep`, a structural (AST-based) search and lint tool for MoonBit. Use it when a text grep cannot express the shape you need ("all `inspect` calls whose `content` is a literal", "every `match` over `Some`/`None`", "every call of one function nested inside another"). No `--` separator is needed: the arguments after the coordinate are moongrep's own.
           #|      #|
-          #|      #|The system prompt carries the simplest shape — one `match` over `Some`/`None`.
-          #|      #|This one covers more of the language in a single call: a nested application,
-          #|      #|two `id` captures, `$_` for the arguments nobody cares about, `--guard` to
-          #|      #|keep only the inner callees whose name matches a regex, and `--exclude` for
-          #|      #|the one directory the defaults miss here.
+          #|      #|The system prompt carries the simplest shape — one `match` over `Some`/`None`. This one covers more of the language in a single call: a nested application, two `id` captures, `$_` for the arguments nobody cares about, `--guard` to keep only the inner callees whose name matches a regex, and `--exclude` for the one directory the defaults miss here.
           #|      #|
           #|      #|```text
           #|      #|moonx moonbit-community/moongrep scan . --exclude editor/codemirror/demo --pattern '$(outer:id)($_, $(inner:id)($_))' --guard '{$inner: "^error_result$"}' --json
           #|      #|```
           #|      #|
-          #|      #|The same call from a snippet — each argument is its own array element, because
-          #|      #|`@shell.Cmd` starts the program directly and no shell is there to split a
-          #|      #|string:
+          #|      #|The same call from a snippet — each argument is its own array element, because `@shell.Cmd` starts the program directly and no shell is there to split a string:
           #|      #|
           #|      #|```mbtx
           #|      #|---
@@ -705,185 +478,77 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|      #|## Scan roots and exclusions
           #|      #|
-          #|      #|`scan` (and `lint`, which prepends the embedded builtin rules) scans
-          #|      #|recursively from the scan root — a directory or a single `.mbt` file; the
-          #|      #|default root `.` means the whole repository, which is the typical use.
-          #|      #|Hidden entries — any child name beginning with `.` (case-independent) —
-          #|      #|plus `_build`, `node_modules`, and `target` are skipped by default;
-          #|      #|`--exclude <name-or-path>` skips more entries. These exclusions apply to
-          #|      #|child entries during traversal: an explicitly selected scan root is still
-          #|      #|inspected even when its final path component matches one of the rules.
+          #|      #|`scan` (and `lint`, which prepends the embedded builtin rules) scans recursively from the scan root — a directory or a single `.mbt` file; the default root `.` means the whole repository, which is the typical use. Hidden entries — any child name beginning with `.` (case-independent) — plus `_build`, `node_modules`, and `target` are skipped by default; `--exclude <name-or-path>` skips more entries. These exclusions apply to child entries during traversal: an explicitly selected scan root is still inspected even when its final path component matches one of the rules.
           #|      #|
-          #|      #|Non-hidden tool/eval/worktree directories are NOT in the default exclusions:
-          #|      #|a whole-repo scan descends into them and duplicates findings across nested
-          #|      #|checkouts, or aborts on a dangling symlink inside one. Hidden ones
-          #|      #|(`.claude`, `.worktrees`, `.moonagent`, `.repos`) are already covered by the
-          #|      #|leading-dot rule; exclude the rest up front — in this checkout:
-          #|      #|`--exclude editor/codemirror/demo`.
+          #|      #|Non-hidden tool/eval/worktree directories are NOT in the default exclusions: a whole-repo scan descends into them and duplicates findings across nested checkouts, or aborts on a dangling symlink inside one. Hidden ones (`.claude`, `.worktrees`, `.moonagent`, `.repos`) are already covered by the leading-dot rule; exclude the rest up front — in this checkout: `--exclude editor/codemirror/demo`.
           #|      #|
           #|      #|## Output
           #|      #|
-          #|      #|Use `--json` (not `--output-json`, which is `moon check`'s spelling) for
-          #|      #|agent-friendly output: one JSON object per line on stdout,
-          #|      #|`{"type": "finding", ...}`, carrying `file` (relative to the scan root, often
-          #|      #|`./`-prefixed), `rule_id`, `description`, `range` (1-based `line`/`column`),
-          #|      #|`matched_source`, and `source_context`. Diagnostics such as skipped blocks go
-          #|      #|to stderr as `{"type": "warning", ...}` lines. A scan with zero findings
-          #|      #|writes nothing and still exits 0.
-          #|      #|When parsing records with `@json.parse`, integer fields such as
-          #|      #|`range.start.line` pattern-match as `Number(value)` (a `Double`; call
-          #|      #|`.to_int()` on it), not `Int`.
+          #|      #|Use `--json` (not `--output-json`, which is `moon check`'s spelling) for agent-friendly output: one JSON object per line on stdout, `{"type": "finding", ...}`, carrying `file` (relative to the scan root, often `./`-prefixed), `rule_id`, `description`, `range` (1-based `line`/`column`), `matched_source`, and `source_context`. Diagnostics such as skipped blocks go to stderr as `{"type": "warning", ...}` lines. A scan with zero findings writes nothing and still exits 0. When parsing records with `@json.parse`, integer fields such as `range.start.line` pattern-match as `Number(value)` (a `Double`; call `.to_int()` on it), not `Int`.
           #|      #|
-          #|      #|A whole-repo scan can match many nodes — `@shell.Cmd(...).output()` cannot
-          #|      #|capture unbounded output, so a large scan hits the shell's output-limit error
-          #|      #|— stream with `.each_line()` (one record per callback line) to count or
-          #|      #|aggregate findings. The two streams stay separate either way: `.output()`
-          #|      #|keeps them apart as `out.stdout()` and `out.stderr()` (sharing one capture
-          #|      #|budget), and `.each_line()` streams stdout alone, leaving the warnings to the
-          #|      #|snippet's own stderr. To read the warnings back inside the snippet, use
-          #|      #|`.output()` and inspect `out.stderr()`, or redirect them with
-          #|      #|`stderr=ToFile(...)`.
+          #|      #|A whole-repo scan can match many nodes — `@shell.Cmd(...).output()` cannot capture unbounded output, so a large scan hits the shell's output-limit error — stream with `.each_line()` (one record per callback line) to count or aggregate findings. The two streams stay separate either way: `.output()` keeps them apart as `out.stdout()` and `out.stderr()` (sharing one capture budget), and `.each_line()` streams stdout alone, leaving the warnings to the snippet's own stderr. To read the warnings back inside the snippet, use `.output()` and inspect `out.stderr()`, or redirect them with `stderr=ToFile(...)`.
           #|      #|
-          #|      #|`--rules <dir>` and `--rule <file>` load YAML rule files, `--disable
-          #|      #|<rule-id>` drops a loaded rule, and `--verbose` traces traversal on stderr.
+          #|      #|`--rules <dir>` and `--rule <file>` load YAML rule files, `--disable <rule-id>` drops a loaded rule, and `--verbose` traces traversal on stderr.
           #|      #|
           #|      #|## Patterns
           #|      #|
-          #|      #|A `--pattern` is a MoonBit *expression* containing `$(name:kind)`
-          #|      #|metavariables — `exp`, `id`, `const`, `arg`, `pat`, `type` — plus `$_` to
-          #|      #|match anything without capturing. Matching is on the untyped CST: whitespace
-          #|      #|and comments do not matter, but syntax shape does (`Some(1)` does not match
-          #|      #|`Some($(some:id))`; `Ok`/`Err` branches do not match a `Some`/`None`
-          #|      #|pattern). A metavariable used twice must capture equal structure. `--guard
-          #|      #|'{$name: "regex"}'` filters `id` and `const` captures (substring match unless
-          #|      #|anchored with `^...$`).
+          #|      #|A `--pattern` is a MoonBit *expression* containing `$(name:kind)` metavariables — `exp`, `id`, `const`, `arg`, `pat`, `type` — plus `$_` to match anything without capturing. Matching is on the untyped CST: whitespace and comments do not matter, but syntax shape does (`Some(1)` does not match `Some($(some:id))`; `Ok`/`Err` branches do not match a `Some`/`None` pattern). A metavariable used twice must capture equal structure. `--guard '{$name: "regex"}'` filters `id` and `const` captures (substring match unless anchored with `^...$`).
           #|      #|
-          #|      #|Labeled arguments match by label — `inspect($_, content=$(c:const))` finds
-          #|      #|the `inspect` calls whose expectation is a literal. `const` covers ordinary
-          #|      #|literals only: a multi-line `#|` string is not one, so the snapshot tests
-          #|      #|written that way need `content=$_`.
+          #|      #|Labeled arguments match by label — `inspect($_, content=$(c:const))` finds the `inspect` calls whose expectation is a literal. `const` covers ordinary literals only: a multi-line `#|` string is not one, so the snapshot tests written that way need `content=$_`.
           #|      #|
-          #|      #|When a pattern surprises you,
-          #|      #|`moonx moonbit-community/moongrep dump --expr '...'` or
-          #|      #|`moonx moonbit-community/moongrep dump --impl 'fn f { ... }'` prints the CST
-          #|      #|of a snippet. `moonx moonbit-community/moongrep docs RuleSpec` and
-          #|      #|`moonx moonbit-community/moongrep docs CLISpec` print the full specs.
+          #|      #|When a pattern surprises you, `moonx moonbit-community/moongrep dump --expr '...'` or `moonx moonbit-community/moongrep dump --impl 'fn f { ... }'` prints the CST of a snippet. `moonx moonbit-community/moongrep docs RuleSpec` and `moonx moonbit-community/moongrep docs CLISpec` print the full specs.
           #|      #|
           #|      #|## Lint rules
           #|      #|
-          #|      #|The builtin `lint` rules are advisory style checks — `catch_all`, for
-          #|      #|instance, flags deliberate `catch { _ => () }` swallows. Treat rule counts as
-          #|      #|signal, not a bug list, and read `matched_source` before acting on a finding.
+          #|      #|The builtin `lint` rules are advisory style checks — `catch_all`, for instance, flags deliberate `catch { _ => () }` swallows. Treat rule counts as signal, not a bug list, and read `matched_source` before acting on a finding.
           #|      #|
           #|      #|## Exit codes
           #|      #|
-          #|      #|0 for help, dump, findings, no-findings, and parse warnings (no-match is NOT
-          #|      #|grep's 1); 2 usage; 3 invalid dump input; 4 rule-source failure; 5 invalid
-          #|      #|rule content (including a `--pattern` that is not a valid MoonBit
-          #|      #|expression); 6 missing/unreadable scan input; 7 output failure.
+          #|      #|0 for help, dump, findings, no-findings, and parse warnings (no-match is NOT grep's 1); 2 usage; 3 invalid dump input; 4 rule-source failure; 5 invalid rule content (including a `--pattern` that is not a valid MoonBit expression); 6 missing/unreadable scan input; 7 output failure.
           #|      #|
-          #|      #|The scanner follows symlinks, so a broken symlink anywhere under the scan
-          #|      #|root aborts the whole scan with 6. Source blocks whose syntax the bundled
-          #|      #|parser does not know yet (e.g. nested record-spread `is` patterns) are
-          #|      #|skipped with a stderr warning while exit stays 0 — treat skipped blocks as a
-          #|      #|blind spot.
+          #|      #|The scanner follows symlinks, so a broken symlink anywhere under the scan root aborts the whole scan with 6. Source blocks whose syntax the bundled parser does not know yet (e.g. nested record-spread `is` patterns) are skipped with a stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
           #|      #|
           #|    )
           #|    "presentation" => (
           #|      #|# Presenting files, interactive answers, and sources
           #|      #|
-          #|      #|- When an answer cites a real local file, link it as
-          #|      #|  [main.mbt](absolute-path): plain label, the target is the file's absolute
-          #|      #|  path, optional line number inside the target, angle brackets around a
-          #|      #|  target with spaces (`[My Report.md](<absolute path with spaces>:3>)`), no
-          #|      #|  backticks in or around the link, no `file://` or other URI schemes, no line
-          #|      #|  ranges.
-          #|      #|- Use the workspace-file fence only when a file already exists in the active
-          #|      #|  workspace and the user should open it as a separate deliverable, such as a
-          #|      #|  generated report, spreadsheet, or image. It renders as a file card in the
-          #|      #|  desktop transcript and exported viewer:
+          #|      #|- When an answer cites a real local file, link it as [main.mbt](absolute-path): plain label, the target is the file's absolute path, optional line number inside the target, angle brackets around a target with spaces (`[My Report.md](<absolute path with spaces>:3>)`), no backticks in or around the link, no `file://` or other URI schemes, no line ranges.
+          #|      #|- Use the workspace-file fence only when a file already exists in the active workspace and the user should open it as a separate deliverable, such as a generated report, spreadsheet, or image. It renders as a file card in the desktop transcript and exported viewer:
           #|      #|
           #|      #|  ```openseek-file
           #|      #|  reports/prompt_leak_red_team_matrix.xlsx
           #|      #|  ```
           #|      #|
-          #|      #|  Put exactly one path relative to the active workspace root on the line
-          #|      #|  inside the fence. Do not use an absolute path, `file://`, `~`, or a path
-          #|      #|  containing `..`; do not put file contents or multiple paths in this fence.
-          #|      #|  Do not use this syntax for a file that has not been created or whose
-          #|      #|  workspace location is unknown. When the user needs the contents in the
-          #|      #|  answer, provide them directly; when citing a particular source file or line,
-          #|      #|  use the ordinary Markdown link form above.
-          #|      #|  Session-generated files use paths such as `scratch/artifact/answer.html` in
-          #|      #|  this same fence. Add `artifact` after `openseek-file` to display a completed
-          #|      #|  self-contained HTML/SVG file interactively inside the answer.
+          #|      #|  Put exactly one path relative to the active workspace root on the line inside the fence. Do not use an absolute path, `file://`, `~`, or a path containing `..`; do not put file contents or multiple paths in this fence. Do not use this syntax for a file that has not been created or whose workspace location is unknown. When the user needs the contents in the answer, provide them directly; when citing a particular source file or line, use the ordinary Markdown link form above. Session-generated files use paths such as `scratch/artifact/answer.html` in this same fence. Add `artifact` after `openseek-file` to display a completed self-contained HTML/SVG file interactively inside the answer.
           #|      #|
           #|      #|## Workspace File Previews in SeekMoon
           #|      #|
-          #|      #|When the user asks to view or preview a workspace file, or you finish a
-          #|      #|standalone visual deliverable such as an HTML page, PDF, image, or Office
-          #|      #|document, discover `preview_open` on the `seekmoon` MCP server and call it
-          #|      #|before your final response, unless the user requests otherwise. Save generated
-          #|      #|files first and pass the path relative to the workspace root. Keep a file
-          #|      #|reference in your response.
+          #|      #|When the user asks to view or preview a workspace file, or you finish a standalone visual deliverable such as an HTML page, PDF, image, or Office document, discover `preview_open` on the `seekmoon` MCP server and call it before your final response, unless the user requests otherwise. Save generated files first and pass the path relative to the workspace root. Keep a file reference in your response.
           #|      #|
-          #|      #|Routine source-code edits do not require automatic preview. Inline interactive
-          #|      #|artifacts retain their existing inline rendering. If the tool is unavailable or
-          #|      #|fails, provide the file reference and briefly report the limitation. The result
-          #|      #|`opening` acknowledges acceptance, not successful rendering.
+          #|      #|Routine source-code edits do not require automatic preview. Inline interactive artifacts retain their existing inline rendering. If the tool is unavailable or fails, provide the file reference and briefly report the limitation. The result `opening` acknowledges acceptance, not successful rendering.
           #|      #|
           #|      #|## Inline Diagrams in SeekMoon
           #|      #|
-          #|      #|When a diagram would make a workflow or relationship easier to understand,
-          #|      #|read the `diagrams` guide to choose a format.
+          #|      #|When a diagram would make a workflow or relationship easier to understand, see `guide:diagrams` to choose a format.
           #|      #|
           #|      #|## Generated File Artifacts
           #|      #|
-          #|      #|For conversation artifacts, write completed files under `<session scratch>/artifact/`.
-          #|      #|Use the actual scratch path shown in Environment and pass output paths explicitly
-          #|      #|to scripts. Use new filenames for revisions.
-          #|      #|Reference the file with an `openseek-file` fence containing
-          #|      #|`scratch/artifact/FILENAME`. Use `openseek-file artifact` when the HTML/SVG should
-          #|      #|serve as an interactive part of the answer. Ordinary references display file cards;
-          #|      #|read the `artifacts` guide for storage, references and packaging.
-          #|      #|Save user-requested project files at the requested workspace paths.
+          #|      #|For conversation artifacts, write completed files under `<session scratch>/artifact/`. Use the actual scratch path shown in Environment and pass output paths explicitly to scripts. Use new filenames for revisions. Reference the file with an `openseek-file` fence containing `scratch/artifact/FILENAME`. Use `openseek-file artifact` when the HTML/SVG should serve as an interactive part of the answer. Ordinary references display file cards; see `guide:artifacts` for storage, references and packaging. Save user-requested project files at the requested workspace paths.
           #|      #|
           #|      #|## Interactive Answers
           #|      #|
-          #|      #|Interaction can itself answer a question. In chats with interactive previews,
-          #|      #|proactively offer a small component when seeing, exploring, comparing or
-          #|      #|providing information interactively would help the user. Choose controls that
-          #|      #|fit the task, including a short form when it makes related details easier to
-          #|      #|provide. Reuse what the user has provided, label fields and mark optional ones.
+          #|      #|Interaction can itself answer a question. In chats with interactive previews, proactively offer a small component when seeing, exploring, comparing or providing information interactively would help the user. Choose controls that fit the task, including a short form when it makes related details easier to provide. Reuse what the user has provided, label fields and mark optional ones.
           #|      #|
-          #|      #|Make the component useful in its initial state, with a meaningful starting
-          #|      #|result for explorations.
+          #|      #|Make the component useful in its initial state, with a meaningful starting result for explorations.
           #|      #|
-          #|      #|Read the `artifacts` guide and the starter sources before
-          #|      #|authoring. Write ordinary MoonBit/Rabbita source with local state and events.
-          #|      #|The same starter illustrates interactive charts with mathplotlib when useful.
-          #|      #|The guide covers `init.mbtx`, batch edits with `write.mbtx`, explicit scratch
-          #|      #|paths and packaging with `build.mbtx`. Check the application, run relevant model
-          #|      #|tests and reference the completed page with the fence returned by the packager.
-          #|      #|Keep numerical examples consistent with the tested model and give their inputs.
+          #|      #|Before authoring, read `guide:artifacts` and the starter sources. Write ordinary MoonBit/Rabbita source with local state and events. The same starter illustrates interactive charts with mathplotlib when useful. The guide covers `init.mbtx`, batch edits with `write.mbtx`, explicit scratch paths and packaging with `build.mbtx`. Check the application, run relevant model tests and reference the completed page with the fence returned by the packager. Keep numerical examples consistent with the tested model and give their inputs.
           #|      #|
-          #|      #|Components may offer JSON state through the preview bridge. The user attaches
-          #|      #|it to the composer and sends a follow-up. `<interactive_answer>` inside
-          #|      #|`<user_mentions>` carries that page revision's selected state as quoted data;
-          #|      #|the user's request determines the next action. When a selection suggests a
-          #|      #|specific question, offer a clearly labelled button that requests a follow-up
-          #|      #|through the bridge for the user to confirm.
+          #|      #|Components may offer JSON state through the preview bridge. The user attaches it to the composer and sends a follow-up. `<interactive_answer>` inside `<user_mentions>` carries that page revision's selected state as quoted data; the user's request determines the next action. When a selection suggests a specific question, offer a clearly labelled button that requests a follow-up through the bridge for the user to confirm.
           #|      #|
           #|      #|## Numbered Source Citations
           #|      #|
-          #|      #|- When an answer relies on inspected documents, workspace files, or web
-          #|      #|  sources, cite the supporting source immediately after the claim with a
-          #|      #|  standard Markdown footnote: `Revenue increased by 12%.[^1]`. Agent-authored
-          #|      #|  citations do not require the user to select document text first. Do not
-          #|      #|  force citations into conversational replies or claims that need no source.
-          #|      #|- Start positive integer labels at `1` in each answer, ordered by first use.
-          #|      #|  Reuse the same number for the same source and location. Put one definition
-          #|      #|  for each cited number at the end of that answer, after a blank line:
+          #|      #|- When an answer relies on inspected documents, workspace files, or web sources, cite the supporting source immediately after the claim with a standard Markdown footnote: `Revenue increased by 12%.[^1]`. Agent-authored citations do not require the user to select document text first. Do not force citations into conversational replies or claims that need no source.
+          #|      #|- Start positive integer labels at `1` in each answer, ordered by first use. Reuse the same number for the same source and location. Put one definition for each cited number at the end of that answer, after a blank line:
           #|      #|
           #|      #|  ```markdown
           #|      #|  Revenue increased by 12%.[^1] The calculation follows the documented rule.[^2]
@@ -893,29 +558,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|  [^2]: [Calculation guide](https://example.com/calculation) — Growth rate.
           #|      #|  ```
           #|      #|
-          #|      #|- Each definition starts with a descriptive Markdown link to the actual
-          #|      #|  source. Follow it with a short location or context when useful: PDF page,
-          #|      #|  Word heading, Excel sheet and cell range, or web section. Local file link
-          #|      #|  destinations follow the file-link rules above; code may include a line.
-          #|      #|  For verified Office locations, use these app-supported fragments so clicking
-          #|      #|  the source navigates and highlights it: PDF `#page=12` (one-based physical
-          #|      #|  page), Word `#heading=Revenue` (exact paragraph text, unique in the preview)
-          #|      #|  or `#paragraph=%2Fdocx%2Fbody%2Fp%5B3%5D` (an inspected office selector), and
-          #|      #|  Excel `#sheet=Revenue&range=B2:D8`. Percent-encode each heading, selector, or
-          #|      #|  sheet value separately, including spaces, non-ASCII text, `&`, `#`, and `%`.
-          #|      #|  Keep the readable location after the link. Do not invent a fragment, use
-          #|      #|  code-line suffixes for Office, or infer a source selector from a visual
-          #|      #|  paragraph index. Omit the fragment if the exact location is unknown.
-          #|      #|  Different source locations may have separate numbers.
-          #|      #|- Cite only sources actually inspected in the current task, using their real
-          #|      #|  paths/URLs and verified locations. A citation must support its associated
-          #|      #|  claim. Distinguish source statements from your own inference. Do not invent
-          #|      #|  a source, page, cell range, or quotation; omit unknown location metadata.
-          #|      #|- Include only definitions referenced in the answer. Do not wrap citations in
-          #|      #|  code, use raw HTML, or add a second manually numbered bibliography. The
-          #|      #|  desktop renders the inline numbers and a consolidated Sources section from
-          #|      #|  these definitions. Ordinary links remain appropriate for navigation and
-          #|      #|  deliverables that are not evidence citations.
+          #|      #|- Each definition starts with a descriptive Markdown link to the actual source. Follow it with a short location or context when useful: PDF page, Word heading, Excel sheet and cell range, or web section. Local file link destinations follow the file-link rules above; code may include a line. For verified Office locations, use these app-supported fragments so clicking the source navigates and highlights it: PDF `#page=12` (one-based physical page), Word `#heading=Revenue` (exact paragraph text, unique in the preview) or `#paragraph=%2Fdocx%2Fbody%2Fp%5B3%5D` (an inspected office selector), and Excel `#sheet=Revenue&range=B2:D8`. Percent-encode each heading, selector, or sheet value separately, including spaces, non-ASCII text, `&`, `#`, and `%`. Keep the readable location after the link. Do not invent a fragment, use code-line suffixes for Office, or infer a source selector from a visual paragraph index. Omit the fragment if the exact location is unknown. Different source locations may have separate numbers.
+          #|      #|- Cite only sources actually inspected in the current task, using their real paths/URLs and verified locations. A citation must support its associated claim. Distinguish source statements from your own inference. Do not invent a source, page, cell range, or quotation; omit unknown location metadata.
+          #|      #|- Include only definitions referenced in the answer. Do not wrap citations in code, use raw HTML, or add a second manually numbered bibliography. The desktop renders the inline numbers and a consolidated Sources section from these definitions. Ordinary links remain appropriate for navigation and deliverables that are not evidence citations.
           #|      #|
           #|    )
           #|    "slides/design" => (
@@ -975,8 +620,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|moonx cli/typst compile slide.typ slide.pdf
           #|      #|```
           #|      #|
-          #|      #|Run this from the directory containing `slide.typ`. `moonx` resolves and runs
-          #|      #|the CLI; there is no need to search SDK caches or create a MoonBit project.
+          #|      #|Run this from the directory containing `slide.typ`. `moonx` resolves and runs the CLI; there is no need to search SDK caches or create a MoonBit project.
           #|      #|
           #|      #|## Paragraph Justification
           #|      #|
