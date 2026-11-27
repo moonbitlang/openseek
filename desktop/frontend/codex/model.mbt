@@ -747,14 +747,6 @@ pub fn State::can_open_permission_menu(self : State) -> Bool {
 }
 
 ///|
-/// Build state from the authoritative `thread/read(includeTurns=true)` reply.
-/// The shell's black-box workspace tests use the same boundary as production
-/// instead of constructing Codex's private thread representation.
-pub fn State::from_thread_snapshot(value : Json) -> State {
-  State().with_thread_reply(value, CodexImportedSnapshot)
-}
-
-///|
 /// Whether the shared sidebar's Codex add action may start a task now. The
 /// root shell owns the common section heading, but readiness and in-flight
 /// request state remain Codex-owned policy.
@@ -1206,7 +1198,7 @@ pub fn State::draft_project(
 /// The project in which the selected local draft may create a worktree. A
 /// draft receives `project_root` only from `codex.draft.open`; the browser's
 /// original cwd is not enough to offer a filesystem-mutating launch mode.
-pub fn State::worktree_launch_workspace(
+fn State::worktree_launch_workspace(
   self : State,
   channel : @interop.ChannelId,
 ) -> @common.Uri? {
@@ -1310,12 +1302,6 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     foreground: None,
     notice: "",
   }
-}
-
-///|
-/// Expose the draft as read-only text for shell-level integration tests.
-pub fn State::draft_text(self : State) -> String {
-  self.draft
 }
 
 ///|
