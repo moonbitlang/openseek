@@ -95,3 +95,15 @@ test('a signed-in browser selects the named device library and Cloud', async ({ 
   await expect(row(page, 'local-notes')).toBeVisible();
   await expect(row(page, 'typst')).toHaveCount(0);
 });
+
+test('send an installed skill reference from a Cloud conversation', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  await page.locator('#task').fill('Use $typ');
+  await page.locator('.completion-item').filter({ hasText: '$typst' }).click();
+  await expect(page.locator('.composer .mention-chip')).toContainText('typst');
+  await page.locator('#send').click();
+  await expect.poll(() => cloud.postCount).toBe(1);
+  const request = cloud.requests.find(r => r.method === 'POST' && r.path.endsWith('/commands'));
+  expect(JSON.parse(request.body).command.content).toContain('<skill name="typst"/>');
+});

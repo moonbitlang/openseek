@@ -1854,6 +1854,7 @@ fn State::submit(
       mention.ref_
       is (File(..)
       | OfficeSelection(..)
+      | Skill(..)
       | Annotation(..)
       | ReviewChanges(_)
       | SemanticSearch(_)
