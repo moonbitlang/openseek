@@ -5985,9 +5985,14 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  #|
           #|  #|## Tests
           #|  #|Test use alone never justifies an export. If only this package's own
-          #|  #|blackbox tests (`*_test.mbt`) use the item, make it private and turn those
-          #|  #|tests into whitebox tests (`*_wbtest.mbt`) of the package, or test it
-          #|  #|through the public API. If tests of another package use it, it is a test
+          #|  #|blackbox tests (`*_test.mbt`) use the item, make it private and move those
+          #|  #|tests into the package, or test it through the public API. A whitebox file
+          #|  #|(`*_wbtest.mbt`) is enough only when the package's own code also uses the
+          #|  #|item: `moon check --deny-warn` does not count whitebox tests as uses, so a
+          #|  #|private item that only they reach is `unused_value`. Then either delete it
+          #|  #|with its tests (it is vestigial), or move its tests into inline `test`
+          #|  #|blocks in the package's source file beside it, which do count as uses.
+          #|  #|If tests of another package use it, it is a test
           #|  #|seam (`exports.mbt`, naming those tests); never edit another package's
           #|  #|files.
           #|  #|
@@ -6025,8 +6030,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  #|target the repository builds (its AGENTS.md says which; `--no-mbti` keeps
           #|  #|the check from rewriting other packages' interface files), and check any
           #|  #|consumer outside the workspace that `git grep` found. Then `moon test`
-          #|  #|for the package, and `moon info` and `moon fmt` with the package path
-          #|  #|only. The package's pkg.generated.mbti may only lose lines, or change
+          #|  #|for the package, and `moon check` (which regenerates its
+          #|  #|pkg.generated.mbti) and `moon fmt` with the package path only. The
+          #|  #|package's pkg.generated.mbti may only lose lines, or change
           #|  #|`pub(all)` to `pub`.
           #|
           #|///|
@@ -7225,7 +7231,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    $|- Resolve each candidate one of the four ways in the guidance, and nothing else: no unrelated cleanup.
           #|    $|- First read the AGENTS.md files on the path from the repository root to `\{dir}`, and the guidance they link, and run the validation they require.
           #|    $|- Before any visibility change, `git grep -n -w <name>` the whole repository for uses the analyzer cannot see.
-          #|    $|- At least run `moon check --deny-warn --no-mbti` from the repository root (the whole workspace) for every target the repository builds, and `moon test` for the package. Then run `moon info` and `moon fmt` with the package path only, never over the whole module (a newer toolchain can rewrite other packages' files, which makes the change unmergeable). Confirm pkg.generated.mbti only lost lines.
+          #|    $|- At least run `moon check --deny-warn --no-mbti` from the repository root (the whole workspace) for every target the repository builds, and `moon test` for the package. Then run `moon check` (without `--no-mbti`, so it regenerates pkg.generated.mbti) and `moon fmt` with the package path only, never over the whole module (a newer toolchain can rewrite other packages' files, which makes the change unmergeable). Confirm pkg.generated.mbti only lost lines.
           #|    $|- Report status done only when every required check passed. In summary, list every candidate and what you did with it (dropped pub, deleted, narrowed, or moved to exports.mbt with its reason). Name each command and its result in verification.
           #|  let started = @tools.call("subagent", {
           #|    "kind": "worker",

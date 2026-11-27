@@ -165,14 +165,19 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
    - Before any visibility change, `git grep -n -w <name>` the whole
      repository.
    - Test use alone never justifies an export. Tests of this package move to
-     its whitebox file. For tests of other packages, it is a seam, or the
+     its whitebox file when its own code also uses the item. When only tests
+     use it, a whitebox file is not enough: `--deny-warn` does not count
+     whitebox tests as uses (`unused_value`), so the item is deleted with its
+     tests, or its tests become inline `test` blocks in its source file. For
+     tests of other packages, it is a seam, or the
      worker leaves the item and says so; it never edits another package.
    - Validate the whole workspace, since a shrink breaks consumers, not the
      package. Run `moon check --deny-warn --no-mbti` from the root for each
      target the repository builds, since without `--no-mbti` a workspace
      check rewrites other packages' interfaces. Check consumers outside the
      workspace that `git grep` found. Then `moon test` for the package, and
-     `moon info` and `moon fmt` with the package path.
+     `moon check` (which regenerates its interface) and `moon fmt` with the
+     package path.
    - Report `done` only when all of that passed; list every candidate and
      what was done to it.
 4. **Gate** (as simplify): the capture is `committed`, its base is B, and the
