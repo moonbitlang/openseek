@@ -95,6 +95,13 @@ base with the default branch; the focus text, if any, becomes the review
 criteria. It sends the same prompt as Desktop's `/ultrareview`, which the
 transcript shows as the turn's prompt, and runs only while no task is running.
 
+`/simplify [focus]` starts a turn that asks the agent to run the bundled
+simplify sweep (`@builtin/simplify.mbtx`), which opens one pull request per
+package it simplifies; the focus text, if any, is passed to the workflow. It
+sends the same prompt as Desktop's `/simplify`. The sweep refuses to start
+from a dirty checkout or off the default branch, and the agent is told to
+report that and stop rather than work around it.
+
 `/inspect` shows the session live in the browser. It starts (or reuses) the
 session viewer for `--session-root`, `moonx moonbitlang/inspect@0.1.0 --ensure
 --watch`, in the background, and adds its link to the transcript on a line of
