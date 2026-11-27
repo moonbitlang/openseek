@@ -23,9 +23,10 @@ pub fn SlashCommandInvocation::to_repr(Self) -> @debug.Repr
 
 #derive(Eq, @debug.Debug)
 type SlashCommandSpec
-pub fn SlashCommandSpec::SlashCommandSpec(name~ : String, description~ : String) -> Self
+pub fn SlashCommandSpec::SlashCommandSpec(name~ : String, description~ : String, multiline_arguments? : Bool) -> Self
 pub fn SlashCommandSpec::description(Self) -> String
 pub fn SlashCommandSpec::equal(Self, Self) -> Bool
+pub fn SlashCommandSpec::multiline_arguments(Self) -> Bool
 pub fn SlashCommandSpec::name(Self) -> String
 pub fn SlashCommandSpec::not_equal(Self, Self) -> Bool
 pub fn SlashCommandSpec::to_repr(Self) -> @debug.Repr
