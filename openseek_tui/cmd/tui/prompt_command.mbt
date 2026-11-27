@@ -84,3 +84,15 @@ test "ultrareview is rejected while a turn runs" {
   assert_eq(cmds.count_if(cmd => cmd is StartAgent(_, ..)), 0)
   assert_eq(state.pending_steers.length(), 0)
 }
+
+///|
+test "prompt commands take multi-line focus text" {
+  // Shift-Enter after `/ultrareview` starts a focus paragraph; the command must
+  // opt in, or the UI sends that entry to the agent as a raw prompt.
+  let takes_text = tui_slash_commands()
+    .filter(spec => spec.multiline_arguments())
+    .map(spec => spec.name())
+  // A command that takes no text, like `/exit`, keeps a pasted `/exit` and a
+  // newline an ordinary prompt.
+  assert_eq(takes_text, ["ultrareview"])
+}

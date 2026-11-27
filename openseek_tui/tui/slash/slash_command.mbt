@@ -8,15 +8,28 @@
 struct SlashCommandSpec {
   name : String
   description : String
+  multiline_arguments : Bool
 }
 
 ///|
 /// Build a slash command spec. `name` does not include the leading slash.
+///
+/// `multiline_arguments` lets the command take text spanning several lines,
+/// as in `/name` followed by Shift-Enter and a paragraph. Other commands only
+/// dispatch from a single-line entry, so pasting multi-line text that happens
+/// to start with their name (`/exit` and a newline) stays ordinary input.
 pub fn SlashCommandSpec::SlashCommandSpec(
   name~ : String,
   description~ : String,
+  multiline_arguments~ : Bool = false,
 ) -> SlashCommandSpec {
-  { name, description, }
+  { name, description, multiline_arguments, }
+}
+
+///|
+/// Whether the command can take arguments spanning several lines.
+pub fn SlashCommandSpec::multiline_arguments(self : SlashCommandSpec) -> Bool {
+  self.multiline_arguments
 }
 
 ///|
