@@ -2102,36 +2102,29 @@ fn update(
   }
   let ctx = file_ctx(model)
   let owns_panel = model.file_panel.owner == Some(ctx.owner)
-  let checkout = ctx.owner
-    .host()
-    .bind(owner => {
-      ctx.placement
-      .bind(placement => placement.checkout_root())
-      .map(root => {
-        let previous = model.github.scope.filter(checkout => {
-          checkout.channel == owner.channel && checkout.cwd == root.path
-        })
-        @github.CheckoutScope::{
-          channel: owner.channel,
-          cwd: root.path,
-          head: if owns_panel {
-            model.file_panel.git_actual_head
-          } else {
-            previous.bind(checkout => checkout.head)
-          },
-          branch: match (owns_panel, model.file_panel.git_graph) {
-            (true, GitGraphReady(snapshot~, ..)) => snapshot.branch
-            _ => previous.bind(checkout => checkout.branch)
-          },
-        }
-      })
-    })
-  let github_visible = model.file_panel_visible() &&
-    model.devices.any(dev => {
-      ctx.owner.host().map_or(false, owner => dev.channel == owner.channel) &&
-      dev.bridge is Connected &&
-      dev.reconnect_failures == 0
-    })
+  let source : (@github.GithubHost, String)? = match ctx.owner {
+    Host(owner) => ctx.placement.bind(placement => placement.checkout_root())
+      .map(root => (@github.Desktop(owner.channel), root.path))
+    Cloud(account~, session~) => ctx.cloud_files.map(files =>
+      (@github.Cloud(account~, session~, token=files.token), "/"))
+  }
+  let checkout = source.map(source => {
+    let (host, cwd) = source
+    let previous = model.github.scope.filter(scope => scope.host == host && scope.cwd == cwd)
+    @github.CheckoutScope::{
+      host, cwd,
+      head: if owns_panel { model.file_panel.git_actual_head } else { previous.bind(scope => scope.head) },
+      branch: match (owns_panel, model.file_panel.git_graph) {
+        (true, GitGraphReady(snapshot~, ..)) => snapshot.branch
+        _ => previous.bind(scope => scope.branch)
+      },
+    }
+  })
+  let github_visible = model.file_panel_visible() && (match ctx.owner {
+    Cloud(..) => ctx.cloud_files is Some(_)
+    Host(owner) => model.devices.any(dev =>
+      dev.channel == owner.channel && dev.bridge is Connected && dev.reconnect_failures == 0)
+  })
   let (github_cmd, github) = @github.reconcile(
     dispatch.map(msg => Github(msg)),
     model.github,

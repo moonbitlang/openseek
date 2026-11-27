@@ -1,4 +1,8 @@
 import {
+  "openseek_desktop/frontend/cloud_client",
+  "openseek_desktop/uri",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
   "openseek_desktop/frontend/action_menu",
   "moonbit-community/rui",
   "moonbit-community/rabbita/dialog",

@@ -70,7 +70,7 @@ test "host directory branch and HEAD changes reject old responses even after ret
   )
   for
     next in [
-      { ..original, channel: Remote("other-host"), },
+      { ..original, host: Desktop(Remote("other-host")), },
       { ..original, cwd: "/other", },
       { ..original, branch: Some("other"), },
       { ..original, head: Some("new-head"), },

@@ -80,7 +80,11 @@ fn panel_view(
     } else {
       None
     },
-    github: @cmd.batch([actions.github, actions.close_menu]),
+    github: if host_tools || input.file_ctx.cloud_files is Some(_) {
+      Some(@cmd.batch([actions.github, actions.close_menu]))
+    } else {
+      None
+    },
     workflows: @cmd.batch([actions.workflows, actions.close_menu]),
   }
   // Every body remains mounted and CSS selects the active kind. This preserves
