@@ -1934,6 +1934,7 @@ fn conversation_header(
       ),
     )
   }
+  items.push(model.conversation_trajectory_button(dispatch))
   items.push(model.conversation_export_button(dispatch))
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
@@ -2324,6 +2325,7 @@ fn view(
               title,
               selected.map(selected => selected.workspace),
             )
+            items.push(model.conversation_trajectory_button(dispatch))
             items.push(model.conversation_export_button(dispatch))
             items
           }

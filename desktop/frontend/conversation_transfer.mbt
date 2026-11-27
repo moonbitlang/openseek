@@ -69,3 +69,83 @@ fn Model::conversation_export_button(
     icon(icon_chat_export),
   )
 }
+
+///|
+fn Model::conversation_trajectory_button(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+) -> @html.Html {
+  let title = self.selected_conversation_title()
+  let (command, is_remote) = match self.chat_column() {
+    Transcript(conversation=conv, ..) if self.screen is Chat =>
+      match conv.device {
+        Local => {
+          let exp = conv.export_source(title)
+          (
+            Some(
+              dispatch(
+                OpenSessionTrajectory(Local, {
+                  session: exp.session,
+                  workspace: exp.workspace,
+                  title: if exp.title.is_empty() {
+                    exp.session
+                  } else {
+                    exp.title
+                  },
+                  archived: exp.archived,
+                  job_id: None,
+                  job_started_at_ms: None,
+                }),
+              ),
+            ),
+            false,
+          )
+        }
+        Remote(_) => (None, true)
+      }
+    _ =>
+      match self.conversation_selection() {
+        Some(selected) if self.screen is Chat =>
+          match selected.channel {
+            Local =>
+              (
+                Some(
+                  dispatch(
+                    OpenSessionTrajectory(Local, {
+                      session: selected.session,
+                      workspace: selected.workspace.to_string(),
+                      title: if title.is_empty() {
+                        selected.session
+                      } else {
+                        title
+                      },
+                      archived: selected.record is ArchivedRecord,
+                      job_id: None,
+                      job_started_at_ms: None,
+                    }),
+                  ),
+                ),
+                false,
+              )
+            Remote(_) => (None, true)
+          }
+        _ => (None, false)
+      }
+  }
+  let tooltip = shell_text(
+    self.locale,
+    if is_remote {
+      TimelineUnavailableRemote
+    } else {
+      ViewTimeline
+    },
+  )
+  @html.button(
+    class="panel-toggle",
+    title=tooltip,
+    attrs=@html.Attrs::build().aria_label(tooltip),
+    disabled=command is None,
+    on_click=command.unwrap_or(@cmd.none),
+    icon(icon_clockface),
+  )
+}

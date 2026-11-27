@@ -25,6 +25,9 @@ priv enum UiMessage {
   PullRequestClosed
   PullRequestAttached
   PullRequestSummaryMulti(Int32, String)
+  ViewTimelineLabel
+  ViewTimeline
+  TimelineUnavailableRemote
 }
 
 ///|
@@ -156,5 +159,26 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "\{count} 個 PR（\{state}）"
     (Japanese, PullRequestSummaryMulti(count, state)) =>
       "\{count} 件の PR（\{state}）"
+    (English, ViewTimelineLabel) => "View timeline"
+    (Spanish, ViewTimelineLabel) => "Ver línea de tiempo"
+    (SimplifiedChinese, ViewTimelineLabel) => "查看轨迹"
+    (TraditionalChinese, ViewTimelineLabel) => "查看軌跡"
+    (Japanese, ViewTimelineLabel) => "タイムラインを表示"
+    (English, ViewTimeline) => "Open run timeline in browser"
+    (Spanish, ViewTimeline) => "Abrir línea de tiempo en el navegador"
+    (SimplifiedChinese, ViewTimeline) => "在浏览器中打开运行轨迹"
+    (TraditionalChinese, ViewTimeline) => "在瀏覽器中開啟執行軌跡"
+    (Japanese, ViewTimeline) =>
+      "ブラウザで実行タイムラインを開く"
+    (English, TimelineUnavailableRemote) =>
+      "Timeline view is unavailable for remote SSH sessions"
+    (Spanish, TimelineUnavailableRemote) =>
+      "La línea de tiempo no está disponible para sesiones SSH remotas"
+    (SimplifiedChinese, TimelineUnavailableRemote) =>
+      "远程 SSH 会话暂不支持查看轨迹"
+    (TraditionalChinese, TimelineUnavailableRemote) =>
+      "遠端 SSH 工作階段暫不支援查看軌跡"
+    (Japanese, TimelineUnavailableRemote) =>
+      "リモート SSH セッションではタイムラインを表示できません"
   }
 }

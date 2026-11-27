@@ -4308,6 +4308,18 @@ pub impl @json.FromJson for SessionToolResult
 pub impl @json.ToJson for SessionToolResult
 
 #derive(Eq, @debug.Debug)
+pub(all) struct SessionTrajectoryPayload {
+  session : String
+  workspace : String
+  title : String
+  archived : Bool
+  job_id : String?
+  job_started_at_ms : Int64?
+}
+pub impl @json.FromJson for SessionTrajectoryPayload
+pub impl @json.ToJson for SessionTrajectoryPayload
+
+#derive(Eq, @debug.Debug)
 pub(all) struct SessionUserMessage {
   content : @openseek_protocol.Content
   submission_id : String?
