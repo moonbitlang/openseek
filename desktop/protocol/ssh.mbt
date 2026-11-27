@@ -378,14 +378,6 @@ pub extend SshAuthKind with Eq::{equal, not_equal}
 pub extend SshAuthRequest with Eq::{equal, not_equal}
 
 ///|
-pub(all) struct SshEvent {
-  host_id : String
-  attempt : Int32
-  epoch : Int32
-  event : Json
-}
-
-///|
 pub impl FromJson for SshEvent with fn from_json(json, path) {
   let o = JsonObject::decode(json, path, "SSH event")
   {

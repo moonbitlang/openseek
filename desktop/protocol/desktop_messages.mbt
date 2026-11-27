@@ -1236,11 +1236,6 @@ pub(all) struct AppTitlebarStylePayload {
 }
 
 ///|
-pub(all) struct AppTitlebarStyleReply {
-  custom_overlay : Bool
-}
-
-///|
 #derive(Debug, Eq)
 pub(all) struct BrowserBoundsPayload {
   id : Int32

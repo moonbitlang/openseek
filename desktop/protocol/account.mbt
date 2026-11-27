@@ -17,12 +17,6 @@ pub(all) struct AccountSession {
 
 ///|
 #derive(Eq)
-pub(all) struct AccountSessionReply {
-  session : AccountSession?
-}
-
-///|
-#derive(Eq)
 pub(all) struct RemoteAccessPayload {
   enabled : Bool
 }

@@ -33,12 +33,6 @@ pub(all) struct ImportAttachmentReply {
 
 ///|
 #derive(Debug, Eq)
-pub(all) struct PickAttachmentReply {
-  path : String?
-}
-
-///|
-#derive(Debug, Eq)
 pub(all) struct StageAttachmentsPayload {
   session : String
   workspace : String

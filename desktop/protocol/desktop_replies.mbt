@@ -2366,12 +2366,6 @@ pub(all) struct DownloadUpdateAcceptedReply {
 }
 
 ///|
-#derive(Debug, Eq)
-pub(all) struct OpenExternalReply {
-  opened : Bool
-}
-
-///|
 pub extend ApplyUpdateReply with Debug::{to_repr}
 
 ///|
