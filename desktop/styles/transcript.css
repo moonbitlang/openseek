@@ -360,11 +360,8 @@
   /* color: var(--color-text-secondary); */
 }
 .empty-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  flex-wrap: wrap;
-  column-gap: 0.25em;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   font-size: var(--font-size-page-title);
   font-weight: 600;
   line-height: 1.25;
@@ -376,24 +373,16 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
 }
-.empty-title-project {
-  display: inline-flex;
-  align-items: baseline;
-  min-width: 0;
-}
 .empty-project-control {
   anchor-scope: --empty-project-trigger;
-  display: inline-flex;
-  min-width: 0;
+  min-inline-size: 0;
 }
 .empty-project-trigger {
   anchor-name: --empty-project-trigger;
-  display: inline-flex;
-  align-items: center;
-  max-width: min(42vw, 420px);
+  display: inline-block;
+  max-inline-size: min(100%, 42vw, 420px);
   margin: 0;
   padding: 0;
-  overflow: hidden;
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
@@ -405,10 +394,14 @@
   text-decoration-thickness: 0.05em;
   text-decoration-skip-ink: none;
   text-underline-offset: 0.16em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   vertical-align: baseline;
   cursor: pointer;
+}
+.empty-project-trigger-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .empty-project-trigger:hover,
 .empty-project-trigger.open {
@@ -437,9 +430,6 @@
   overflow: hidden;
   box-shadow: none;
   color: var(--color-text-primary);
-  /* The picker node inherits the heading's large, bold type from the title;
-     pin it back to the app's body type and sans stack, matching the select
-     menus instead of the mono stack. */
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
   font-weight: 400;

@@ -36,7 +36,10 @@ fn empty_title(
   project_label : String?,
 ) -> String {
   match project_label {
-    Some(project) => dynamic_text(locale, DWhatBuild(project.to_string()))
+    Some(project) => {
+      let (prefix, suffix) = build_in_parts(locale)
+      "\{prefix}\{project}\{suffix}"
+    }
     None => ui(locale, WhatBuild)
   }
 }
@@ -119,26 +122,32 @@ fn EmptyProjectControl::render(
   label : String,
   projects : Array[ProjectChoice],
 ) -> @html.Html {
+  let (prefix, suffix) = build_in_parts(locale)
+  let trigger = @html.button(
+    class=if self.open {
+      "empty-project-trigger open"
+    } else {
+      "empty-project-trigger"
+    },
+    type_="button",
+    title=ui(locale, ChooseProject),
+    on_click=self.toggle,
+    attrs=@html.Attrs::build()
+      .id(EmptyProjectTriggerId)
+      .aria_label(dynamic_text(locale, DChooseProject(label.to_string())))
+      .aria_haspopup("dialog")
+      .aria_controls(EmptyProjectMenuId)
+      .aria_expanded(self.open.to_string())
+      .on_blur(event => self.dismiss_on_blur(event))
+      .on_keydown(event => self.keydown(event)),
+    @html.span(class="empty-project-trigger-label", label),
+  )
   let children : Array[@html.Html] = [
-    @html.button(
-      class=if self.open {
-        "empty-project-trigger open"
-      } else {
-        "empty-project-trigger"
-      },
-      type_="button",
-      title=ui(locale, ChooseProject),
-      on_click=self.toggle,
-      attrs=@html.Attrs::build()
-        .id(EmptyProjectTriggerId)
-        .aria_label(dynamic_text(locale, DChooseProject(label.to_string())))
-        .aria_haspopup("dialog")
-        .aria_controls(EmptyProjectMenuId)
-        .aria_expanded(self.open.to_string())
-        .on_blur(event => self.dismiss_on_blur(event))
-        .on_keydown(event => self.keydown(event)),
-      label,
-    ),
+    @html.h2(class="empty-title", [
+      @html.text(prefix),
+      trigger,
+      @html.text(suffix),
+    ]),
   ]
   if self.open {
     let visible = projects.filter(project => project.matches(self.query))
@@ -269,15 +278,9 @@ fn empty_transcript_view(
   let title = match (input.project_label, input.current_project) {
     (Some(label), Some(project)) if input.can_choose_project &&
       !input.projects.is_empty() =>
-      @html.div(class="empty-title", [
-        @html.span(ui(locale, BuildInPrefix)),
-        @html.div(class="empty-title-project", [
-          project_menu.render(locale~, project, label, input.projects),
-          @html.span(ui(locale, BuildInSuffix)),
-        ]),
-      ])
+      project_menu.render(locale~, project, label, input.projects)
     _ =>
-      @html.div(class="empty-title", empty_title(locale~, input.project_label))
+      @html.h2(class="empty-title", empty_title(locale~, input.project_label))
   }
   children.push(title)
   @html.div(class="empty", children)

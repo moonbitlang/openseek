@@ -720,7 +720,7 @@ fn main {
             subs.push(
               @dismiss.on_outside_click(
                 "empty-project-menu-dismiss",
-                trigger=".empty-project-control",
+                trigger=".empty-project-trigger, .empty-project-menu",
                 emit.map((_ : Unit) => CloseSelectMenu),
               ),
             )
