@@ -55,8 +55,13 @@ async fn WsClientActor::open_subscription(
       notification_for_client(notification).map(n => Notify(n))
     },
     on_lag=subscription => {
-      @xlog.warn(category="transport") <?
-        { "event": "hub_subscription_lagged", "transport": "remote" }
+      if @xlog.warn(category="transport") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "hub_subscription_lagged")
+        ..write_object_field("transport", "remote")
+        .write_object_end()
+      }
       subscription.close()
       out.close(
         error=SlowClient("client not draining outbound frames"),

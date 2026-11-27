@@ -2,7 +2,6 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/shell",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
@@ -336,12 +335,140 @@ async fn walk(
 }
 
 ///|
+async fn glob_walk(
+  dir : String,
+  prefix : String,
+  segments : ArrayView[String],
+  only_dirs : Bool,
+  seen : Set[String],
+  results : Array[String],
+) -> Unit {
+  match segments {
+    [] => {
+      if prefix.is_empty() {
+        return
+      }
+      if only_dirs {
+        let is_dir = (@fs.kind(dir, follow_symlink=true) catch { _ => Unknown })
+          is Directory
+        if !is_dir {
+          return
+        }
+      }
+      if !seen.contains(prefix) {
+        seen.insert(prefix)
+        results.push(prefix)
+      }
+    }
+    ["**", .. rest] => {
+      glob_walk(dir, prefix, rest, only_dirs, seen, results)
+      let names = @fs.readdir(dir, include_hidden=true) catch { _ => return }
+      names.sort_by(compare_code_units)
+      for name in names {
+        if name.has_prefix(".") {
+          continue
+        }
+        let next_dir = if dir == "." {
+          name
+        } else if dir.has_suffix("/") {
+          dir + name
+        } else {
+          dir + "/" + name
+        }
+        let kind = @fs.kind(next_dir, follow_symlink=false) catch {
+          _ => continue
+        }
+        if kind is Directory {
+          let next_prefix = if prefix.is_empty() {
+            name
+          } else if prefix.has_suffix("/") {
+            prefix + name
+          } else {
+            prefix + "/" + name
+          }
+          glob_walk(next_dir, next_prefix, segments, only_dirs, seen, results)
+        }
+      }
+    }
+    [head, .. rest] =>
+      if !has_glob(head) {
+        let next_dir = if dir == "." {
+          head
+        } else if dir.has_suffix("/") {
+          dir + head
+        } else {
+          dir + "/" + head
+        }
+        let exists = @fs.exists(next_dir) catch { _ => false }
+        if exists {
+          let next_prefix = if prefix.is_empty() {
+            head
+          } else if prefix.has_suffix("/") {
+            prefix + head
+          } else {
+            prefix + "/" + head
+          }
+          glob_walk(next_dir, next_prefix, rest, only_dirs, seen, results)
+        }
+      } else {
+        let names = @fs.readdir(dir, include_hidden=true) catch { _ => return }
+        names.sort_by(compare_code_units)
+        for name in names {
+          if name.has_prefix(".") && !head.has_prefix(".") {
+            continue
+          }
+          if segment_matches(head, name) {
+            let next_dir = if dir == "." {
+              name
+            } else if dir.has_suffix("/") {
+              dir + name
+            } else {
+              dir + "/" + name
+            }
+            let next_prefix = if prefix.is_empty() {
+              name
+            } else if prefix.has_suffix("/") {
+              prefix + name
+            } else {
+              prefix + "/" + name
+            }
+            glob_walk(next_dir, next_prefix, rest, only_dirs, seen, results)
+          }
+        }
+      }
+  }
+}
+
+///|
+async fn glob_paths(pattern : String) -> Array[String] {
+  if pattern.is_empty() {
+    return []
+  }
+  let only_dirs = pattern.has_suffix("/")
+  let rooted = pattern.has_prefix("/")
+  let trimmed = pattern.trim_start(chars="/").trim_end(chars="/")
+  let segments : Array[String] = []
+  for part in trimmed.split("/") {
+    if !part.is_empty() {
+      segments.push(part.to_owned())
+    }
+  }
+  let dir = if rooted { "/" } else { "." }
+  let prefix = if rooted { "/" } else { "" }
+  let seen : Set[String] = Set([])
+  let results : Array[String] = []
+  glob_walk(dir, prefix, segments, only_dirs, seen, results)
+  results.sort_by(compare_code_units)
+  results
+}
+
+///|
 async fn list_glob(
   listing : Listing,
   options : Options,
   pattern : String,
 ) -> Unit {
-  let matches = @shell.glob(pattern)
+  let matches = glob_paths(pattern)
   if matches.is_empty() {
     listing.items.push(Note("no matches for \{quoted(pattern)}"))
     return

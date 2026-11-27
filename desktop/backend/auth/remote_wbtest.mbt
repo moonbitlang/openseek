@@ -2,7 +2,7 @@
 async test "remote registration uses the account, and disabling preserves it" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
-  let origin = "http://127.0.0.1:\{server.addr.port}"
+  let origin = "http://127.0.0.1:\{server.local_addr().port}"
   let store = AuthStore::empty()
   store.session = Some({
     ..sample_session(avatar=""),
@@ -12,7 +12,7 @@ async test "remote registration uses the account, and disabling preserves it" {
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       for step in 0..<2 {
-        let (conn, _) = server.accept()
+        let conn = server.accept()
         defer conn.close()
         let request = conn.read_request()
         conn.skip_request_body()
@@ -24,7 +24,7 @@ async test "remote registration uses the account, and disabling preserves it" {
             Some("Bearer ts_secret"),
           )
           conn.send_response(201, "Created")
-          conn.write_string(
+          conn.text.write(
             "{\"device_token\":\"odt_new\",\"device\":{\"id\":\"d_new\",\"name\":\"Test\"}}",
           )
         } else {
@@ -55,7 +55,7 @@ async test "cancelled registration reads its device credential and revokes it" {
   @async.with_timeout(5000, () => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let origin = "http://127.0.0.1:\{server.addr.port}"
+    let origin = "http://127.0.0.1:\{server.local_addr().port}"
     let store = AuthStore::empty()
     store.session = Some({
       ..sample_session(avatar=""),
@@ -64,17 +64,17 @@ async test "cancelled registration reads its device credential and revokes it" {
     })
     @async.with_task_group(group => {
       let operation = group.spawn(() => store.set_remote(true))
-      let (conn, _) = server.accept()
+      let conn = server.accept()
       defer conn.close()
       assert_eq(conn.read_request().path, "/v2/devices")
       conn.skip_request_body()
       operation.cancel()
       conn.send_response(201, "Created")
-      conn.write_string(
+      conn.text.write(
         "{\"device_token\":\"odt_cancelled\",\"device\":{\"id\":\"d_cancelled\",\"name\":\"Test\"}}",
       )
       conn.end_response()
-      let (cleanup, _) = server.accept()
+      let cleanup = server.accept()
       defer cleanup.close()
       let request = cleanup.read_request()
       assert_true(request.meth is Delete)
@@ -101,7 +101,7 @@ async test "disable and sign-out retire the device committed while waiting for p
       defer server.close()
       let session = {
         ..sample_session(avatar=""),
-        server_url: "http://127.0.0.1:\{server.addr.port}",
+        server_url: "http://127.0.0.1:\{server.local_addr().port}",
         device: None,
       }
       let store = AuthStore::empty()
@@ -132,7 +132,7 @@ async test "disable and sign-out retire the device committed while waiting for p
           ["/v2/devices/d_just_committed"]
         }
         for path in paths {
-          let (conn, _) = server.accept()
+          let conn = server.accept()
           defer conn.close()
           let request = conn.read_request()
           assert_eq(request.path, path)

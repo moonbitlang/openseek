@@ -570,7 +570,7 @@ struct Session {
 pub fn Session::Session(
   id : SessionId,
   system_prompt~ : String,
-  events~ : @vector.Vector[SessionEvent] = @vector.new(),
+  events~ : @vector.Vector[SessionEvent] = @vector.Vector::empty(),
 ) -> Session {
   let last_sequence = events.fold(init=0, (last_sequence, event) => {
     last_sequence.max(event.sequence)

@@ -97,8 +97,9 @@ async test "PTC real script preserves imports and structured results" {
       let output = dispatch(tool, {
         "ptc": true,
         "source": (
-          #|///|
+          #|---
           #|import { "moonbitlang/openseek_tools@0.4.2" @tools, "moonbitlang/core/async", "moonbitlang/core/async/fs" @files, }
+          #|---
           #|async fn main {
           #|  let result = @tools.call("web_search", { "query": "query" })
           #|  guard result.data is Some({ "sources": [{ "url": String(url), .. }], .. }) else { fail("missing data") }

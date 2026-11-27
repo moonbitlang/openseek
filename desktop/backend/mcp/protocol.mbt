@@ -230,13 +230,15 @@ fn offered(name : String, groups : Array[String]) -> Bool {
 ///|
 #cfg(target="native")
 fn log_tool_failure(name : String, session : String, error : String) -> Unit {
-  @xlog.warn(category="mcp") <?
-    {
-      "event": "mcp_tool_failed",
-      "tool": name,
-      "session": session,
-      "error": error,
-    }
+  if @xlog.warn(category="mcp") is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "mcp_tool_failed")
+    ..write_object_field("tool", name)
+    ..write_object_field("session", session)
+    ..write_object_field("error", error)
+    .write_object_end()
+  }
 }
 
 ///|

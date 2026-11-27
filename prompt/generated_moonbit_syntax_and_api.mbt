@@ -32,13 +32,28 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async/shell",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/process",
     #|  "moonbitlang/core/env",
     #|}
     #|---
     #|
     #|fn main {
-    #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
+    #|  let mut code = 0
+    #|  @async.with_task_group(group => {
+    #|    let proc = @process.spawn(
+    #|      group,
+    #|      "moon",
+    #|      ["check", ..@env.args()[1:]],
+    #|      stdin=Empty,
+    #|      stdout=Collect,
+    #|      stderr=Inherit,
+    #|    )
+    #|    while proc.stdout.text.read_line() is Some(line) {
+    #|      println(line)
+    #|    }
+    #|    code = proc.wait()
+    #|  })
     #|  if code != 0 { fail("moon check failed (exit=\{code})") }
     #|}
     #|```
@@ -133,35 +148,41 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async/shell",
+    #|  "moonbitlang/core/async/process",
     #|}
     #|---
     #|
     #|///|
     #|fn main {
-    #|  // `Cmd` takes an argv array, not a shell line: nothing expands `*.mbt`
-    #|  // before rg sees it, so rg applies it as its own glob. A glob with no `/`
-    #|  // matches the basename at any depth. rg ships no `moonbit` file type, so
-    #|  // `-g` is the filter — and `*.mbt` excludes `.mbti` and `.mbt.md`; widen it
-    #|  // to `*.mbt*` when those should count. rg here is cli/rg, ripgrep ported to
-    #|  // MoonBit and run through moonx; `--` keeps moonx off rg's flags.
-    #|  let out = @shell.Cmd("moonx", [
-    #|    "cli/rg@0.1.1", "--",
-    #|    // A regex needle is one ordinary string element, so double the
-    #|    // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
-    #|     "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
-    #|  ]).output()
-    #|  // Redirect input with `Cmd(prog, args, stdin=Text(s))` or `stdin=FromFile(p)`.
-    #|  // Redirect output with `Cmd(.., stdout=ToFile(...))` to a file under
+    #|  // `@process.run` takes an argv array, not a shell line: nothing expands
+    #|  // `*.mbt` before rg sees it, so rg applies it as its own glob. A glob with
+    #|  // no `/` matches the basename at any depth. rg ships no `moonbit` file type,
+    #|  // so `-g` is the filter — and `*.mbt` excludes `.mbti` and `.mbt.md`; widen
+    #|  // it to `*.mbt*` when those should count. rg here is cli/rg, ripgrep ported
+    #|  // to MoonBit and run through moonx; `--` keeps moonx off rg's flags.
+    #|  let out = @process.run(
+    #|    "moonx",
+    #|    [
+    #|      "cli/rg@0.1.1", "--",
+    #|      // A regex needle is one ordinary string element, so double the
+    #|      // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
+    #|       "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
+    #|    ],
+    #|    stdin=Empty,
+    #|    stdout=Collect,
+    #|    stderr=Collect,
+    #|  )
+    #|  // Redirect input with `stdin=FromFile(p)` or `stdin=FeedFromParent`.
+    #|  // Redirect output with `stdout=ToFile(...)` to a file under
     #|  // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
     #|  // directory, and that directory is the one place a snippet may write (`/tmp`
     #|  // itself is refused).
     #|
     #|  // `test` is a keyword, don't write `let test = ...`
     #|  // Slicing clamps instead of panicking, so this is safe on shorter output.
-    #|  println(out.stdout()[:8000]) // at most 8000 UTF-16 code units
-    #|  println(out.stderr()[:8000])
-    #|  println("exit=\{out.exit_code()}") // `rg` exits 1 when nothing matched
+    #|  println(out.stdout_text()[:8000]) // at most 8000 UTF-16 code units
+    #|  println(out.stderr_text()[:8000])
+    #|  println("exit=\{out.exit_code}") // `rg` exits 1 when nothing matched
     #|}
     #|```
     #|
@@ -177,7 +198,8 @@ fn moonbit_syntax_and_api() -> String {
     #|```mbtx
     #|---
     #|import {
-    #|  "moonbitlang/core/async/shell",
+    #|  "moonbitlang/core/async",
+    #|  "moonbitlang/core/async/process",
     #|  "moonbitlang/core/json",
     #|}
     #|---
@@ -185,29 +207,36 @@ fn moonbit_syntax_and_api() -> String {
     #|///|
     #|fn main {
     #|  let mut errors = 0
-    #|  let exit_code = @shell.Cmd(
-    #|    "moon",
-    #|    ["check", "--output-json", "--diagnostic-limit", "5"],
-    #|    env={ "NO_COLOR": "1" },
-    #|    // argv is passed literally
+    #|  let mut exit_code = 0
+    #|  @async.with_task_group(group => {
+    #|    let proc = @process.spawn(
+    #|      group,
+    #|      "moon",
+    #|      ["check", "--output-json", "--diagnostic-limit", "5"],
+    #|      extra_env={ "NO_COLOR": "1" },
+    #|      stdin=Empty,
+    #|      stdout=Collect,
+    #|      stderr=Inherit,
+    #|    )
+    #|    // argv is passed literally:
     #|    // `|`, `>`, `&&`, `$()`, and `*` receive no shell interpretation.
-    #|    // `<|` is sugar for a trailing lambda: `f() <| x => {...}` is the last
-    #|    // argument of `f`, written after the call instead of inside it.
-    #|  ).each_line() <| line => {
-    #|    // Stderr is inherited, try to parse jsonl
-    #|    let diagnostic = @json.parse(line) catch { _ => return }
-    #|    if diagnostic // literal does not need `String(..)`
-    #|      is {
-    #|        "level": "error",
-    #|        "path": String(path),
-    #|        "loc": String(loc),
-    #|        "message": String(message),
-    #|        ..
-    #|      } {
-    #|      errors += 1
-    #|      println("\{path}:\{loc}  \{message}")
+    #|    while proc.stdout.text.read_line() is Some(line) {
+    #|      // Stderr is inherited, try to parse jsonl
+    #|      let diagnostic = @json.parse(line) catch { _ => continue }
+    #|      if diagnostic // literal does not need `String(..)`
+    #|        is {
+    #|          "level": "error",
+    #|          "path": String(path),
+    #|          "loc": String(loc),
+    #|          "message": String(message),
+    #|          ..
+    #|        } {
+    #|        errors += 1
+    #|        println("\{path}:\{loc}  \{message}")
+    #|      }
     #|    }
-    #|  }
+    #|    exit_code = proc.wait()
+    #|  })
     #|  println("exit=\{exit_code} errors=\{errors}")
     #|}
     #|```

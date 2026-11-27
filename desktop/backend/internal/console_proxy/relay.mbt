@@ -90,12 +90,14 @@ async fn forward(
     body,
   ) catch {
     error => {
-      @xlog.warn(category="console_proxy") <?
-        {
-          "event": "relay_unreachable",
-          "path": target(req),
-          "error": "\{error}",
-        }
+      if @xlog.warn(category="console_proxy") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "relay_unreachable")
+        ..write_object_field("path", target(req))
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       res.send_void(status=502)
       return
     }
@@ -136,12 +138,14 @@ async fn bridge_socket(
       return
     }
     error => {
-      @xlog.warn(category="console_proxy") <?
-        {
-          "event": "relay_socket_unreachable",
-          "path": target(req),
-          "error": "\{error}",
-        }
+      if @xlog.warn(category="console_proxy") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "relay_socket_unreachable")
+        ..write_object_field("path", target(req))
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       res.send_void(status=502)
       return
     }

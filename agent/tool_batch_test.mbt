@@ -14,7 +14,7 @@ async fn tool_batch_test_server(group : @async.TaskGroup) -> String? {
       if requests == 1 {
         assert_true(request_body.contains("\"name\":\"first_test\""))
         assert_true(request_body.contains("\"name\":\"second_test\""))
-        conn.write_string(
+        conn.text.write(
           (
             #|data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_first","type":"function","function":{"name":"first_test","arguments":"{}"}},{"index":1,"id":"call_second","type":"function","function":{"name":"second_test","arguments":"{}"}}]}}]}
             #|
@@ -24,7 +24,7 @@ async fn tool_batch_test_server(group : @async.TaskGroup) -> String? {
       } else {
         assert_true(request_body.contains("first-result"))
         assert_true(request_body.contains("second-result"))
-        conn.write_string(
+        conn.text.write(
           (
             #|data: {"choices":[{"delta":{"content":"done"}}]}
             #|
@@ -32,7 +32,7 @@ async fn tool_batch_test_server(group : @async.TaskGroup) -> String? {
           ),
         )
       }
-      conn.write_string("data: [DONE]\n\n")
+      conn.text.write("data: [DONE]\n\n")
     },
   )
 }
@@ -129,10 +129,10 @@ async fn one_tool_call_server(
     conn.send_response(200, "OK", extra_headers={
       "Content-Type": "text/event-stream",
     })
-    conn.write_string(
+    conn.text.write(
       "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"\{call_id}\",\"type\":\"function\",\"function\":{\"name\":\"\{tool_name}\",\"arguments\":\"{}\"}}]}}]}\n\n",
     )
-    conn.write_string("data: [DONE]\n\n")
+    conn.text.write("data: [DONE]\n\n")
   })
 }
 

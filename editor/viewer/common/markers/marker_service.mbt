@@ -311,7 +311,7 @@ fn MarkerService::read(
           }
           if reasons is Some(r) && r.length() > 0 {
             result.push(MarkerService::create_filtered_marker(data.resource, r))
-            filtered.add(data.resource.to_string())
+            filtered.insert(data.resource.to_string())
           } else if MarkerService::accept(data, severities) {
             result.push(data)
           }

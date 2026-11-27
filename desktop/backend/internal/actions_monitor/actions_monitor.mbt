@@ -84,7 +84,7 @@ pub fn ActionsMonitor::set_artifacts(
       @github.canonical_pull_request_url(artifact.url) is Some(url) else {
       continue
     }
-    urls.add(url)
+    urls.insert(url)
   }
   for url in self.watches.keys().collect() {
     if !urls.contains(url) &&
@@ -218,13 +218,15 @@ async fn ActionsMonitor::watch_actions(
       ChecksOpen(head~, checks~) => (head, checks)
       ChecksUnavailable(error) => {
         if !unavailable {
-          @xlog.warn() <?
-            {
-              "event": "actions_monitor_unavailable",
-              "session": session,
-              "pr": url,
-              "error": error,
-            }
+          if @xlog.warn() is Some(event) {
+            event
+            ..write_object_begin()
+            ..write_object_field("event", "actions_monitor_unavailable")
+            ..write_object_field("session", session)
+            ..write_object_field("pr", url)
+            ..write_object_field("error", error)
+            .write_object_end()
+          }
         }
         unavailable = true
         green = None

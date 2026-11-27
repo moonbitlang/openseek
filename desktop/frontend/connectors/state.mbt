@@ -21,7 +21,7 @@ struct State {
 ///|
 pub fn State::empty() -> State {
   {
-    rows: @vector.new(),
+    rows: @vector.Vector::empty(),
     loaded: false,
     operation: Idle,
     epoch: 0,
