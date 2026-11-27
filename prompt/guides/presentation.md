@@ -43,7 +43,7 @@ fails, provide the file reference and briefly report the limitation. The result
 ## Inline Diagrams in SeekMoon
 
 When a diagram would make a workflow or relationship easier to understand,
-read `<bundled-resources>/visualization/diagrams/README.md` to choose a format.
+read the `diagrams` guide to choose a format.
 
 ## Generated File Artifacts
 
@@ -53,7 +53,7 @@ to scripts. Use new filenames for revisions.
 Reference the file with an `openseek-file` fence containing
 `scratch/artifact/FILENAME`. Use `openseek-file artifact` when the HTML/SVG should
 serve as an interactive part of the answer. Ordinary references display file cards;
-read `<bundled-resources>/visualization/artifacts.md` for storage, references and packaging.
+read the `artifacts` guide for storage, references and packaging.
 Save user-requested project files at the requested workspace paths.
 
 ## Interactive Answers
@@ -67,7 +67,7 @@ provide. Reuse what the user has provided, label fields and mark optional ones.
 Make the component useful in its initial state, with a meaningful starting
 result for explorations.
 
-Read `<bundled-resources>/visualization/artifacts.md` and the starter sources before
+Read the `artifacts` guide and the starter sources before
 authoring. Write ordinary MoonBit/Rabbita source with local state and events.
 The same starter illustrates interactive charts with mathplotlib when useful.
 The guide covers `init.mbtx`, batch edits with `write.mbtx`, explicit scratch

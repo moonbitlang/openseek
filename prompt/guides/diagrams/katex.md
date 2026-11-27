@@ -3,7 +3,7 @@
 KaTeX can draw a flowchart from ordinary boxes and arrows, with text, formulas,
 or both as labels. The same technique works for a few connected components.
 For specific diagram types and features beyond KaTeX, see the
-[selection guide](README.md).
+`diagrams` guide.
 
 In SeekMoon, put `$$` on separate opening and closing lines, with no code fence
 around the block.

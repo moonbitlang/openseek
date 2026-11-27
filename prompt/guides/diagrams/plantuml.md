@@ -23,7 +23,7 @@ Cloud --> Desktop : Original file bytes
 
 Use a class diagram when the distinction between an interface, an implementation,
 and their relationships is the point. Include only members relevant to the
-question; use [Diago](diago.md) for module-level dependencies instead.
+question; use Diago (see `diagrams/diago`) for module-level dependencies instead.
 
 ```plantuml
 @startuml

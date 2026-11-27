@@ -12,6 +12,6 @@ values. Use a Markdown table when the reader needs a few exact values.
 
 Label axes with units and give enough context to interpret the data, such as the
 period and source. Use an available plotting tool such as Matplotlib for a static
-plot, save it, and reference it as a [file artifact](../artifacts.md#storage-and-references).
-If changing inputs or filters is part of the answer, use an
-[interactive HTML artifact](../artifacts.md#interactive-answers) instead.
+plot, save it, and reference it as a file artifact.
+If changing inputs or filters is part of the answer, use an interactive HTML
+artifact instead. See `artifacts` for storage, references, and interactive answers.

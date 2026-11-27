@@ -81,7 +81,7 @@ diagnostics on stderr. Pass each argument as its own element of
 `@shell.Cmd("moonx", [...])` — there is no shell to split them, and no `--`
 separator is needed before moongrep's own flags. The pattern language, output
 fields, scan-root exclusions, and exit codes are in
-`<bundled-resources>/moongrep/README.md`; read it before going beyond this
+the `moongrep` guide; read it before going beyond this
 example rather than guessing the flags.
 
 ## MoonBit Project Setup

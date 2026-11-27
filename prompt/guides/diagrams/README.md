@@ -5,7 +5,7 @@ easier to grasp than prose. Use an ordered list for a simple series of steps or 
 Markdown table for a few exact values. Honor an explicitly requested format or
 one required by the project.
 
-Use [KaTeX block math](katex.md) by default for explanatory diagrams. Its boxes
+Use KaTeX block math (`diagrams/katex`) by default for explanatory diagrams. Its boxes
 and arrows can contain plain text or formulas and can show steps, decisions, or
 connections between components.
 
@@ -13,13 +13,13 @@ Use Mermaid, PlantUML, or Diago/D2 only when the task calls for a specific diagr
 
 | Specific diagram type | Guide |
 | --- | --- |
-| State diagram with named states and transition events, or flowchart that requires automatic layout of branches and loops | [Mermaid](mermaid.md) |
-| Sequence diagram with participant lifelines and ordered messages, or class diagram with type relationships | [PlantUML](plantuml.md) |
-| Architecture or dependency diagram with nested component boundaries and links across them | [Diago / D2](diago.md) |
+| State diagram with named states and transition events, or flowchart that requires automatic layout of branches and loops | `diagrams/mermaid` |
+| Sequence diagram with participant lifelines and ordered messages, or class diagram with type relationships | `diagrams/plantuml` |
+| Architecture or dependency diagram with nested component boundaries and links across them | `diagrams/diago` (Diago / D2) |
 
 For trends, comparisons, distributions, or correlation in numeric data, use
-[quantitative charts](charts.md). If readers need to change inputs or filters,
-use an [interactive HTML artifact](../artifacts.md#interactive-answers).
+`diagrams/charts`. If readers need to change inputs or filters,
+use an interactive HTML artifact (see `artifacts`).
 
 Read only the selected guide. In the SeekMoon transcript, use complete Markdown
 fences with the exact lowercase language names for Mermaid, Diago, and PlantUML.

@@ -64,9 +64,9 @@ the browser calls `@rabbita.new(@components.app).hydrate()` for that component.
 Use this paired setup for SSR (experimental), rather than replacing hydration
 with a fresh DOM mount. Put shared data types and validation in packages both
 sides can import; validate again on the server, as shown in the bundled
-[validation tutorial](../doc/moonbit/tutorial/fullstack-one-project.md).
+tutorial at `<bundled-resources>/doc/moonbit/tutorial/fullstack-one-project.md`.
 Keep browser-only and server-only IO out of shared UI/domain packages.
-For native desktop hosting, also read [Proton](../desktop-proton/README.md).
+For native desktop hosting, also read the `desktop-proton` guide.
 
 Run `moon check --target js`, check the backend's target when present, and test
 changed state/validation logic. Build with the selected Warren entries, then

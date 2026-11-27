@@ -36,7 +36,7 @@ application with `proton_cli dev` to check its UI and native behavior.
 
 ## Basic concepts and examples
 
-Read [the small examples](examples.md) for a complete minimal window and a
+Read `desktop-proton/examples` for a complete minimal window and a
 page that calls a command, receives an event, and uses the clipboard extension.
 The examples include package imports and expected behavior.
 
@@ -44,7 +44,7 @@ The examples include package imports and expected behavior.
 | --- | --- |
 | Application and windows | `@proton.html`, `url`, `file`, or `asset` selects the initial page; `WindowConfig` sets window options; use `..` for App configuration and `.` for `run`. See [windows](https://github.com/moonbit-community/proton/blob/main/website/content/en/introduction/application-api.md). |
 | Frontend, backend, and shared types | The frontend renders the UI; the native backend performs host operations; shared command and event types connect them. Follow the generated isomorphic project and [Todo tutorial](https://github.com/moonbit-community/proton/blob/main/website/content/en/tutorial/isomorphic.md). |
-| Commands and events | Commands request work and return a result. Events notify listeners without a response. See [examples](examples.md#commands-events-and-an-extension). |
+| Commands and events | Commands request work and return a result. Events notify listeners without a response. See “Commands, events, and an extension” in `desktop-proton/examples`. |
 | Extensions and capabilities | Extensions provide native operations; adding a dependency alone does not expose them to the page. Register the required capability on the App. See [capabilities](https://github.com/moonbit-community/proton/blob/main/website/content/en/tutorial/capabilities.md). |
 | State and lifecycle | Keep application state in the backend when it must outlive a page. Use `setup`/`setup_window` and `context.add_cleanup` to attach and release resources, and dispose frontend subscriptions with their owner. The [Todo tutorial](https://github.com/moonbit-community/proton/blob/main/website/content/en/tutorial/isomorphic.md) demonstrates this. |
 | Pages and resources | Use `asset` for packaged web files, declare shipped resources in the project configuration, and resolve native resource paths from `@proton.resource_dir()`. See [configuration](https://github.com/moonbit-community/proton/blob/main/website/content/en/configuration/project.md). |
