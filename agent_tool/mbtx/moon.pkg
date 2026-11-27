@@ -35,7 +35,6 @@ dev_build(
     "../../prompt/guides/diagrams/plantuml.md",
     "../../prompt/guides/frontend-rabbita.md",
     "../../prompt/guides/git-shipping.md",
-    "../../prompt/guides/markdown-replies.md",
     "../../prompt/guides/mcp.md",
     "../../prompt/guides/moonbit-development.md",
     "../../prompt/guides/moongrep.md",

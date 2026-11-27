@@ -714,69 +714,35 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|
           #|    )
           #|    "git-shipping" => (
-          #|      #|# Git authorship and shipping
+          #|      #|# Git and GitHub
           #|      #|
-          #|      #|- Attribute Git work you author:
-          #|      #|  - End every commit message you write with
-          #|      #|    `Co-Authored-By: SeekMoon <seekmoon@moonbitlang.com>` as its own final
-          #|      #|    paragraph. Pass the trailer as a separate `-m` argument or preserve the
-          #|      #|    blank line when writing the message from a file.
-          #|      #|  - End every pull request description you write with this final line:
-          #|      #|    `Generated with SeekMoon`
-          #|      #|  - Add each marker only once, and never add it to work someone else wrote.
-          #|      #|- Attach every pull request opened in this conversation — by you, a script,
-          #|      #|  or a workflow you ran — once, when the `seekmoon` MCP server is available
-          #|      #|  (`@mcp.search(server="seekmoon")` says whether it is):
+          #|      #|## Publishing
+          #|      #|
+          #|      #|- Push, open a PR, or merge only when requested. A request to push is not a
+          #|      #|  request to open a PR. Never force-push a branch you do not own.
+          #|      #|- Run the relevant local checks before publishing. In a PR you open, describe
+          #|      #|  what changed, what you verified, and what you could not verify.
+          #|      #|
+          #|      #|## Attribution and session links
+          #|      #|
+          #|      #|- For commits you author, put `Co-Authored-By: SeekMoon <seekmoon@moonbitlang.com>`
+          #|      #|  in its own final paragraph. End PR descriptions you write with
+          #|      #|  `Generated with SeekMoon`. Add each marker once, only to your own work.
+          #|      #|- For each PR opened during the session, including by a script or workflow,
+          #|      #|  attach it once if `seekmoon` MCP is available:
           #|      #|  `@mcp.call("seekmoon", "artifacts_attach", { "type": "pull_request", "url": pr_url })`.
-          #|      #|  When the server is unavailable, skip this step.
-          #|      #|- Read a failing CI check by its run id: `gh pr checks <n>` prints each
-          #|      #|  check with its run URL — take the id from the failing one (or run
-          #|      #|  `git rev-parse HEAD` first, then `gh run list --commit <sha>
-          #|      #|  --status failure --limit 1 --json databaseId -q '.[0].databaseId'`), then
-          #|      #|  `gh run view <run-id> --log-failed`. Never pick "the latest run on the
-          #|      #|  branch": a PR can trigger several workflows, and without an id the
-          #|      #|  command opens an interactive picker nothing can answer. A red check you
-          #|      #|  cannot explain is a finding to report, not a detail to omit.
-          #|      #|- SHIPPING (push, open a PR, get CI green) — engage this ONLY when the task
-          #|      #|  explicitly asks you to ship (push, open a pull request, land it, get CI
-          #|      #|  green). Never push or open a PR just because work looks finished: it is
-          #|      #|  outward-facing and others see it. When you ARE asked:
-          #|      #|  - Verify locally first (build, tests, format gate), then push the branch
-          #|      #|    you actually integrated, and open the PR describing what you verified —
-          #|      #|    including what you could NOT verify. Never force-push a branch you do
-          #|      #|    not own, and never merge unless asked to.
-          #|      #|  - Then WATCH CI as a background job: `gh pr checks <n> --watch` blocks
-          #|      #|    until the checks settle and exits, which is exactly what a background
-          #|      #|    job wants — but it does NOT wait for checks to appear, so right after a
-          #|      #|    push it can exit instantly with "no checks reported" and leave you
-          #|      #|    watching nothing. Worse, workflows register at different speeds, and no
-          #|      #|    amount of polling can PROVE the set is complete — a repository may
-          #|      #|    attach a check late. So do not try to detect "ready"; instead write ONE
-          #|      #|    background snippet that watches repeatedly until a cycle adds nothing
-          #|      #|    new: a bounded MoonBit loop that runs `gh pr checks <n> --watch`, then
-          #|      #|    `gh pr checks <n>`, compares the line count with the previous pass, and
-          #|      #|    stops when it is unchanged and non-zero. The non-zero guard matters:
-          #|      #|    with nothing registered yet both counts are zero, and without it the
-          #|      #|    loop would call "no checks at all" stable and exit before the first
-          #|      #|    workflow ever attached. Print the final plain `gh pr checks` output as
-          #|      #|    the honest last word: READ it, and treat any check that is failing,
-          #|      #|    pending, or newly appeared as unfinished work rather than a green PR.
-          #|      #|    While the monitor runs, keep working or call `job_wait` with its job ID
-          #|      #|    if you have no other work. The completion notice resumes that wait; an
-          #|      #|    already-finished turn is not restarted. Read the result with `job_output`.
-          #|      #|    Never call a PR done while a check is pending or unreported.
-          #|      #|  - Treat a red check exactly like a failing local test, with MORE
-          #|      #|    authority: local checks passing is not the last word (a repository can
-          #|      #|    gate on things your local loop never ran). Read the failing run's log by
-          #|      #|    its run id as described above, fix the cause on the branch, push again,
-          #|      #|    and re-watch. Repeat until green.
-          #|      #|  - Separate YOUR failure from infrastructure noise (registry/network
-          #|      #|    timeouts, flaky runners): rerun once, and if it repeats, say so plainly
-          #|      #|    instead of papering over it.
           #|      #|
-          #|    )
-          #|    "markdown-replies" => (
-          #|      #|SeekMoon Desktop renders math in Markdown replies with KaTeX. Use `$...$` for inline math and `$$...$$` for display math. Do not use `\(...\)` or `\[...\]` as math delimiters in Markdown.
+          #|      #|## CI
+          #|      #|
+          #|      #|- To check a PR's CI, call `mbtx` with `filename="@builtin/ci-watch.mbtx"`
+          #|      #|  and `args=["<PR number or URL>"]`. Watch after opening or updating a PR;
+          #|      #|  add `--once` to `args` for a status snapshot only. The workflow is read-only.
+          #|      #|  A pass covers observed checks on that head, not missing checks or merge readiness.
+          #|      #|- For a failure, use the reported `failure_logs_argv` or follow the failed
+          #|      #|  check's URL. Read logs from that exact run, not the latest run on the branch.
+          #|      #|- If asked to fix CI, fix the cause and check the new head. Rerun a suspected
+          #|      #|  infrastructure failure at most once when authorized, and report persistent
+          #|      #|  failures or checks you could not verify.
           #|      #|
           #|    )
           #|    "mcp" => (
@@ -1489,7 +1455,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
           #|fn main {
           #|  let response : Json = match @env.args() {
-          #|    [_] => {"version":1,"guides":[{"id":"artifacts","description":"Creating, packaging, and presenting session artifacts, including interactive answers."},{"id":"desktop-proton","description":"Building native MoonBit desktop applications with Proton."},{"id":"desktop-proton/examples","description":"Small Proton examples for native desktop applications."},{"id":"diagrams","description":"Choosing between prose, tables, charts, and diagrams, and selecting a diagram format."},{"id":"diagrams/charts","description":"Quantitative charts for trends, comparisons, distributions, and correlations."},{"id":"diagrams/diago","description":"Architecture and dependency diagrams with Diago or D2."},{"id":"diagrams/katex","description":"Explanatory diagrams drawn with KaTeX boxes and arrows."},{"id":"diagrams/mermaid","description":"Flowcharts and state diagrams with Mermaid."},{"id":"diagrams/plantuml","description":"Sequence and class diagrams with PlantUML."},{"id":"frontend-rabbita","description":"Building browser UIs and full-stack MoonBit applications with Rabbita."},{"id":"git-shipping","description":"Git authorship, commits, pull requests, and CI investigations."},{"id":"markdown-replies","description":"Markdown conventions for all user-facing replies."},{"id":"mcp","description":"Discovering and using external services through MCP."},{"id":"moonbit-development","description":"Developing, refactoring, testing, and looking up APIs in MoonBit projects."},{"id":"moongrep","description":"Structural code search and linting with moongrep."},{"id":"presentation","description":"Presenting local files, previewing deliverables, citing sources, and offering interactive answers."},{"id":"slides/design","description":"Visual design for presentation slides."},{"id":"slides/typst-layout","description":"Slide layout in Typst."},{"id":"slides/typst-syntax-cautions","description":"Common Typst syntax mistakes in slide source."},{"id":"slides/typst-touying","description":"PDF slide animations and progressive reveals with Touying."},{"id":"slides/writing","description":"Writing and editing slide text."}]}
+          #|    [_] => {"version":1,"guides":[{"id":"artifacts","description":"Creating, packaging, and presenting session artifacts, including interactive answers."},{"id":"desktop-proton","description":"Building native MoonBit desktop applications with Proton."},{"id":"desktop-proton/examples","description":"Small Proton examples for native desktop applications."},{"id":"diagrams","description":"Choosing between prose, tables, charts, and diagrams, and selecting a diagram format."},{"id":"diagrams/charts","description":"Quantitative charts for trends, comparisons, distributions, and correlations."},{"id":"diagrams/diago","description":"Architecture and dependency diagrams with Diago or D2."},{"id":"diagrams/katex","description":"Explanatory diagrams drawn with KaTeX boxes and arrows."},{"id":"diagrams/mermaid","description":"Flowcharts and state diagrams with Mermaid."},{"id":"diagrams/plantuml","description":"Sequence and class diagrams with PlantUML."},{"id":"frontend-rabbita","description":"Building browser UIs and full-stack MoonBit applications with Rabbita."},{"id":"git-shipping","description":"Committing, pushing, opening pull requests, and investigating GitHub CI."},{"id":"mcp","description":"Discovering and using external services through MCP."},{"id":"moonbit-development","description":"Developing, refactoring, testing, and looking up APIs in MoonBit projects."},{"id":"moongrep","description":"Structural code search and linting with moongrep."},{"id":"presentation","description":"Presenting local files, previewing deliverables, citing sources, and offering interactive answers."},{"id":"slides/design","description":"Visual design for presentation slides."},{"id":"slides/typst-layout","description":"Slide layout in Typst."},{"id":"slides/typst-syntax-cautions","description":"Common Typst syntax mistakes in slide source."},{"id":"slides/typst-touying","description":"PDF slide animations and progressive reveals with Touying."},{"id":"slides/writing","description":"Writing and editing slide text."}]}
           #|    [_, id] => { "version": 1, "id": id, "format": "markdown", "content": content(id) }
           #|    _ => fail("agent-guide: expected zero or one guide ID")
           #|  }
