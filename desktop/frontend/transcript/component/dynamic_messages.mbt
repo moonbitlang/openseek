@@ -7,7 +7,6 @@ priv enum DynamicMessage {
   DJumpLine(String, String)
   DJumpFile(String)
   DProgramCallsArray(String)
-  DWhatBuild(String)
   DChooseProject(String)
 }
 
@@ -60,11 +59,6 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
       "程式工具呼叫（\{p0}）"
     (Japanese, DProgramCallsArray(p0)) =>
       "プログラムツール呼び出し（\{p0}）"
-    (English, DWhatBuild(p0)) => "What should we build in \{p0}?"
-    (Spanish, DWhatBuild(p0)) => "¿Qué quieres crear en \{p0}?"
-    (SimplifiedChinese, DWhatBuild(p0)) => "想在 \{p0} 中构建什么？"
-    (TraditionalChinese, DWhatBuild(p0)) => "想在 \{p0} 中構建什麼？"
-    (Japanese, DWhatBuild(p0)) => "\{p0} で何を作りましょうか？"
     (English, DChooseProject(p0)) => "Choose project, current project \{p0}"
     (Spanish, DChooseProject(p0)) => "Elegir proyecto, proyecto actual \{p0}"
     (SimplifiedChinese, DChooseProject(p0)) =>

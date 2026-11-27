@@ -302,6 +302,7 @@
   font-weight: 600;
   color: var(--color-text-primary);
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -326,6 +327,7 @@
   line-height: var(--line-height-normal);
   color: var(--color-text-secondary);
   display: -webkit-box;
+  line-clamp: 4;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -342,29 +344,33 @@
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 14px;
+  gap: var(--space-6);
   min-height: 46vh;
   text-align: center;
-  padding: 32px 12px;
+  padding: 2rem var(--space-6);
+}
+/* Center only a lone empty state in the transcript's content box. Auto
+   margins collapse to zero when there isn't room, so the pane can scroll. */
+.transcript > .stream:has(> .empty:only-child) {
+  min-block-size: 100cqb;
+}
+.transcript > .stream > .empty:only-child {
+  min-block-size: 0;
+  margin-block: auto;
 }
 .empty-badge {
-  /* Not a control glyph: the empty state's hero mark, sized to its 52px tile. */
-  --icon-size: 30px;
+  --icon-size: 3em;
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
-  border-radius: var(--radius-inline);
-  background: var(--color-control-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
+}
+@media (hover: hover) {
+  .empty-badge:hover {
+    --color-moonbit-logo-primary: var(--color-moonbit-logo-primary-hover);
+  }
 }
 .empty-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  flex-wrap: wrap;
-  column-gap: 0.25em;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   font-size: var(--font-size-page-title);
   font-weight: 600;
   line-height: 1.25;
@@ -376,39 +382,37 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
 }
-.empty-title-project {
-  display: inline-flex;
-  align-items: baseline;
-  min-width: 0;
-}
 .empty-project-control {
   anchor-scope: --empty-project-trigger;
-  display: inline-flex;
-  min-width: 0;
+  min-inline-size: 0;
 }
 .empty-project-trigger {
   anchor-name: --empty-project-trigger;
   display: inline-flex;
-  align-items: center;
-  max-width: min(42vw, 420px);
+  align-items: baseline;
+  max-inline-size: min(100%, 42vw, 28rem);
   margin: 0;
   padding: 0;
-  overflow: hidden;
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
   color: inherit;
   font: inherit;
+  letter-spacing: inherit;
   text-decoration-line: underline;
   text-decoration-style: dotted;
   text-decoration-color: var(--color-text-muted);
   text-decoration-thickness: 0.05em;
   text-decoration-skip-ink: none;
   text-underline-offset: 0.16em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   vertical-align: baseline;
   cursor: pointer;
+}
+.empty-project-trigger-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .empty-project-trigger:hover,
 .empty-project-trigger.open {
@@ -420,6 +424,7 @@
 }
 /* Reuse the select-menu frame without its floating shadow in the transcript. */
 .empty-project-menu {
+  --empty-project-menu-gap: var(--space-5);
   position: fixed;
   position-anchor: --empty-project-trigger;
   position-visibility: anchors-visible;
@@ -429,17 +434,18 @@
   z-index: var(--z-menu);
   display: none;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(360px, calc(100dvw - 24px));
+  width: min(24rem, calc(100dvw - 2 * var(--space-6)));
   /* 100% is the chosen position-area block. Constraining to it keeps a tall
      project list on one side of the title instead of shifting across it. */
-  max-height: min(420px, calc(100dvh - 24px), calc(100% - 18px));
-  margin: 9px 0;
+  max-height: min(
+    28rem,
+    calc(100dvh - 2 * var(--space-6)),
+    calc(100% - 2 * var(--empty-project-menu-gap))
+  );
+  margin: var(--empty-project-menu-gap) 0;
   overflow: hidden;
   box-shadow: none;
   color: var(--color-text-primary);
-  /* The picker node inherits the heading's large, bold type from the title;
-     pin it back to the app's body type and sans stack, matching the select
-     menus instead of the mono stack. */
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
   font-weight: 400;
@@ -452,18 +458,18 @@
 .empty-project-search {
   --icon-size: var(--icon-md);
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: var(--space-7) minmax(0, 1fr);
   align-items: center;
   min-width: 0;
-  margin-bottom: 6px;
-  padding: 0 9px;
+  margin-bottom: var(--space-4);
+  padding: 0 var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   color: var(--color-text-muted);
 }
 .empty-project-search input {
   width: 100%;
-  padding: 8px 0;
+  padding: var(--space-5) 0;
   border: 0;
   color: var(--color-text-primary);
   font-family: inherit;
@@ -472,7 +478,7 @@
 .empty-project-options {
   display: grid;
   min-height: 0;
-  max-height: 300px;
+  max-height: 20rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 1px 0;
@@ -480,12 +486,12 @@
 .empty-project-option {
   --icon-size: var(--icon-lg);
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 18px;
+  grid-template-columns: var(--space-7) minmax(0, 1fr) var(--icon-lg);
   align-items: center;
-  gap: 8px;
+  gap: var(--space-5);
   width: 100%;
   margin: 0;
-  padding: 8px 9px;
+  padding: var(--space-5);
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
@@ -520,19 +526,19 @@
   text-align: center;
 }
 .empty-project-no-results {
-  padding: 18px 10px;
+  padding: var(--space-7) var(--space-5);
   color: var(--color-text-muted);
   text-align: center;
 }
 .empty-project-new {
   --icon-size: var(--icon-lg);
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: var(--space-7) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: var(--space-5);
   width: 100%;
-  margin-top: 6px;
-  padding: 9px;
+  margin-top: var(--space-4);
+  padding: var(--space-5);
   border: 0;
   border-top: 1px solid var(--color-border);
   border-radius: 0 0 var(--radius-surface) var(--radius-surface);

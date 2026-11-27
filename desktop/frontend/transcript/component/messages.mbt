@@ -8,8 +8,6 @@ priv enum UiMessage {
   SearchProjects
   ProjectsLabel
   NewProject
-  BuildInPrefix
-  BuildInSuffix
   JumpLatest
   LoadingOlderHistory
   RecordedSnapshot
@@ -75,6 +73,17 @@ priv enum UiMessage {
 }
 
 ///|
+fn build_in_parts(locale : @i18n.Locale) -> (String, String) {
+  match locale {
+    English => ("What should we build in ", "?")
+    Spanish => ("¿Qué quieres crear en ", "?")
+    SimplifiedChinese => ("想在 ", " 中构建什么？")
+    TraditionalChinese => ("想在 ", " 中構建什麼？")
+    Japanese => ("", " で何を作りましょうか？")
+  }
+}
+
+///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
     (English, SubagentTranscript) => "subagent transcript"
@@ -119,16 +128,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, NewProject) => "新建项目"
     (TraditionalChinese, NewProject) => "新建專案"
     (Japanese, NewProject) => "新しいプロジェクト"
-    (English, BuildInPrefix) => "What should we build in "
-    (Spanish, BuildInPrefix) => "¿Qué quieres crear en "
-    (SimplifiedChinese, BuildInPrefix) => "想在"
-    (TraditionalChinese, BuildInPrefix) => "想在"
-    (Japanese, BuildInPrefix) => ""
-    (English, BuildInSuffix) => "?"
-    (Spanish, BuildInSuffix) => "?"
-    (SimplifiedChinese, BuildInSuffix) => "\u{A0}中构建什么？"
-    (TraditionalChinese, BuildInSuffix) => "\u{A0}中構建什麼？"
-    (Japanese, BuildInSuffix) => "で何を作りましょうか？"
     (English, JumpLatest) => "Jump to latest"
     (Spanish, JumpLatest) => "Ir al final"
     (SimplifiedChinese, JumpLatest) => "跳至最新消息"
