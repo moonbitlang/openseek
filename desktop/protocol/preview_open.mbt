@@ -1,6 +1,6 @@
 ///|
 /// A workspace-relative file name, independent of the selected conversation.
-pub(all) struct PreviewOpenArgs {
+pub struct PreviewOpenArgs {
   path : String
 }
 

@@ -64,7 +64,7 @@ pub impl FromJson for SessionFeedbackPayload with fn from_json(json, path) {
 }
 
 ///|
-pub(all) struct FeedbackReceipt {
+pub struct FeedbackReceipt {
   id : String
 }
 

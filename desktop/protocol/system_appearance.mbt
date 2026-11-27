@@ -1,11 +1,4 @@
 ///|
-/// The local operating system preference, independent of the window theme.
-#derive(Debug, Eq)
-pub(all) struct AppSystemAppearanceReply {
-  dark : Bool
-}
-
-///|
 pub impl FromJson for AppSystemAppearanceReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "system appearance reply")
   { dark: object.required_bool("dark"), }

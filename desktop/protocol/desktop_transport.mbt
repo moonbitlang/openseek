@@ -2,48 +2,6 @@
 // reads or writes the public wire format.
 
 ///|
-/// The stable identity of one server-pushed event. Transport registration
-/// uses this payload-free enum; `Notification` below carries the associated
-/// typed payload once an event is decoded.
-#derive(Debug, Eq, Hash)
-pub(all) enum NotificationKind {
-  PreviewOpen
-  CloudMcp
-  UserQuestions
-  AgentApprovals
-  AgentConnected
-  AgentStarted
-  AgentEvent
-  AgentError
-  AgentFinished
-  AgentPrediction
-  SessionEvent
-  SessionShareProgress
-  SubrunProgress
-  WorkflowEntry
-  SessionChanged
-  WorkspaceChanged
-  WorkspaceSettingsChanged
-  WorktreeChanged
-  SettingsChanged
-  SessionArtifactsChanged
-  SkillsChanged
-  UpdateDownloadProgress
-  UpdateDownloaded
-  UpdateDownloadFailed
-  AuthChanged
-  CodexStatusChanged
-  CodexNotification
-  CodexServerRequest
-  LspDiagnostics
-  FsChanged
-  FsWatchFailed
-  TerminalOutput
-  TerminalExit
-  SemanticSearchProgress
-}
-
-///|
 /// The stable public name written at a transport boundary.
 pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
   match self {
