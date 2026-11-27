@@ -80,6 +80,16 @@ An unfinished acceptance can continue by passing that directory as a second
 argument. This command is not part of `just test` and needs explicit live
 service configuration.
 
+# Built-in guide acceptance
+
+For the TUI release path, start a native TUI outside
+the checkout **without `--engine`**, with the release Wasm engine preloaded in
+an isolated `moonx` cache, no `share/`, and no session or script build cache.
+Use a loopback scripted provider; deny external network and checkout access to
+the TUI and its children. Compare the zero-argument listing with the IDs and
+descriptions from the guide files. Compare each single-ID tool message in the
+next provider request with the guide body, rather than the terminal preview.
+
 # Bundled workflows
 
 `just test-workflows` runs the native MoonBit fixture package at

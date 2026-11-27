@@ -1,3 +1,5 @@
+Writing and editing slide text.
+
 # Writing Style for Presentations
 
 ## General Principles

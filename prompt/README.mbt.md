@@ -4,10 +4,9 @@ This package owns SeekMoon's built-in system prompt text and prompt-selection
 policy. Prompt Markdown files are converted to generated MoonBit string
 functions through the module-level `md_to_mbt_string` dev-build rule.
 
-The generator strips Markdown comments outside code blocks. The working
-prompt has no resource-layout placeholders: at runtime, the CLI appends the
-installation's absolute `Bundled resources` path and a sorted, directory-only
-tree of that directory to both built-in and custom base prompts. No `tree`
+The prompt generator strips Markdown comments outside code blocks. When
+resources are installed, the CLI appends their absolute `Bundled resources`
+path and a sorted, directory-only tree to both built-in and custom base prompts. No `tree`
 executable is required, and changes to the installed resources do not require
 regenerating the prompt. Files passed through `--system-prompt-file` are read
 literally, without template expansion or comment stripping.
@@ -19,35 +18,45 @@ rule when its Markdown input changes.
 
 ## Prompt Sources
 
-- `default_prompt.mbt.md`: short always-on working rules and a trigger-based
-  guide index. Detailed workflows live in `share/agent-guides/`; presentation,
-  artifact, diagram, and slide guidance lives in `share/visualization/`.
-  Framework and search guides stay in their own `share/` directories. Only the core and index become system-prompt text;
-  linked Markdown guides are not expanded or appended.
+- `default_prompt.mbt.md`: short always-on working rules and guide lookup
+  instructions. Guide bodies under `prompt/guides/` are not expanded into this
+  prompt or read at session startup.
 - `moonbit_syntax_and_api.mbt.md`: MoonBit syntax and library API teaching,
   manifest examples, and complete programs illustrating the language and APIs.
-  Verified examples live under `share/examples/`: a whole-line markdown link
-  to a `.mbtx` file is expanded into a fenced block by `md_to_mbt_string`, so
-  the prompt shows code that CI type-checks and runs.
+  Prompt-only examples live under [`prompt/examples/`](examples/). The
+  `md_to_mbt_string` generator inlines whole-line links to `.mbtx` files as
+  code blocks, so the examples do not need to ship in `share/`. CI type-checks
+  these scripts and runs the deterministic examples.
 
 Each prompt source has its own dev-build rule and generated MoonBit string
-function. The built-in prompt includes the core and index first and, by default,
+function. The built-in prompt includes the core first and, by default,
 the language guide second. The language guide can be omitted for a new session while
-retaining the core and index. `just prompt`, `just check-prompt`, CI, and the
+retaining the core. `just prompt`, `just check-prompt`, CI, and the
 documentation updater generate or check both outputs.
 
-The agent reads indexed guides before the matching work with the existing
-`mbtx` tool and `@builtin/read.mbtx`. The index paths are relative to the
-installation's `Bundled resources`, never the workspace. Both CLI and Desktop
-packaging copy the `share/` tree, including these guides; no separate loader or
-startup read of every guide is involved. Changes to guide contents need no prompt
-regeneration unless the core or index also changes. Raw builds without installed
-resources retain the core and tool contracts but cannot read the external guides.
+## On-demand guides
+
+A guide ID is the file's path relative to `prompt/guides/` without `.md`.
+Write references as `guide:<id>` in prose and tables. For example,
+`guide:diagrams/katex` is read with `args=["diagrams/katex"]` in
+`@builtin/agent-guide.mbtx`; the prefix is not part of the ID.
+Register the file in the `agent_guide` inputs in `agent_tool/mbtx/moon.pkg`.
+Write its description in the first paragraph, then a blank line and the Markdown
+body. A heading is optional.
+
+`moon check --target wasm agent_tool/mbtx prompt` runs the build rules:
+`scripts/agent_guide.mbtx` generates a self-contained `agent-guide.mbtx` and
+`mbtx_bundle` embeds it alongside the other workflows. Commit the generated
+`.mbt` files, not the intermediate `.mbtx`. The engine runs the
+script through ordinary `mbtx` with `ptc=false`. With no arguments it returns
+`{version: 1, guides: [{id, description}, ...]}`; with one ID it returns the
+Markdown body. Neither response reads workspace or installed resources. References to official docs, templates and executable
+assets still require the corresponding installed resources.
 
 When maintaining instructions, put cross-task rules in the core, detailed
-procedures in the owning guide, and new task triggers in the index. Keep tool
+procedures in the owning guide, and describe its scope in its first paragraph. Keep tool
 argument contracts in their tool definitions rather than duplicating them in
-the core. Validate that indexed paths survive resource staging; exercise model
+the core. Verify guide queries against the Markdown sources; exercise model
 routing and task quality with `eval/prompt_task` rather than assertions on prose.
 
 ## API Shape

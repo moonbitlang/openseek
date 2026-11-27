@@ -1,3 +1,5 @@
+PDF slide animations and progressive reveals with Touying.
+
 # Touying for PDF Animations
 
 Use Touying only when the user needs PDF frame animations, such as progressive reveals with `#pause`, parallel reveal sequences with `#meanwhile`, or stepwise math equation animations. Use plain Typst for static slides.

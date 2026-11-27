@@ -9,7 +9,7 @@ test('bundled diagram examples render as SVG in the transcript', async ({ page }
     plantuml: '[data-diagram-language="uml"]',
   };
   const examples = Object.entries(selectors).map(([language, selector]) => {
-    const guidePath = `../../../share/visualization/diagrams/${language}.md`;
+    const guidePath = `../../../prompt/guides/diagrams/${language}.md`;
     const guide = readFileSync(new URL(guidePath, import.meta.url), 'utf8');
     const fence = new RegExp('^```' + language + '\\n[\\s\\S]*?^```$', 'gm');
     const blocks = [...guide.matchAll(fence)].map(match => match[0]);

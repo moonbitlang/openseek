@@ -1,0 +1,64 @@
+---
+import {
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/env",
+}
+---
+
+///|
+async fn main {
+  guard @env.args() is [_, .. files, script_output] && !files.is_empty() else {
+    fail("usage: agent_guide.mbtx GUIDE.md... SCRIPT_OUTPUT")
+  }
+  let script = StringBuilder()
+  script.write_string(
+    (
+      #|---
+      #|import { "moonbitlang/core/env" }
+      #|---
+      #|
+      #|fn content(id : String) -> String raise {
+      #|  match id {
+      #|
+    ),
+  )
+  let catalog : Array[Json] = []
+  let root = @fs.realpath("prompt/guides").replace_all(old="\\", new="/") + "/"
+  for file in files {
+    let path = @fs.realpath(file).replace_all(old="\\", new="/")
+    guard path.strip_prefix(root) is Some(relative) &&
+      relative.strip_suffix(".md") is Some(stem) else {
+      fail("expected a Markdown file under prompt/guides/: \{file}")
+    }
+    let id = stem.to_owned()
+    let text = @fs.read_text(file)
+    guard text.find("\n\n") is Some(end) && end > 0 else {
+      fail("\{file}: expected a description followed by a blank line")
+    }
+    catalog.push({ "id": id, "description": text[:end].to_owned() })
+    script.write_string("    \{Json::string(id).stringify()} => (\n")
+    for line in text[end + 2:].split("\n") {
+      script.write_string("      #|\{line}\n")
+    }
+    script.write_string("    )\n")
+  }
+  let listing : Json = { "version": 1, "guides": catalog }
+  script.write_string(
+    (
+      $|    _ => fail("agent-guide: unknown guide ID: " + id)
+      $|  }
+      $|}
+      $|
+      $|fn main {
+      $|  let response : Json = match @env.args() {
+      $|    [_] => \{listing.stringify()}
+      $|    [_, id] => { "version": 1, "id": id, "format": "markdown", "content": content(id) }
+      $|    _ => fail("agent-guide: expected zero or one guide ID")
+      $|  }
+      $|  println(response.stringify())
+      $|}
+      $|
+    ),
+  )
+  @fs.write_text(script_output, script.to_string(), create_mode=CreateOrTruncate)
+}

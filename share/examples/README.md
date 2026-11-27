@@ -1,56 +1,14 @@
 # Verified examples
 
-Small MoonBit scripts that teach one feature each, with the explanation in
-their comments. They are the source of truth for the language and PTC
-material in the system prompt and the PTC tool description: a standalone
-markdown link to one of these files is expanded into a fenced block by
-`scripts/md_to_mbt_string` when the prompt is generated, so the text is
-written once and shown inline.
+These scripts ship as runnable examples. The scripts inlined into the system
+prompt live separately in `prompt/examples/` in the source repository.
 
-Every example is verified: `scripts/check-workflows.mbtx` type-checks each
-one under `--deny-warn` on wasm in CI, the examples with deterministic output
-run under `tests/cram/examples.md` with their output pinned, and the PTC
-examples run through the real host in `agent_tool/mbtx/examples_test.mbt`.
-The rest — the ones that spawn `moon` or `rg`, glob the working directory, or
-read the environment — are type-checked only, since what they print depends
-on the checkout they run in. When the toolchain changes what it accepts, the
-example fails before the prompt can teach something stale.
+- `best-of-n.mbtx`: run multiple `openseek run` attempts in separate worktrees;
+  see `cmd/openseek/README.md` in the source repository.
+- `cli_greet.mbtx`: demonstrate program arguments, exercised by
+  `tests/cram/examples.md` and the `mbtx` tool tests.
+- `paths_and_env.mbtx`: read paths and environment variables.
+- `ptc_search_filter.mbtx`: filter `web_search` results while preserving source
+  URLs and truncation, exercised by the `mbtx` host tests.
 
-Part 1 of the prompt teaches the tooling:
-
-- `command_output.mbtx`: `@shell.Cmd(...).output()` and its three accessors,
-  including a non-zero exit that is not a failure.
-- `check_diagnostics.mbtx`: streaming line-delimited `moon check` JSON with
-  `each_line` and matching it as `@json.parse` output.
-- `cli_count_input.mbtx`: an `argparse` CLI reading a file or stdin through
-  async IO.
-- `subagent_scouts.mbtx`: subagents from a script through `@tools.call` —
-  fan out explore scouts, wait for them within bounds, read each report in
-  chunks.
-
-The reusable-script form is taught from `share/workflow/check.mbtx`, the
-bundled workflow itself, so the prompt shows the same file `@builtin/` runs.
-`paths_and_env.mbtx`, `cli_greet.mbtx` and `best-of-n.mbtx` (best-of-N
-attempts of `openseek run` in separate worktrees, linked from
-`cmd/openseek/README.md`) are verified here but not linked from the prompt; `cli_greet.mbtx` is the fixture
-`agent_tool/mbtx/mbtx_test.mbt` drives through the real tool to pin the `args`
-contract.
-
-Part 2 teaches the language:
-
-- `checked_errors.mbtx`: checked errors as an effect, `suberror`, translation
-  at a boundary, and error inference in `fn main`.
-- `syntax_basics.mbtx`: bindings, negation, `Map([])`, match arms, lambdas.
-- `strings_and_views.mbtx`: interpolation, multi-line literals, code units,
-  clamping views, shortlex ordering, in-place sort, map lookup, JSON
-  patterns.
-
-The PTC tool description teaches host calls:
-
-- `ptc_guarded_edit.mbtx`: one guarded `edit` from a script and reading
-  `result.data`.
-- `ptc_search_filter.mbtx`: a `web_search` filtered before it reaches the
-  model, keeping URLs and truncation.
-
-Keep each under about 40 lines of code, wasm-safe, and free of workspace side
-effects beyond what its arguments name.
+CI type-checks these scripts with `scripts/check-workflows.mbtx`.

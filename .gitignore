@@ -33,6 +33,8 @@ eval/ptc_prompt/_build/
 # Generated from *.mbt.md by moon dev_build and kept in release archives so
 # published packages can be checked without the nested scripts module.
 
+/agent_tool/mbtx/agent-guide.mbtx
+
 # Local session state from dogfooding the CLI in-repo.
 .openseek/
 .claude/
