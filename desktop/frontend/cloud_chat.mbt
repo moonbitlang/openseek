@@ -254,7 +254,8 @@ fn update_cloud(
     id == session &&
     stream.active &&
     cloud.conversations.get(id) is Some(conversation) &&
-    conversation.stream == Some(stream) &&
+    conversation.stream is Some(current_stream) &&
+    physical_equal(current_stream, stream) &&
     (
       incoming is ArtifactsChanged(..) ||
       (

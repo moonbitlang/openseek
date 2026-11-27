@@ -2391,13 +2391,25 @@ fn view(
               if model.overview_open &&
                 model.cloud_identity() is Some(owner) &&
                 model.file_panel.owner == Some(owner) {
+                let workspace = model.file_panel.overview_changes(model.locale)
+                let attached = @session_changes.summary(
+                  locale=model.locale,
+                  owner,
+                  None,
+                  model.changes,
+                )
                 @conversation_overview.view(
                   locale=model.locale,
                   model.overview,
                   changes=Some({
-                    ..model.file_panel.overview_changes(model.locale),
+                    summary: match attached {
+                      Some(summary) if !workspace.summary.is_empty() =>
+                        workspace.summary + " · " + summary
+                      Some(summary) => summary
+                      None => workspace.summary
+                    },
                     rows: () => {
-                      model.file_panel.overview_changes(model.locale).rows() +
+                      (workspace.rows)() +
                       @session_changes.rows(
                         locale=model.locale,
                         owner,
