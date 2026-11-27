@@ -266,10 +266,10 @@ async fn file_fingerprint(path : String) -> FileFingerprint? {
   let size = file.size() catch { _ => return None }
   let mtime = file.mtime() catch { _ => return None }
   let mtime_seconds = mtime.sec()
-  let mtime_nanoseconds = mtime.nsec()
+  let mtime_nanoseconds = mtime.subsec_nanos()
   let ctime = file.ctime() catch { _ => return None }
   let ctime_seconds = ctime.sec()
-  let ctime_nanoseconds = ctime.nsec()
+  let ctime_nanoseconds = ctime.subsec_nanos()
   Some({
     size,
     mtime_seconds,
@@ -808,7 +808,7 @@ pub async fn SessionStore::listings(
       }
     }
     let seconds = stamp.sec()
-    let nanoseconds = stamp.nsec()
+    let nanoseconds = stamp.subsec_nanos()
     stamped.push(
       (
         {
@@ -844,7 +844,7 @@ pub async fn SessionStore::latest(
   for id in self.list() {
     let stamp = @fs.mtime(self.session_file_path(id)) catch { _ => continue }
     let seconds = stamp.sec()
-    let nanoseconds = stamp.nsec()
+    let nanoseconds = stamp.subsec_nanos()
     stamped.push((id, seconds, nanoseconds))
   }
   // Newest first.

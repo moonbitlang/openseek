@@ -20,7 +20,7 @@ pub impl @jsonrpc.Transport for TcpTransport with fn recv(self) {
     guard body.length() + bytes.length() <= 128 * 1024 * 1024 else {
       raise SshError("SSH RPC frame exceeds 128 MiB")
     }
-    body.write_bytes(bytes)
+    body.write_bytesview(bytes)
   }
   Some(@json.parse(@utf8.decode(body.to_bytes())))
 }

@@ -1,6 +1,7 @@
 ---
 import {
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/json",
 }
 ---
@@ -8,28 +9,35 @@ import {
 ///|
 fn main {
   let mut errors = 0
-  let exit_code = @shell.Cmd(
-    "moon",
-    ["check", "--output-json", "--diagnostic-limit", "5"],
-    env={ "NO_COLOR": "1" },
-    // argv is passed literally
+  let mut exit_code = 0
+  @async.with_task_group(group => {
+    let proc = @process.spawn(
+      group,
+      "moon",
+      ["check", "--output-json", "--diagnostic-limit", "5"],
+      extra_env={ "NO_COLOR": "1" },
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Inherit,
+    )
+    // argv is passed literally:
     // `|`, `>`, `&&`, `$()`, and `*` receive no shell interpretation.
-    // `<|` is sugar for a trailing lambda: `f() <| x => {...}` is the last
-    // argument of `f`, written after the call instead of inside it.
-  ).each_line() <| line => {
-    // Stderr is inherited, try to parse jsonl
-    let diagnostic = @json.parse(line) catch { _ => return }
-    if diagnostic // literal does not need `String(..)`
-      is {
-        "level": "error",
-        "path": String(path),
-        "loc": String(loc),
-        "message": String(message),
-        ..
-      } {
-      errors += 1
-      println("\{path}:\{loc}  \{message}")
+    while proc.stdout.text.read_line() is Some(line) {
+      // Stderr is inherited, try to parse jsonl
+      let diagnostic = @json.parse(line) catch { _ => continue }
+      if diagnostic // literal does not need `String(..)`
+        is {
+          "level": "error",
+          "path": String(path),
+          "loc": String(loc),
+          "message": String(message),
+          ..
+        } {
+        errors += 1
+        println("\{path}:\{loc}  \{message}")
+      }
     }
-  }
+    exit_code = proc.wait()
+  })
   println("exit=\{exit_code} errors=\{errors}")
 }

@@ -83,7 +83,7 @@ fn WatchInterest::WatchInterest(
   for path in payload.directories {
     let path = @pathx.Relative(path).normalize()
     if !interest.recursive || @file_search_policy.excludes_directory(path.0) {
-      interest.directories.add(path)
+      interest.directories.insert(path)
       interest.remember(path)
     }
   }
@@ -104,7 +104,7 @@ fn WatchInterest::remember(
       } else {
         "\{prefix}/\{segment}"
       }
-      self.paths.add(Relative(prefix))
+      self.paths.insert(Relative(prefix))
     }
   }
 }
@@ -234,12 +234,14 @@ async fn FsWatchRequest::activate(
       let active = target.activate(emit) catch {
         error => {
           target.alive.val = false
-          @xlog.warn(category="filesystem") <?
-            {
-              "event": "watch_activation_failed",
-              "root": target.root.to_string(),
-              "error": "\{error}",
-            }
+          if @xlog.warn(category="filesystem") is Some(event) {
+            event
+            ..write_object_begin()
+            ..write_object_field("event", "watch_activation_failed")
+            ..write_object_field("root", target.root.to_string())
+            ..write_object_field("error", "\{error}")
+            .write_object_end()
+          }
           reply.put(Some(error))
           return None
         }
@@ -342,12 +344,14 @@ pub async fn Watcher::run(
           error => {
             target.alive.val = false
             let message = "File watching stopped: \{error}"
-            @xlog.warn(category="filesystem") <?
-              {
-                "event": "watch_failed",
-                "root": target.root.to_string(),
-                "error": "\{error}",
-              }
+            if @xlog.warn(category="filesystem") is Some(event) {
+              event
+              ..write_object_begin()
+              ..write_object_field("event", "watch_failed")
+              ..write_object_field("root", target.root.to_string())
+              ..write_object_field("error", "\{error}")
+              .write_object_end()
+            }
             emit(
               FsWatchFailed({
                 root: target.root.resource_path(),

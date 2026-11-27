@@ -1,6 +1,7 @@
 ---
 import {
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
 }
@@ -34,15 +35,26 @@ fn main {
   let mut remaining = OutputBytes - 256
   let mut shown = 0
   let mut total = 0
-  let cmd = @shell.Cmd("moon", ["ide", ..args], stderr=Inherit)
-  let exit_code = cmd.each_line(line => {
-    total += 1
-    let bytes = @utf8.encode(line).length() + 1
-    if shown == total - 1 && bytes <= remaining {
-      println(line)
-      shown += 1
-      remaining -= bytes
+  let mut exit_code = 0
+  @async.with_task_group(group => {
+    let proc = @process.spawn(
+      group,
+      "moon",
+      ["ide", ..args],
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Inherit,
+    )
+    while proc.stdout.text.read_line() is Some(line) {
+      total += 1
+      let bytes = @utf8.encode(line).length() + 1
+      if shown == total - 1 && bytes <= remaining {
+        println(line)
+        shown += 1
+        remaining -= bytes
+      }
     }
+    exit_code = proc.wait()
   }) catch {
     error => {
       println(

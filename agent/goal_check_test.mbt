@@ -19,8 +19,8 @@ async fn goal_check_test_server(
       conn.send_response(200, "OK", extra_headers={
         "Content-Type": "text/event-stream",
       })
-      conn.write_string("data: \{responses[bodies.length() - 1]}\n\n")
-      conn.write_string("data: [DONE]\n\n")
+      conn.text.write("data: \{responses[bodies.length() - 1]}\n\n")
+      conn.text.write("data: [DONE]\n\n")
     },
   )
 }
@@ -45,7 +45,7 @@ async fn goal_ceiling_test_server(
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "application/json",
         })
-        conn.write_string(
+        conn.text.write(
           "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"GOAL-CEILING-SUMMARY\"}}]}",
         )
       } else {
@@ -53,8 +53,8 @@ async fn goal_ceiling_test_server(
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "text/event-stream",
         })
-        conn.write_string("data: \{responses[bodies.length() - 1]}\n\n")
-        conn.write_string("data: [DONE]\n\n")
+        conn.text.write("data: \{responses[bodies.length() - 1]}\n\n")
+        conn.text.write("data: [DONE]\n\n")
       }
     },
   )

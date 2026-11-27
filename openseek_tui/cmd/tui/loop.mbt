@@ -82,7 +82,7 @@ async fn drain_stderr_capped(reader : @process.ReadFromProcess) -> String {
     // Under budget the read is `<= remaining`, so it fits exactly; once the
     // buffer is full any further bytes are dropped and flag truncation.
     if remaining > 0 {
-      buffer.write_bytes(Bytes::from_array(chunk[:read]))
+      buffer.write_bytesview(Bytes::from_array(chunk[:read]))
     } else {
       truncated = true
     }

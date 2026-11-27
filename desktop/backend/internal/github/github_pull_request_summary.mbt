@@ -151,7 +151,7 @@ fn decode_pull_request_summaries_batch(
   if response is { "errors": Array(entries), .. } {
     for entry in entries {
       if entry is { "path": [String(key), ..], .. } {
-        errored.add(key)
+        errored.insert(key)
       }
     }
   }

@@ -120,12 +120,12 @@ async test "SSH IPC rejects unrelated peers and serializes challenge delivery th
           ignore(events.try_put(value) catch { _ => false })
         })
       })
-      let unrelated = @socket.Tcp::connect(server.addr)
+      let unrelated = @socket.Tcp::connect(server.local_addr())
       defer unrelated.close()
       unrelated.write(b"{\"token\":\"wrong\",\"prompt\":\"p\",\"hint\":\"\"}\n")
       assert_eq(unrelated.read(), None)
       assert_true(connection.waiter is None)
-      let helper = @socket.Tcp::connect(server.addr)
+      let helper = @socket.Tcp::connect(server.local_addr())
       defer helper.close()
       helper.write(
         b"{\"token\":\"private-token\",\"prompt\":\"demo's password: \",\"hint\":\"\"}\n",
@@ -150,7 +150,7 @@ async test "SSH IPC rejects unrelated peers and serializes challenge delivery th
       )
       assert_true(events.get() == { "authentication_submitted": 1 })
       assert_true(connection.waiter is None)
-      let next = @socket.Tcp::connect(server.addr)
+      let next = @socket.Tcp::connect(server.local_addr())
       defer next.close()
       next.write(
         b"{\"token\":\"private-token\",\"prompt\":\"Code:\",\"hint\":\"\"}\n",

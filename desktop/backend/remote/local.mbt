@@ -37,7 +37,7 @@ const LocalConsoleDevice = "host"
 /// The port this console is bound on. Private: consumers read the bound
 /// address through `origin()`, the exported accessor.
 fn LocalConsole::port(self : LocalConsole) -> Int32 {
-  self.server.addr.port.to_int()
+  self.server.local_addr().port.to_int()
 }
 
 ///|
@@ -258,12 +258,14 @@ async fn serve_static(
       return
     }
     error => {
-      @xlog.error(category="transport") <?
-        {
-          "event": "console_asset_unreadable",
-          "path": relative,
-          "error": "\{error}",
-        }
+      if @xlog.error(category="transport") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "console_asset_unreadable")
+        ..write_object_field("path", relative)
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       respond_status(conn, 500, "Internal Server Error")
       return
     }
@@ -302,7 +304,7 @@ async fn respond_json(conn : @http.ServerConnection, body : Json) -> Unit {
     "Cache-Control": "no-store",
     "Connection": "close",
   })
-  conn.write_string(text)
+  conn.text.write(text)
   conn.end_response()
 }
 
@@ -505,6 +507,6 @@ async fn respond_account_page(
     "Cache-Control": "no-store",
     "Connection": "close",
   })
-  conn.write_string(body)
+  conn.text.write(body)
   conn.end_response()
 }

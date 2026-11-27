@@ -105,15 +105,17 @@ async fn run_session(
     defer state.sessions.remove(request.id)
     opened_pty = Some(pty)
     request.reply.put(Ok(()))
-    @xlog.debug() <?
-      {
-        "event": "terminal_spawn",
-        "id": request.id,
-        "pid": pid,
-        "argv0": request.argv.get(0).unwrap_or(""),
-        // The directory passed directly to the platform process spawn.
-        "cwd": request.cwd,
-      }
+    if @xlog.debug() is Some(event) {
+      event
+      ..write_object_begin()
+      ..write_object_field("event", "terminal_spawn")
+      ..write_object_field("id", request.id)
+      ..write_object_field("pid", pid)
+      ..write_object_field("argv0", request.argv.get(0).unwrap_or(""))
+      // The directory passed directly to the platform process spawn.
+      ..write_object_field("cwd", request.cwd)
+      .write_object_end()
+    }
     let output_task = group.spawn(allow_failure=true, () => {
       let buf : FixedArray[Byte] = FixedArray::make(ReadChunkBytes, b'\x00')
       for ;; {
@@ -150,7 +152,14 @@ async fn run_session(
   // natural or cancellation-driven exit result even though its handles are
   // now closed.
   let code = pty.wait() catch { _ => -1 }
-  @xlog.debug() <? { "event": "terminal_exit", "id": request.id, "code": code }
+  if @xlog.debug() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "terminal_exit")
+    ..write_object_field("id", request.id)
+    ..write_object_field("code", code)
+    .write_object_end()
+  }
   emit(Exited(id=request.id, code~))
 }
 

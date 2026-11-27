@@ -41,8 +41,13 @@ async fn RelayActor::run_connector(
         return message
       }
       error =>
-        @xlog.warn(category="remote") <?
-          { "message": "relay connection lost", "error": "\{error}" }
+        if @xlog.warn(category="remote") is Some(event) {
+          event
+          ..write_object_begin()
+          ..write_object_field("message", "relay connection lost")
+          ..write_object_field("error", "\{error}")
+          .write_object_end()
+        }
     }
     self.dropped()
     @async.sleep(ReconnectDelayMs)
@@ -92,8 +97,13 @@ async fn RelayActor::connect_once(
     on_lag=subscription => {
       // Only a stalled control socket lets this fill; its connection is
       // about to fail and reconnect with a fresh subscription.
-      @xlog.warn(category="remote") <?
-        { "event": "hub_subscription_lagged", "transport": "push" }
+      if @xlog.warn(category="remote") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "hub_subscription_lagged")
+        ..write_object_field("transport", "push")
+        .write_object_end()
+      }
       subscription.close()
     },
   )

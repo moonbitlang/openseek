@@ -112,7 +112,7 @@ async fn read_output_prefix(
         output_limit_reached: false,
       }
     }
-    buffer.write_bytes(Bytes::from_array(chunk[:read]))
+    buffer.write_bytesview(Bytes::from_array(chunk[:read]))
     let text = decode_valid_utf8_prefix(buffer.to_bytes())
     if text.offset_of_nth_char(max_output_chars) is Some(end) {
       return { text: text[:end].to_owned(), output_limit_reached: true, }

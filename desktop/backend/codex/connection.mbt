@@ -162,17 +162,26 @@ async fn connect(
               } else {
                 error
               }
-              @xlog.warn(category="codex") <?
-                {
-                  "event": "codex_app_server_stderr_read_failed",
-                  "error": "\{error}",
-                }
+              if @xlog.warn(category="codex") is Some(event) {
+                event
+                ..write_object_begin()
+                ..write_object_field(
+                  "event", "codex_app_server_stderr_read_failed",
+                )
+                ..write_object_field("error", "\{error}")
+                .write_object_end()
+              }
               None
             }
           }
           guard line is Some(line) else { break }
-          @xlog.debug(category="codex") <?
-            { "event": "codex_app_server_stderr", "line": line }
+          if @xlog.debug(category="codex") is Some(event) {
+            event
+            ..write_object_begin()
+            ..write_object_field("event", "codex_app_server_stderr")
+            ..write_object_field("line", line)
+            .write_object_end()
+          }
         }
       },
       no_wait=true,

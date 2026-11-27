@@ -127,7 +127,7 @@ fn Model::edit(
   if valid {
     {
       ..self,
-      answers: self.answers.add(question, draft),
+      answers: self.answers.insert(question, draft),
       submission: Editing(None),
     }
   } else {

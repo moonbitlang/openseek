@@ -250,7 +250,7 @@ fn Conversation::with_history_window(
     records.append(page.messages)
     for event in page.session.events.unwrap_or([]) {
       if !sequences.contains(event.sequence) {
-        sequences.add(event.sequence)
+        sequences.insert(event.sequence)
         events.push(event)
       }
     }
