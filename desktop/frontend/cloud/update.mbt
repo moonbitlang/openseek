@@ -341,42 +341,6 @@ pub fn State::can_choose_settings(self : State, id : String) -> Bool {
 }
 
 ///|
-/// The mode the session's next engine starts with, including a draft's choice.
-pub fn State::approval(self : State, id : String) -> String {
-  if self.creation is Some({ id: draft, approval, .. }) && draft == id {
-    return approval
-  }
-  match self.sessions.iter().find_first(session => session.id == id) {
-    Some(session) => session.approval
-    None => "ask"
-  }
-}
-
-///|
-pub fn State::model(self : State, id : String) -> @deepseek.DsVariant {
-  if self.creation is Some({ id: draft, model, .. }) && draft == id {
-    return model
-  }
-  self.sessions
-  .iter()
-  .find_first(session => session.id == id)
-  .map(session => session.model)
-  .unwrap_or(V4Flash)
-}
-
-///|
-pub fn State::thinking(self : State, id : String) -> @protocol.Thinking {
-  if self.creation is Some({ id: draft, thinking, .. }) && draft == id {
-    return thinking
-  }
-  self.sessions
-  .iter()
-  .find_first(session => session.id == id)
-  .map(session => session.thinking)
-  .unwrap_or(ThinkingHigh)
-}
-
-///|
 pub fn State::is_archived(self : State, id : String) -> Bool {
   self.sessions.any(session => session.id == id && session.archived)
 }
