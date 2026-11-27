@@ -109,11 +109,17 @@ struct Program {
 
 ///|
 /// One retained trace entry. `result` is present only once the call is done.
+///
+/// `started_at_ms` and `ended_at_ms` are host wall-clock unix milliseconds, the
+/// same clock the session log stamps its events with, so a viewer can draw the
+/// call as a real interval instead of a marker at the script's end.
 fn call_entry(
   name : String,
   arguments : Json,
   status : String,
   result? : Json,
+  started_at_ms? : Int64,
+  ended_at_ms? : Int64,
 ) -> Json {
   let fields : Map[String, Json] = {
     "name": Json(name),
@@ -122,6 +128,12 @@ fn call_entry(
   }
   if result is Some(result) {
     fields["result"] = result
+  }
+  if started_at_ms is Some(started) {
+    fields["started_at_ms"] = Json(started.to_double())
+  }
+  if ended_at_ms is Some(ended) {
+    fields["ended_at_ms"] = Json(ended.to_double())
   }
   Json::object(fields)
 }
@@ -213,7 +225,12 @@ pub async fn Service::start(
         return
       }
       let index = program.calls.length()
-      let entry = call_entry(name, arguments, "running")
+      let entry = call_entry(
+        name,
+        arguments,
+        "running",
+        started_at_ms=now_unix_ms(),
+      )
       let reservation = @utf8.encode(entry.stringify()).length() +
         TraceEntryReserveBytes
       guard program.trace_bytes + reservation <= MaxTraceBytes else {
@@ -264,7 +281,8 @@ pub async fn Service::start(
             // The deadline has joined the call and returns an acknowledged
             // tool error. The script may handle it. This small result fits
             // the entry's reserved 1 KiB; never replace a completed mutation.
-            program.calls[index] = call_entry(
+            program.calls[index] = program.finish_call(
+              index,
               name,
               arguments,
               "done",
@@ -509,7 +527,7 @@ pub fn Program::stop(self : Program) -> Unit {
 fn Program::cancel_call(self : Program, index : Int32) -> Unit {
   if self.calls[index]
     is { "name": String(name), "arguments": arguments, "status": "running", .. } {
-    self.calls[index] = call_entry(name, arguments, "interrupted")
+    self.calls[index] = self.finish_call(index, name, arguments, "interrupted")
   }
   if self.active.get(index) is Some(task) {
     task.cancel()
@@ -607,7 +625,7 @@ async fn Program::execute(
     _ => self.service.tools
   }
   errdefer (if @async.is_being_cancelled() {
-    self.calls[index] = call_entry(name, arguments, "interrupted")
+    self.calls[index] = self.finish_call(index, name, arguments, "interrupted")
   })
   let result = try {
     self.publish_trace()
@@ -662,7 +680,7 @@ async fn Program::execute(
   if self.calls[index] is { "status": "interrupted", .. } {
     return response
   }
-  let entry = call_entry(name, arguments, "done", result=response)
+  let entry = self.finish_call(index, name, arguments, "done", result=response)
   let size = @utf8.encode(entry.stringify()).length()
   if self.trace_bytes - self.reservations[index] + size <= MaxTraceBytes {
     self.trace_bytes += size - self.reservations[index]
@@ -671,7 +689,7 @@ async fn Program::execute(
   } else {
     // The client still receives the full bounded response. Retained job
     // metadata must fit the existing 1 MiB durable-record reader.
-    self.calls[index] = call_entry(name, arguments, "done", result={
+    self.calls[index] = self.finish_call(index, name, arguments, "done", result={
       "version": 1,
       "content": "Result omitted from retained trace: trace size limit reached",
       "is_error": match response {
@@ -812,4 +830,35 @@ async fn Program::capture_images(
     snapshots,
   }
   (self.on_image_output)(self.image_output())
+}
+
+///|
+/// The host wall clock in unix milliseconds, the clock the session log uses.
+fn now_unix_ms() -> Int64 {
+  @env.now().reinterpret_as_int64()
+}
+
+///|
+/// Replace one retained entry with its terminal form: the start it recorded is
+/// kept, and the end is stamped now.
+fn Program::finish_call(
+  self : Program,
+  index : Int32,
+  name : String,
+  arguments : Json,
+  status : String,
+  result? : Json,
+) -> Json {
+  let started = match self.calls[index] {
+    { "started_at_ms": Number(ms, ..), .. } => Some(ms.to_int64())
+    _ => None
+  }
+  call_entry(
+    name,
+    arguments,
+    status,
+    result?,
+    started_at_ms?=started,
+    ended_at_ms=now_unix_ms(),
+  )
 }
