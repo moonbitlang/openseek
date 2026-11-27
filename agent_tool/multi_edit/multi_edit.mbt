@@ -1200,7 +1200,7 @@ fn check_contiguity(edits : Array[ResolvedEdit]) -> String? {
         )
       }
       if current is Some(path) {
-        ended.add(path)
+        ended.insert(path)
       }
       current = Some(edit.path)
     }

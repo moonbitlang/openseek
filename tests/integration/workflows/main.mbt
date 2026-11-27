@@ -59,15 +59,20 @@ async fn compile(root : String, temp : String, name : String) -> String {
   @fs.mkdir(dir)
   let source = dir + "/" + name + ".mbtx"
   write(source, @fs.read_text(root + "/share/workflow/" + name + ".mbtx"))
-  let build = @shell.Cmd(
-    "moon",
-    ["run", "--build-only", "--deny-warn", "--target", "wasm", source],
-    cwd=root,
-  ).output(timeout_ms=60000)
-  build.check()
-  guard @json.parse(build.stdout())
-    is { "artifacts_path": [String(artifact)], .. } else {
-    fail("Build returned no script artifact: \{build.stdout()}")
+  let build = @async.with_timeout(60000, () => {
+    @process.run(
+      "moon",
+      ["run", "--build-only", "--deny-warn", "--target", "wasm", source],
+      cwd=root,
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Collect,
+      accepted_exit_code=code => code == 0,
+    )
+  })
+  let stdout = build.stdout_text()
+  guard @json.parse(stdout) is { "artifacts_path": [String(artifact)], .. } else {
+    fail("Build returned no script artifact: \{stdout}")
   }
   artifact
 }

@@ -293,7 +293,7 @@ pub async fn Connection::run(
         "SSH_ASKPASS_REQUIRE": "force",
         "SEEKMOON_ASKPASS": "1",
         "SEEKMOON_ASKPASS_TOKEN": token,
-        "SEEKMOON_ASKPASS_ADDRESS": auth_server.addr.to_string(),
+        "SEEKMOON_ASKPASS_ADDRESS": auth_server.local_addr().to_string(),
         "LC_ALL": "C",
       }
       group.spawn_bg(() => self.serve_auth(auth_server, token, emit))
@@ -321,7 +321,7 @@ pub async fn Connection::run(
             self.rejected = true
             // Preserve diagnostics, but consume the rejection marker once.
             stderr = Buffer()
-            stderr.write_bytes(b"Authentication was rejected.\n")
+            stderr.write_bytesview(b"Authentication was rejected.\n")
           }
         }
       })
@@ -368,7 +368,7 @@ pub async fn Connection::run(
               if byte == b"\n" {
                 break
               }
-              line.write_bytes(byte)
+              line.write_bytesview(byte)
             }
             match bootstrap_record(@utf8.decode_lossy(line.to_bytes())) {
               Some(Progress(stage)) => emit({ "stage": stage })
@@ -379,7 +379,7 @@ pub async fn Connection::run(
         },
       )
       let reservation = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
-      let address = reservation.addr
+      let address = reservation.local_addr()
       reservation.close()
       let forward = arguments(self.profile.command)
       forward.insert(0, "127.0.0.1:\{address.port}:127.0.0.1:\{port}")

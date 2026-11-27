@@ -77,7 +77,7 @@ async test "prediction preserves the main request prefix and leaves the session 
             },
           }
           conn.send_response(200, "OK")
-          conn.write_string(reply.stringify())
+          conn.text.write(reply.stringify())
           conn.end_response()
         },
         max_connections=1,
@@ -87,7 +87,7 @@ async test "prediction preserves the main request prefix and leaves the session 
       api_key="fixture",
       thinking=High,
       retry_attempts=1,
-      api_url="http://127.0.0.1:\{server.addr.port}/chat/completions",
+      api_url="http://127.0.0.1:\{server.local_addr().port}/chat/completions",
     )
     guard @prediction.generate(client, session, tools~)
       is Completed(text~, usage~) else {
@@ -150,7 +150,7 @@ async test "uncertain predictions are absent and malformed model output stays an
             },
           }
           conn.send_response(200, "OK")
-          conn.write_string(reply.stringify())
+          conn.text.write(reply.stringify())
           conn.end_response()
         },
         max_connections=1,
@@ -160,7 +160,7 @@ async test "uncertain predictions are absent and malformed model output stays an
       api_key="fixture",
       thinking=No,
       retry_attempts=1,
-      api_url="http://127.0.0.1:\{server.addr.port}/chat/completions",
+      api_url="http://127.0.0.1:\{server.local_addr().port}/chat/completions",
     )
     guard @prediction.generate(client, session, tools=[])
       is Completed(text=None, usage~) else {

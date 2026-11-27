@@ -202,16 +202,21 @@ async fn gh_child(dir : String) -> Unit {
 ///|
 /// Run git in `cwd` with a fixed identity and return its output.
 async fn git(cwd : String, args : Array[String]) -> String {
-  let output = @shell.Cmd(
-    "git",
-    [
-      "-c", "user.name=fixture", "-c", "user.email=fixture@example.com", "-c", "commit.gpgsign=false",
-      ..args,
-    ],
-    cwd~,
-  ).output(timeout_ms=60000)
-  output.check()
-  output.stdout()
+  let output = @async.with_timeout(60000, () => {
+    @process.run(
+      "git",
+      [
+        "-c", "user.name=fixture", "-c", "user.email=fixture@example.com", "-c",
+        "commit.gpgsign=false", ..args,
+      ],
+      cwd~,
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Collect,
+      accepted_exit_code=code => code == 0,
+    )
+  })
+  output.stdout_text()
 }
 
 ///|

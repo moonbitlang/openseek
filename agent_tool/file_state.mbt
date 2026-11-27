@@ -118,7 +118,7 @@ pub fn FileStateMap::record_created_directory(
   self : FileStateMap,
   path : String,
 ) -> Unit {
-  self.created_directories.add(path)
+  self.created_directories.insert(path)
 }
 
 ///|

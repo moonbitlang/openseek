@@ -6,7 +6,7 @@ async test "GET follows redirects on request and drops credentials across origin
       defer origin.close()
       let asset = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       defer asset.close()
-      let base = "http://127.0.0.1:\{origin.addr.port}"
+      let base = "http://127.0.0.1:\{origin.local_addr().port}"
       let mut same_origin_headers = None
       let mut asset_headers = None
       group.spawn_bg(no_wait=true, () => {
@@ -15,7 +15,7 @@ async test "GET follows redirects on request and drops credentials across origin
             "/start" => "next?ticket=123#fragment"
             "/next?ticket=123" => {
               same_origin_headers = Some(request.headers)
-              "//127.0.0.1:\{asset.addr.port}/package.zip"
+              "//127.0.0.1:\{asset.local_addr().port}/package.zip"
             }
             "/unsupported" => "file:///package.zip"
             "/empty" => ""

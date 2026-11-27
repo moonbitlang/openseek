@@ -123,7 +123,7 @@ async fn native_file_signature(path : String) -> String {
     return "missing"
   }
   match (Some(@fs.mtime(path)) catch { _ => None }) {
-    Some(mtime) => "exists:\{mtime.sec()}:\{mtime.nsec()}"
+    Some(mtime) => "exists:\{mtime.sec()}:\{mtime.subsec_nanos()}"
     None => "missing"
   }
 }
@@ -595,13 +595,12 @@ async fn write_static_response_body(
 ///|
 async fn serve_not_found(conn : @http.ServerConnection) -> Unit {
   let body = "Not found"
-  conn
-  ..send_response(404, "Not Found", extra_headers={
+  conn.send_response(404, "Not Found", extra_headers={
     "Content-Type": "text/plain; charset=utf-8",
     "Content-Length": body.length().to_string(),
   })
-  ..write_string(body)
-  .end_response()
+  conn.text.write(body)
+  conn.end_response()
 }
 
 ///|

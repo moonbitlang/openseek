@@ -691,7 +691,7 @@ async fn run_semantic_search(
           let length = chunk
             .length()
             .min(MaxSemanticSearchStderrBytes - retained_bytes)
-          retained.write_bytes(chunk[:length])
+          retained.write_bytesview(chunk[:length])
           retained_bytes += length
         }
       }

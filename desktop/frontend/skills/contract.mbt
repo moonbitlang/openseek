@@ -82,7 +82,7 @@ fn Input::installed_registry_skills(self : Input) -> Set[(String, String)] {
   let installed : Set[(String, String)] = Set([])
   for skill in self.installed {
     if skill.registry is Some(registry) {
-      installed.add((registry.module_name, registry.package_path))
+      installed.insert((registry.module_name, registry.package_path))
     }
   }
   installed

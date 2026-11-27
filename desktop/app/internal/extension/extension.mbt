@@ -562,8 +562,13 @@ fn DesktopBridgeActor::subscribe(
     self.inbox,
     map=notification => Some(Deliver(Hub(notification))),
     on_lag=subscription => {
-      @xlog.warn(category="transport") <?
-        { "event": "hub_subscription_lagged", "transport": "desktop" }
+      if @xlog.warn(category="transport") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "hub_subscription_lagged")
+        ..write_object_field("transport", "desktop")
+        .write_object_end()
+      }
       group.spawn_bg(() => self.inbox.put(SubscriptionLagged(subscription)))
     },
   )

@@ -78,7 +78,7 @@ pub async fn Server::Server(tools : Array[Tool], version~ : String) -> Server {
 ///|
 /// Where clients POST.
 pub fn Server::url(self : Server) -> String {
-  "http://127.0.0.1:\{self.listener.addr.port}\{EndpointPath}"
+  "http://127.0.0.1:\{self.listener.local_addr().port}\{EndpointPath}"
 }
 
 ///|
@@ -145,7 +145,7 @@ pub async fn Server::run(self : Server) -> Unit {
   defer self.listener.close()
   @async.with_task_group(group => {
     for ;; {
-      let (conn, _) = self.listener.accept()
+      let conn = self.listener.accept()
       group.spawn_bg(allow_failure=true, () => self.handle(conn))
     }
   })
@@ -229,7 +229,7 @@ async fn read_body(conn : @http.ServerConnection) -> Bytes? {
     guard buffer.length() + chunk.length() <= MaxRequestBytes else {
       return None
     }
-    buffer.write_bytes(chunk)
+    buffer.write_bytesview(chunk)
   }
   Some(buffer.contents())
 }

@@ -211,6 +211,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
     {
       ..self,
       cloud_access: input.cloud_access,
+      symbol_cache: SymbolCache(),
       attachment_sequence: sequence,
       attachment_requests: requests,
     }
@@ -1514,11 +1515,11 @@ fn Model::editing_subscriptions(
         Trigger::parse(entry.draft.task, inline_markers="$#") is Some(trigger) &&
         trigger.marker() == "#" {
         let owner = entry.owner
-        guard owner.host() is Some(host) else { return @sub.none }
         let query = trigger.query()
         subs.push(
           @symbols.searching(
-            host,
+            owner,
+            cloud?=input.cloud_access,
             query,
             root~,
             loaded=items => emit(SymbolsLoaded(owner~, root~, query~, items~)),

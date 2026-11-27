@@ -63,12 +63,15 @@ pub fn terminal_safe_line(text : String, limit~ : Int32 = 72) -> String {
 /// (or pass a temporary whose lifetime ends before the view is used) call
 /// `.to_owned()`.
 pub fn failure_message(error_text : StringView) -> StringView {
-  lexmatch error_text {
+  let unwrapped = match error_text.strip_prefix("Failure(") {
+    Some(inner) => inner.strip_suffix(")").unwrap_or(inner)
+    None => error_text
+  }
+  lexmatch unwrapped {
     (re"^error: ", after=message) => message
     // `(.|\n)*` is greedy across lines, so the remainder follows the LAST
     // marker occurrence — the same piece the split-and-take-last form chose.
-    (re"^(.|\n)* FAILED: ", after=last) =>
-      last.strip_suffix(")").unwrap_or(last)
+    (re"^(.|\n)* FAILED: ", after=last) => last
     _ => error_text
   }
 }

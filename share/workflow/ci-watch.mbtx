@@ -1,7 +1,7 @@
 ---
 import {
   "moonbitlang/core/async",
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/argparse",
   "moonbitlang/core/json",
 }
@@ -119,16 +119,15 @@ async fn main {
         command.append(["--repo", value])
       }
       command.append(["--json", "number,url,headRefOid,statusCheckRollup"])
-      let output = @shell.Cmd("gh", command).output(
-        timeout_ms=30000,
-        max_output_bytes=1048576,
-      )
-      guard output.exit_code() == 0 else {
+      let output = @async.with_timeout(30000, () => {
+        @process.run("gh", command, stdin=Empty, stdout=Collect, stderr=Collect)
+      })
+      guard output.exit_code == 0 else {
         fail(
-          "CI query failed (gh exit \{output.exit_code()}): \{output.stderr()}",
+          "CI query failed (gh exit \{output.exit_code}): \{output.stderr_text()}",
         )
       }
-      let snapshot = @json.parse(output.stdout())
+      let snapshot = @json.parse(output.stdout_text())
       guard snapshot
         is {
           "url": String(url),

@@ -8,7 +8,7 @@ async fn stateless_reply(
     "Content-Type": "application/json",
     "Mcp-Session-Id": "must-be-ignored",
   })
-  conn.write_string(
+  conn.text.write(
     ({ "jsonrpc": "2.0", "id": id, "result": result } : Json).stringify(),
   )
 }
@@ -89,7 +89,7 @@ async test "stateless HTTP has per-request metadata mirrored headers no initiali
     })
     let connection = @streamhttp.connect(
       group,
-      url="http://127.0.0.1:\{server.addr.port}/mcp",
+      url="http://127.0.0.1:\{server.local_addr().port}/mcp",
       headers={
         "Authorization": "Bearer test",
         "mCp-MeThOd": "wrong",
@@ -171,7 +171,7 @@ async test "modern HTTP errors and authentication failures never trigger legacy 
           conn.send_response(status, "Rejected", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write_string(
+          conn.text.write(
             (
               {
                 "jsonrpc": "2.0",
@@ -184,7 +184,7 @@ async test "modern HTTP errors and authentication failures never trigger legacy 
       try
         @streamhttp.connect(
           group,
-          url="http://127.0.0.1:\{server.addr.port}/mcp",
+          url="http://127.0.0.1:\{server.local_addr().port}/mcp",
           client_name="test",
           client_version="1",
         )
@@ -223,7 +223,7 @@ async test "cancelling a modern HTTP call closes its stream while another call c
     let disconnected : @async.Queue[Unit] = Queue(kind=Unbounded)
     let methods : Array[String] = []
     group.spawn_bg(no_wait=true, () => {
-      server.run_forever((tcp, _) => {
+      server.run_forever(tcp => {
         let conn = @http.ServerConnection(tcp)
         defer conn.close()
         let _ = conn.read_request()
@@ -244,7 +244,7 @@ async test "cancelling a modern HTTP call closes its stream while another call c
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "text/event-stream",
           })
-          conn.write_string(": waiting\n\n")
+          conn.text.write(": waiting\n\n")
           conn.flush_partial_data()
           started.put(())
           tcp.read() |> ignore
@@ -254,7 +254,7 @@ async test "cancelling a modern HTTP call closes its stream while another call c
             "Content-Type": "text/event-stream",
           })
           // A forbidden peer request must not cause a response POST.
-          conn.write_string(
+          conn.text.write(
             "data: {\"jsonrpc\":\"2.0\",\"id\":\"peer\",\"method\":\"ping\"}\n\n",
           )
           let reply : Json = {
@@ -265,14 +265,14 @@ async test "cancelling a modern HTTP call closes its stream while another call c
               "content": [{ "type": "text", "text": "done" }],
             },
           }
-          conn.write_string("data: \{reply.stringify()}\n\n")
+          conn.text.write("data: \{reply.stringify()}\n\n")
         }
         conn.end_response()
       })
     })
     let connection = @streamhttp.connect(
       group,
-      url="http://127.0.0.1:\{server.addr.port}/mcp",
+      url="http://127.0.0.1:\{server.local_addr().port}/mcp",
       client_name="test",
       client_version="1",
     )

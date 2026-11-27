@@ -243,7 +243,7 @@ async test "the loopback listener takes the matching redirect and ignores strays
   @async.with_task_group(group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
-    let port = server.addr.port
+    let port = server.local_addr().port
     let waiter = group.spawn(() => wait_for_code(server, oauth_state="st"))
     // A stray (forged state) answers 404 and keeps the wait alive.
     let (stray, _) = @http.get(
@@ -351,10 +351,10 @@ async test "environment relay survives account login and local sign-out without 
 async test "account code exchange uses v2 without registering a device" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
-  let origin = "http://127.0.0.1:\{server.addr.port}"
+  let origin = "http://127.0.0.1:\{server.local_addr().port}"
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
-      let (connection, _) = server.accept()
+      let connection = server.accept()
       defer connection.close()
       let request = connection.read_request()
       assert_true(request.meth is Post)
@@ -364,7 +364,7 @@ async test "account code exchange uses v2 without registering a device" {
         "code_verifier": "verifier",
       })
       connection.send_response(200, "OK")
-      connection.write_string(
+      connection.text.write(
         "{\"token\":\"ts_fixture\",\"user\":{\"user_id\":\"123\",\"login\":\"octocat\",\"avatar_url\":\"\"}}",
       )
       connection.end_response()

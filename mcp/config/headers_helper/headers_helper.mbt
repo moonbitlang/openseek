@@ -25,11 +25,11 @@ pub async fn run(
     )
     group.spawn_bg(() => {
       while process.stderr.read() is Some(chunk) {
-        diagnostics.write_bytes(chunk)
+        diagnostics.write_bytesview(chunk)
         @stdio.stderr.write(chunk)
       }
     })
-    stdout.write_bytes(process.stdout.read_all())
+    stdout.write_bytesview(process.stdout.read_all())
     code = process.wait()
   })
   guard code == 0 else {
