@@ -9,6 +9,7 @@ import {
   "openseek_desktop/backend/endpoint",
   "openseek_desktop/backend/host",
   "openseek_desktop/backend/mcp",
+  "openseek_desktop/backend/preview_open",
   "openseek_desktop/backend/internal/actions_monitor",
   "openseek_desktop/backend/internal/files",
   "openseek_desktop/backend/internal/session_messages",

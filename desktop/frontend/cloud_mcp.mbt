@@ -63,6 +63,15 @@ fn cloud_mcp_connection(
                 )
               }
             }),
+            @preview_open.tool((session, path) => {
+              scheduler.add(
+                emit(
+                  PreviewOpenRequested(
+                    Cloud(account=account_id, session~, path~),
+                  ),
+                ),
+              )
+            }),
           ],
           version~,
         )

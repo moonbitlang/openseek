@@ -3,6 +3,7 @@ fn Model::preview_file(
   self : Model,
   dispatch : @cmd.Emit[Msg],
   path : String,
+  embed~ : Bool = false,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(self)
   if ctx.owner is Cloud(session~, ..) {
@@ -25,7 +26,9 @@ fn Model::preview_file(
           error => Err(@fileeditor.Bridge(@interop.bridge_problem(error)))
         }
         scheduler.add(
-          dispatch(CloudFilePreviewCreated(owner~, auth_epoch~, result~)),
+          dispatch(
+            CloudFilePreviewCreated(owner~, auth_epoch~, embed~, result~),
+          ),
         )
       })
       |> ignore
@@ -74,3 +77,14 @@ fn Model::preview_file(
     },
   )
 }
+
+///|
+/// The preview runs scripts with access to its own relative assets. Its origin
+/// must be separate from the client in which it is embedded.
+extern "js" fn is_separate_preview_origin(url : String) -> Bool =
+  #| (value) => {
+  #|   try {
+  #|     const url = new URL(value);
+  #|     return (url.protocol === "https:" || url.protocol === "http:") && url.origin !== window.location.origin;
+  #|   } catch { return false; }
+  #| }

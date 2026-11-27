@@ -210,7 +210,7 @@ test('an ordinary desktop browser answers Cloud ask_user without a connected hos
   await page.goto(`${authOrigin}/cloud/session/${sessionA}`);
   await connected(app);
   request(app, sessionA, 1, 'tools/list');
-  await expect.poll(() => app.mcpFrames.find(({ frame }) => frame.id === 1)?.frame.result.tools.map(t => t.name)).toEqual(['ask_user']);
+  await expect.poll(() => app.mcpFrames.find(({ frame }) => frame.id === 1)?.frame.result.tools.map(t => t.name)).toEqual(['ask_user', 'preview_open']);
 
   request(app, sessionA, 2, 'tools/call', { name: 'ask_user', arguments: { questions: [{ id: 'target', title: 'Which branch?' }] } });
   const card = page.locator('.user-question-card');

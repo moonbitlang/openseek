@@ -7133,7 +7133,11 @@ fn update_msg(
                 }
               }
               Browser(id~) => {
-                let cmds : Array[@cmd.Cmd] = [browser_close_view(dispatch, id)]
+                let cmds : Array[@cmd.Cmd] = if model.is_desktop {
+                  [browser_close_view(dispatch, id)]
+                } else {
+                  []
+                }
                 // Closing owns the native view's teardown. Retire its cached
                 // placement at the same transition so the outer browser sync
                 // does not enqueue a hide behind the close; the ordered bridge
@@ -7650,7 +7654,7 @@ fn update_msg(
     PreviewOpenRequested(request) => (@cmd.none, model.queue_preview(request))
     OpenNextPreview => (@cmd.none, model)
     PreviewFile(path) => model.preview_file(dispatch, path)
-    CloudFilePreviewCreated(owner~, auth_epoch~, result~) => {
+    CloudFilePreviewCreated(owner~, auth_epoch~, embed~, result~) => {
       let ctx = file_ctx(model)
       guard ctx.owner == owner &&
         ctx.cloud_files is Some({ epoch: current, .. }) &&
@@ -7658,6 +7662,16 @@ fn update_msg(
         return (@cmd.none, model)
       }
       match result {
+        Ok(url) if embed => {
+          guard is_separate_preview_origin(url) else {
+            return model.notify_file_error(
+              dispatch,
+              @fileeditor.Cloud(Malformed),
+            )
+          }
+          let (_, next) = model.add_browser_tab(owner, url~, cloud_preview=true)
+          (@cmd.none, next)
+        }
         Ok(url) => open_user_link(dispatch, model, url, cloud_preview=true)
         Err(failure) => model.notify_file_error(dispatch, failure)
       }

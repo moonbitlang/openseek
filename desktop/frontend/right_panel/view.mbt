@@ -178,18 +178,35 @@ fn panel_view(
             }
           }),
         [
-          @preview.toolbar_view(locale~, active_page, toolbar),
+          if input.is_desktop {
+            @preview.toolbar_view(locale~, active_page, toolbar)
+          } else {
+            @html.nothing
+          },
           @preview.failure_view(active_page),
           @preview.annotation_view(
             locale~,
             input.annotation,
             actions.browser_annotation,
           ),
-          // A native page overlays this measured rectangle after navigation.
-          @html.div(
-            attrs=@html.Attrs::build().id("browser-pane").class("browser-pane"),
-            ([] : Array[@html.Html]),
-          ),
+          if !input.is_desktop &&
+            active_page.cloud_preview &&
+            active_page.url is Some(url) {
+            @html.iframe(
+              class="browser-pane",
+              title=@preview.page_label(active_page, locale~),
+              src=url,
+              sandbox="allow-scripts allow-same-origin allow-forms",
+              attrs=@html.Attrs::build().referrerpolicy("no-referrer"),
+            )
+          } else {
+            @html.div(
+              attrs=@html.Attrs::build()
+                .id("browser-pane")
+                .class("browser-pane"),
+              ([] : Array[@html.Html]),
+            )
+          },
         ],
       ),
       @jobs.panel(locale~, input.jobs, actions.job_events),

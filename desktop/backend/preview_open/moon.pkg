@@ -1,0 +1,7 @@
+import {
+  "moonbitlang/core/json",
+  "openseek_desktop/backend/mcp",
+  "openseek_desktop/protocol",
+}
+
+supported_targets = "js+native+wasm"

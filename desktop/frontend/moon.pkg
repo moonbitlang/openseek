@@ -1,6 +1,7 @@
 import {
   "openseek_desktop/backend/user_questions" @question_service,
   "openseek_desktop/backend/mcp",
+  "openseek_desktop/backend/preview_open",
   "openseek_desktop/frontend/connectors",
   "moonbitlang/openseek/deepseek",
   "openseek_desktop/frontend/prompt",

@@ -691,6 +691,27 @@ test('Host Quick Open retains both file and workspace-symbol shortcuts', async (
   expect(app.requests.some(request => request.method === 'lsp.workspace_symbols')).toBe(true);
 });
 
+test('browser MCP opens a Cloud document in its own session and rejects invalid paths', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.contents.set(sessionB + ':report.docx', { kind: 'binary_content', ...cloud.device.officeFiles['docs/report.docx'] });
+  await cloud.install(); await cloud.goto(); await cloud.open(sessionB); await cloud.open(sessionA);
+  await expect.poll(() => cloud.mcpSockets.has(sessionB)).toBe(true);
+  const call = (id, path) => cloud.mcpSockets.get(sessionB).send(JSON.stringify({
+    jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'preview_open', arguments: { path } },
+  }));
+  const result = id => cloud.mcpFrames.find(f => f.session === sessionB && f.frame.id === id)?.frame.result;
+  call(41, '../outside.docx');
+  await expect.poll(() => result(41)?.isError).toBe(true);
+  call(42, 'report.docx');
+  await expect.poll(() => result(42)?.content[0].text).toBeTruthy();
+  expect(JSON.parse(result(42).content[0].text)).toEqual({ status: 'opening', path: 'report.docx' });
+  await expect(page.locator('main .topbar-title')).toHaveText(cloud.titles.get(sessionA));
+  expect(cloud.fileRequests.some(r => r.content && r.path === 'report.docx')).toBe(false);
+  await cloud.open(sessionB);
+  await expect(page.locator('.word-page')).toBeVisible();
+  expect(cloud.fileRequests.filter(r => r.content && r.path === 'report.docx').map(r => r.session)).toEqual([sessionB]);
+});
+
 test('preview_open reuses Cloud viewers and parks another session without stealing focus', async ({ page }, testInfo) => {
   const cloud = new CloudFilesHarness(page, { desktop: true });
   const names = ['report.docx', 'report.pdf', 'image.png', 'src/main.mbt', 'notes.txt'];

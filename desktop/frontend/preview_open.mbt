@@ -13,7 +13,7 @@ fn Model::queue_preview(
   self : Model,
   request : @protocol.PreviewOpenRequest,
 ) -> Model {
-  guard self.is_desktop else { return self }
+  guard self.is_desktop || request is Cloud(..) else { return self }
   if request is Cloud(account~, ..) &&
     self.account.map(a => a.user.user_id) != Some(account) {
     return self
@@ -34,7 +34,9 @@ fn Model::open_pending_preview(
   self : Model,
   dispatch : @cmd.Emit[Msg],
 ) -> (@cmd.Cmd, Model) {
-  guard self.is_desktop && self.screen is Chat && self.management_dialog is None else {
+  guard !self.pending_previews.is_empty() &&
+    self.screen is Chat &&
+    self.management_dialog is None else {
     return (@cmd.none, self)
   }
   let ctx = file_ctx(self)
@@ -62,7 +64,7 @@ fn Model::open_pending_preview(
   guard current else { return (more, model) }
   let resource = @resource.join_relative(root, Relative(path))
   let (open, model) = if @fileeditor.is_html_file(path) {
-    model.preview_file(dispatch, resource.to_string())
+    model.preview_file(dispatch, resource.to_string(), embed=!self.is_desktop)
   } else {
     let model = model.begin_editor_navigation()
     show_editor_resource(

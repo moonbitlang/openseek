@@ -327,10 +327,11 @@ answer's delivery fails. Failed or ambiguous inputs are not replayed on reconnec
 `preview_open({"path":"reports/result.html"})` asks SeekMoon to show a generated
 workspace file to the user. It uses the caller's trusted conversation and
 workspace, rather than the currently selected chat. The tool is available to
-Local agents and Desktop Cloud client MCP; filtered Local clients must include
-the `preview` tool group.
+Local agents and Cloud client MCP on Desktop, Web, and mobile. Filtered Local
+clients must include the `preview` tool group.
 
-HTML/HTM uses the existing HTTP preview and Browser tab. PDF, images, Office,
+HTML/HTM opens in the conversation’s Browser tab. Web and mobile embed the
+Cloud preview there so an agent request works without a popup. PDF, images, Office,
 code, and text use the existing file panel. The response
 `{"status":"opening","path":"reports/result.html"}` acknowledges acceptance,
 not file existence or completed rendering. It does not return file contents;

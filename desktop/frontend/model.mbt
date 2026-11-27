@@ -1997,6 +1997,7 @@ priv enum Msg {
   OpenNextPreview
   PreviewFile(String)
   CloudFilePreviewCreated(
+    embed~ : Bool,
     owner~ : @interop.ConversationIdentity,
     auth_epoch~ : Int32,
     result~ : Result[String, @fileeditor.Failure],

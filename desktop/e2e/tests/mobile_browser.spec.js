@@ -1,6 +1,6 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, authOrigin, sessionA } from './support/cloud_harness.js';
+import { CloudHarness, authOrigin, cloudOrigin, sessionA } from './support/cloud_harness.js';
 
 // Exercise the browser packager's normal HTML, CSS and frontend bundle.
 // Only the remote account and host responses contain fixture data.
@@ -181,7 +181,7 @@ test('Cloud conversation fits a small phone and a multiline draft survives a hei
   expect(cloud.device.socket).toBeNull();
 });
 
-test.describe('Cloud ask_user on a phone', () => {
+test.describe('Cloud client tools on a phone', () => {
   // The bundled apps run the shared frontend without a desktop bridge.
   test.use({ userAgent: 'Mozilla/5.0 (iPhone) Mobile SeekMoonIOS/0.1.0' });
 
@@ -211,7 +211,7 @@ test.describe('Cloud ask_user on a phone', () => {
   test('discovers ask_user and returns a choice over MCP @webkit-layout', async ({ page }) => {
     const app = await openChat(page);
     request(app, 1, 'tools/list', {});
-    await expect.poll(() => reply(app, 1)?.tools.map(t => t.name)).toEqual(['ask_user']);
+    await expect.poll(() => reply(app, 1)?.tools.map(t => t.name)).toEqual(['ask_user', 'preview_open']);
     ask(app, 2);
     const card = page.locator('.user-question-card');
     await expect(card).toContainText('Which plan?');
@@ -221,6 +221,27 @@ test.describe('Cloud ask_user on a phone', () => {
     expect(JSON.parse(reply(app, 2).content[0].text)).toMatchObject({ status: 'answered', answers: { plan: 'Small change' } });
     await expect(card).toHaveCount(0);
     expect(app.requests.filter(r => r.path.endsWith('/commands'))).toHaveLength(0);
+  });
+
+  test('preview_open shows an interactive HTML page in the phone panel @webkit-layout', async ({ page }) => {
+    const app = await openChat(page);
+    const preview = 'https://preview.example.test/p/fixture/';
+    await page.route(cloudOrigin + '/v1/sessions/' + sessionA + '/previews', route =>
+      route.fulfill({ status: 201, json: { url: preview + 'index.html' } }));
+    await page.route(preview + 'index.html', route => route.fulfill({
+      contentType: 'text/html',
+      body: `<button onclick="fetch('data.json').then(r=>r.json()).then(v=>this.textContent=v.message)">Load data</button>`,
+    }));
+    await page.route(preview + 'data.json', route => route.fulfill({ json: { message: 'Preview ready' } }));
+    request(app, 7, 'tools/call', { name: 'preview_open', arguments: { path: 'index.html' } });
+    await expect.poll(() => reply(app, 7)?.content[0].text).toBeTruthy();
+    expect(JSON.parse(reply(app, 7).content[0].text)).toEqual({ status: 'opening', path: 'index.html' });
+    const frame = page.frameLocator('iframe.browser-pane');
+    await frame.getByRole('button', { name: 'Load data' }).click();
+    await expect(frame.getByRole('button')).toHaveText('Preview ready');
+    expect(page.context().pages()).toHaveLength(1);
+    await expect(page).toHaveURL(authOrigin + '/cloud/session/' + sessionA);
+    expect(app.device.socket).toBeNull();
   });
 
   for (const reason of ['timeout', 'disconnect']) {

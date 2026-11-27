@@ -54,6 +54,7 @@ test "Cloud preview results belong to the requesting account epoch and selected 
   let owner = file_ctx(model).owner
   let url = "https://preview.example.test/page.html"
   let completed = CloudFilePreviewCreated(
+    embed=false,
     owner~,
     auth_epoch=model.cloud.epoch,
     result=Ok(url),
