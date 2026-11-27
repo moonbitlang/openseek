@@ -4,7 +4,7 @@ Structural code search and linting with moongrep.
 
 `moonx` runs `moongrep`, a structural (AST-based) search and lint tool for MoonBit. Use it when a text grep cannot express the shape you need ("all `inspect` calls whose `content` is a literal", "every `match` over `Some`/`None`", "every call of one function nested inside another"). No `--` separator is needed: the arguments after the coordinate are moongrep's own.
 
-The system prompt carries the simplest shape — one `match` over `Some`/`None`. This one covers more of the language in a single call: a nested application, two `id` captures, `$_` for the arguments nobody cares about, `--guard` to keep only the inner callees whose name matches a regex, and `--exclude` for the one directory the defaults miss here.
+This example combines several pattern features in a single call: a nested application, two `id` captures, `$_` for the arguments nobody cares about, `--guard` to keep only the inner callees whose name matches a regex, and `--exclude` for the one directory the defaults miss here.
 
 ```text
 moonx moonbit-community/moongrep scan . --exclude editor/codemirror/demo --pattern '$(outer:id)($_, $(inner:id)($_))' --guard '{$inner: "^error_result$"}' --json
