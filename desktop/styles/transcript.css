@@ -302,6 +302,7 @@
   font-weight: 600;
   color: var(--color-text-primary);
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -361,12 +362,11 @@
   --icon-size: 3em;
   display: grid;
   place-items: center;
-  /* width: 52px; */
-  /* height: 52px; */
-  /* border-radius: var(--radius-inline); */
-  /* background: var(--color-control-surface); */
-  /* border: 1px solid var(--color-border); */
-  /* color: var(--color-text-secondary); */
+}
+@media (hover: hover) {
+  .empty-badge:hover {
+    --color-moonbit-logo-primary: var(--color-moonbit-logo-primary-hover);
+  }
 }
 .empty-title {
   min-inline-size: 0;
