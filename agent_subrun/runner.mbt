@@ -23,8 +23,8 @@ pub enum SubrunTerminal {
 }
 
 ///|
-/// The outcome of one sub-run: the parsed report when there is one, plus the
-/// cost the child actually spent — read from the child's own result file
+/// The outcome of one sub-run: the parsed report when there is one, plus what
+/// the child actually spent — read from the child's own result file
 /// (`usage`, `steps`), so it is exact for the requests the child made.
 #derive(Debug)
 struct SubrunResult[T] {
@@ -33,7 +33,6 @@ struct SubrunResult[T] {
   steps_used : Int32
   prompt_tokens : Int32
   completion_tokens : Int32
-  cost_usd : Double?
   unaccounted : String?
   subrun_id : String?
 }
@@ -48,38 +47,6 @@ pub fn[T] SubrunResult::value(self : SubrunResult[T]) -> T? {
 /// How the sub-run ended.
 pub fn[T] SubrunResult::terminal(self : SubrunResult[T]) -> SubrunTerminal {
   self.terminal
-}
-
-///|
-/// Model requests the child actually made.
-pub fn[T] SubrunResult::steps_used(self : SubrunResult[T]) -> Int32 {
-  self.steps_used
-}
-
-///|
-/// The child's own money figure for the run: the `usage.cost_usd` its result
-/// file reported. `None` means unknown, never free: an engine
-/// that prices nothing leaves it absent.
-pub fn[T] SubrunResult::cost_usd(self : SubrunResult[T]) -> Double? {
-  self.cost_usd
-}
-
-///|
-/// Why the counts may fall short of what the child spent: it left no usable
-/// result, so they are only what was observed. `None` when they are the
-/// child's own account.
-pub fn[T] SubrunResult::unaccounted(self : SubrunResult[T]) -> String? {
-  self.unaccounted
-}
-
-///|
-/// The runner-assigned sub-run id ("sr-N"): the same id the
-/// SubrunStarted/SubrunFinished brackets carried, and — when the child was
-/// launched with a `ChildSession` — the suffix of the child's durable
-/// session id. `None` when no child was launched because its session could
-/// not be claimed.
-pub fn[T] SubrunResult::subrun_id(self : SubrunResult[T]) -> String? {
-  self.subrun_id
 }
 
 ///|
@@ -141,7 +108,6 @@ pub async fn[T] run_subrun(
             steps_used: 0,
             prompt_tokens: 0,
             completion_tokens: 0,
-            cost_usd: None,
             unaccounted: None,
             subrun_id: None,
           }
@@ -253,7 +219,6 @@ pub async fn[T] run_subrun(
     steps_used,
     prompt_tokens,
     completion_tokens,
-    cost_usd: attempt.bind(a => a.cost_usd),
     unaccounted,
     subrun_id: Some(id),
   }

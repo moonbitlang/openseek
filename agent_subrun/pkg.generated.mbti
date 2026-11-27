@@ -28,12 +28,8 @@ pub struct ClaimedChild {
 #derive(@debug.Debug)
 type SubrunResult[T]
 pub fn[T] SubrunResult::completion_tokens(Self[T]) -> Int32
-pub fn[T] SubrunResult::cost_usd(Self[T]) -> Double?
 pub fn[T] SubrunResult::prompt_tokens(Self[T]) -> Int32
-pub fn[T] SubrunResult::steps_used(Self[T]) -> Int32
-pub fn[T] SubrunResult::subrun_id(Self[T]) -> String?
 pub fn[T] SubrunResult::terminal(Self[T]) -> SubrunTerminal
-pub fn[T] SubrunResult::unaccounted(Self[T]) -> String?
 pub fn[T] SubrunResult::value(Self[T]) -> T?
 
 #derive(Eq, @debug.Debug)

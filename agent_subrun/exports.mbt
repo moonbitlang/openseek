@@ -5,8 +5,8 @@
 ///|
 /// Provider prompt tokens the child consumed, summed over its requests.
 /// Token accounting is part of the runner's observable contract — the
-/// runner tests assert it — and completes the `steps_used`/`subrun_id`
-/// getter family.
+/// runner tests assert it — beside the other per-run spend
+/// `run_subrun` records.
 pub fn[T] SubrunResult::prompt_tokens(self : SubrunResult[T]) -> Int32 {
   self.prompt_tokens
 }
