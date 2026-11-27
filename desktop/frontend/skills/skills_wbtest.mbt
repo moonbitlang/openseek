@@ -112,3 +112,77 @@ test "a library change to the document reloads it and drops the old read" {
     fail("the replacement read must settle")
   }
 }
+
+///|
+/// The protocol projections are package-private: the page's own tests are
+/// the only caller, so they run here as whitebox tests rather than through an
+/// export kept alive for a blackbox test file.
+test "skill reply errors stay distinct from empty successful lists" {
+  let message = "GET https://mooncakes.io/api/v0/skills returned HTTP 503"
+  try catalog_from_reply(SkillsCatalogError(message)) catch {
+    error => assert_eq(@interop.bridge_error_text(error), message)
+  } noraise {
+    _ => fail("expected a catalog reply error")
+  }
+  try installed_from_reply(InstalledSkillsError(message)) catch {
+    error => assert_eq(@interop.bridge_error_text(error), message)
+  } noraise {
+    _ => fail("expected an installed skills reply error")
+  }
+  assert_true(catalog_from_reply(SkillsCatalog([])).is_empty())
+  assert_true(
+    installed_from_reply(InstalledSkills([], builtin_errors=[])).is_empty(),
+  )
+}
+
+///|
+test "catalog replies decode and skip odd entries" {
+  let items = catalog_from_reply(
+    SkillsCatalog([
+      {
+        name: "acme/widget",
+        module_name: "acme/widget",
+        package_path: "",
+        version: "1.0.0",
+        description: "Build widgets fast.",
+        author: "acme",
+        repository: "https://example.com/acme/widget",
+      },
+      {
+        name: "odd",
+        module_name: "",
+        package_path: "",
+        version: "1.0.0",
+        description: "",
+        author: "",
+        repository: "",
+      },
+    ]),
+  )
+  guard items is [item] else { fail("expected exactly one catalog item") }
+  assert_eq(item.name, "acme/widget")
+  assert_eq(item.module_name, "acme/widget")
+  assert_eq(item.version, "1.0.0")
+  assert_eq(item.description, "Build widgets fast.")
+  assert_eq(source_label(item), "acme/widget@1.0.0")
+}
+
+///|
+test "subpackage skills carry their package path in the source label" {
+  let items = catalog_from_reply(
+    SkillsCatalog([
+      {
+        name: "alice/alpha/cmd/run",
+        module_name: "alice/alpha",
+        package_path: "cmd/run",
+        version: "0.2.0",
+        description: "Run alpha commands",
+        author: "",
+        repository: "",
+      },
+    ]),
+  )
+  guard items is [item] else { fail("expected one catalog item") }
+  assert_eq(source_label(item), "alice/alpha@0.2.0/cmd/run")
+  assert_eq(item.author, "")
+}
