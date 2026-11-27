@@ -121,6 +121,9 @@
     var(--dark-text-selection)
   );
 
+  --color-moonbit-logo-primary: light-dark(#151226, #e5e0ff);
+  --color-moonbit-logo-secondary: light-dark(#bdbcbc, #918fa2);
+
   /* Status colors */
   --color-success: light-dark(var(--light-success), var(--dark-success));
   --color-danger: light-dark(var(--light-danger), var(--dark-danger));
