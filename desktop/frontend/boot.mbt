@@ -853,12 +853,19 @@ fn main {
       terminal_state,
       terminal_emit,
     )
-    let transcript_actions = (slot : String) => {
+    let transcript_actions = (source : TranscriptSlot) => {
+      let slot = source.key()
       (
         {
           open: emit.map(path => TranscriptLinkOpened(slot~, path~)),
           jump: emit.map(target => TranscriptLocationOpened(slot~, target)),
-          open_session: emit.map(child => OpenTranscriptChild(slot~, child)),
+          open_session: emit.map(child => {
+            match source {
+              HostTranscript(channel~, ..) => OpenSession(channel, child)
+              CloudTranscriptSlot(owner) =>
+                OpenCloudTranscriptChild(owner, child)
+            }
+          }),
           fork: emit.map(through => ForkRequested(slot~, through~)),
           edit_user: emit.map(request => {
             let (sequence, draft) = request
@@ -901,7 +908,7 @@ fn main {
             Some(slot) =>
               @transcript_component.component(
                 state.map(model => model.transcript_input()),
-                transcript_actions(slot.key()),
+                transcript_actions(slot),
               )
           }
         },

@@ -2005,7 +2005,7 @@ priv enum Msg {
   )
   DownloadFile(String)
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
-  OpenTranscriptChild(slot~ : String, String)
+  OpenCloudTranscriptChild(@interop.ConversationIdentity, String)
   OpenCloudSubagents(String?)
   CloudSubagentsLoaded(
     Int32,

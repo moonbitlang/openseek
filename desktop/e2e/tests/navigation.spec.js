@@ -198,3 +198,20 @@ test("Back closes the management dialog before it reaches the page", async ({ pa
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
   expect(await hostBack()).toBe(false);
 });
+
+test('opening a Host subagent from a tool card adds a browser history entry', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
+  const app = new DesktopBrowserHarness(page);
+  const child = 'session-1-sr-2';
+  app.onRpc('session.load', (request, next) => request.params.session === child
+    ? { session: { version: 1, id: child, events: [] }, watermark: 0, prediction: null }
+    : next());
+  await app.install(); await app.goto(); await app.openSession();
+  const chip = page.locator('#transcript .subrun-chip');
+  await chip.locator('xpath=ancestor::details[1]/summary').click();
+  await chip.click();
+  await expect(page).toHaveURL(new RegExp(path('chat/session/' + child) + '$'));
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(path('chat/session/session-1') + '$'));
+  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+});

@@ -7704,16 +7704,12 @@ fn update_msg(
       }
       (@cmd.batch([cmd, command]), { ..model, session_search, })
     }
-    OpenTranscriptChild(slot~, child) => {
-      guard model.transcript_slot() is Some(current) && current.key() == slot else {
+    OpenCloudTranscriptChild(owner, child) => {
+      guard model.transcript_slot() is Some(CloudTranscriptSlot(active)) &&
+        active == owner else {
         return (@cmd.none, model)
       }
-      match current {
-        CloudTranscriptSlot(_) =>
-          open_cloud_subagents(dispatch, model, Some(child))
-        HostTranscript(..) =>
-          update_msg(dispatch, OpenSessionHere(child), model)
-      }
+      open_cloud_subagents(dispatch, model, Some(child))
     }
     OpenCloudSubagents(child) => open_cloud_subagents(dispatch, model, child)
     CloudSubagentsLoaded(generation, result) => {
