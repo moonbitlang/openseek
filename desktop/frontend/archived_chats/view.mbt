@@ -32,7 +32,7 @@ pub(all) struct Actions {
 
 ///|
 /// Every archived row the groups hold.
-pub fn count(groups : Array[Group]) -> Int32 {
+fn count(groups : Array[Group]) -> Int32 {
   groups.fold(init=0, (total, group) => total + group.rows.length())
 }
 
@@ -40,7 +40,7 @@ pub fn count(groups : Array[Group]) -> Int32 {
 /// The groups narrowed to rows whose title or group name contains `query`
 /// (case-insensitive). A blank query keeps everything; groups left without
 /// rows disappear.
-pub fn filtered(
+fn filtered(
   locale : @i18n.Locale,
   groups : Array[Group],
   query : String,

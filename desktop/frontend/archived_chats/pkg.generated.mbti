@@ -13,10 +13,6 @@ import {
 // Values
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Array[Group]], Actions) -> @rabbita.Val[@html.Html]
 
-pub fn count(Array[Group]) -> Int32
-
-pub fn filtered(@i18n.Locale, Array[Group], String) -> Array[Group]
-
 pub fn text(@i18n.Locale, Message) -> String
 
 // Errors
@@ -62,7 +58,7 @@ pub(all) enum Message {
   CodexBadge
 }
 
-pub(all) enum Msg {
+pub enum Msg {
   QueryChanged(String)
 }
 
@@ -70,11 +66,9 @@ pub(all) enum Msg {
 pub struct State {
   query : String
 }
-pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::to_repr(Self) -> @debug.Repr
-pub fn State::update(Self, Msg) -> Self
 
 // Type aliases
 

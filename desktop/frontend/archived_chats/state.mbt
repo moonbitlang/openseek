@@ -8,17 +8,17 @@ pub struct State {
 
 ///|
 /// The page as it opens: an empty filter.
-pub fn State::empty() -> State {
+fn State::empty() -> State {
   { query: "", }
 }
 
 ///|
-pub(all) enum Msg {
+pub enum Msg {
   QueryChanged(String)
 }
 
 ///|
-pub fn State::update(_ : State, msg : Msg) -> State {
+fn State::update(_ : State, msg : Msg) -> State {
   match msg {
     QueryChanged(query) => { query, }
   }
