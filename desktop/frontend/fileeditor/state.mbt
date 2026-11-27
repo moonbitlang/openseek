@@ -1254,14 +1254,14 @@ pub(all) enum Msg {
   // One Host-side `moon tree --package --json` request settled. The complete
   // owner/epoch/path/generation tuple fences checkout and close/reopen races.
   PackageGraphRequestLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     path~ : @common.Uri,
     generation~ : Int32,
     source~ : String,
   )
   PackageGraphRequestFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     path~ : @common.Uri,
     generation~ : Int32,

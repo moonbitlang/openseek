@@ -772,3 +772,29 @@ test('Cloud AI pattern repair sends no client configuration overrides', async ({
   expect(repairs[0]).toEqual({ pattern: 'broken', generation: expect.any(Number) });
   await expect(search.getByRole('textbox', { name: 'pattern', exact: true })).toHaveValue('inspect($_)');
 });
+
+test('Cloud moon.mod loads its package graph on demand and retries a diagnostic', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.set(`${sessionA}:src`, [{ name: 'moon.mod', is_dir: false }]);
+  cloud.contents.set(`${sessionA}:src/moon.mod`, { kind: 'content', content: 'name = "example/app"', sig: 'manifest', absolute: '/src/moon.mod' });
+  await cloud.install();
+  const requests = [];
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/moonide/package-graph`, route => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ json: requests.length === 1
+      ? { kind: 'error', message: 'Invalid manifest in src/moon.mod' }
+      : { kind: 'source', source: cloud.device.packageGraphSource } });
+  });
+  await cloud.goto(); await openFiles(page, cloud);
+  await file(page, 'src').click(); await file(page, 'moon.mod').click();
+  await expect(source(page)).toContainText('example/app');
+  expect(requests).toEqual([]);
+  const graph = page.locator('#package-diagram-host');
+  const dependencies = page.locator('.moon-mod-view-toolbar button').first();
+  await dependencies.click();
+  await expect(graph).toContainText('Invalid manifest in src/moon.mod');
+  await dependencies.click();
+  await expect(graph.locator('svg').first()).toBeVisible();
+  expect(requests).toEqual(Array(2).fill({ source: 'workspace', path: 'src/moon.mod' }));
+  expect(cloud.device.requests.filter(request => request.method === 'moon.package_graph')).toEqual([]);
+});

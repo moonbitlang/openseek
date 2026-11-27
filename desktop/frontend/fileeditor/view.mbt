@@ -2544,7 +2544,7 @@ fn mbti_view_toolbar(
 /// exact basename is `moon.mod`. Reviews and historical comparisons retain
 /// their source/diff surfaces even if their path names a module manifest.
 fn moon_mod_view_available(state : State, ctx : Ctx) -> Bool {
-  guard ctx.owner.host() is Some(_) &&
+  guard ctx.checkout_ready() &&
     ctx.active_history_diff is None &&
     ctx.active_file is Some(path) &&
     ctx.relative(path) is Some(_) else {
