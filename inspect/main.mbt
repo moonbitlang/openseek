@@ -10,6 +10,10 @@
 ///   (`?known_bytes=N` answers `{found, unchanged, events_bytes}` while the log
 ///   is still N bytes, so a `--watch` viewer can poll cheaply)
 /// - `GET /api/sessions/<key>/openseek_session-<id>.jsonl` → raw session file (header line + events)
+/// - `GET /api/sessions/<key>/jobs/<job>`         → one background job's record and a page of its output
+///   (`?start=<ms>` picks the generation that was running then, `?cursor=<byte>` reads
+///   forward from a page that was already sent)
+/// - `GET /api/trajectory/<id>`             → one run's waterfall: the root session and every sub-run it spawned
 /// - `GET /api/info`                          → `{server, version, identity}`, so a
 ///   second `inspect` can tell whether a busy port already serves its sessions
 ///
@@ -558,14 +562,35 @@ async fn build_reply(
     "/api/sessions" => session_list_reply(catalog)
     "/api/info" => info_reply(assets.identity)
     _ =>
-      match path.strip_prefix("/api/sessions/") {
+      match path.strip_prefix("/api/trajectory/") {
         Some(rest) =>
-          session_path_reply(
-            catalog,
-            "\{rest}",
-            known_bytes?=known_bytes_param(request.path),
-          )
-        None => text_reply(404, "Not Found", "no route for \{path}")
+          // `cursor` is the token of the previous reply; equal tokens mean
+          // nothing changed and the whole document can be skipped.
+          if query_param(request.path, "resolve_root") is Some("1") {
+            trajectory_reply(
+              catalog,
+              @percent.decode_lossy(rest),
+              cursor?=query_param(request.path, "cursor"),
+              resolve_root=true,
+            )
+          } else {
+            trajectory_reply(
+              catalog,
+              @percent.decode_lossy(rest),
+              cursor?=query_param(request.path, "cursor"),
+            )
+          }
+        None =>
+          match path.strip_prefix("/api/sessions/") {
+            Some(rest) =>
+              session_path_reply(
+                catalog,
+                "\{rest}",
+                known_bytes?=known_bytes_param(request.path),
+                request_path=request.path,
+              )
+            None => text_reply(404, "Not Found", "no route for \{path}")
+          }
       }
   }
 }
@@ -583,6 +608,7 @@ async fn session_path_reply(
   catalog : SessionCatalog,
   rest : String,
   known_bytes? : Int64,
+  request_path~ : String,
 ) -> Reply {
   let (key, file) = match rest.split_once("/") {
     None => (@percent.decode_lossy(rest), None)
@@ -600,8 +626,20 @@ async fn session_path_reply(
     None => session_envelope_reply(row.path, known_bytes?)
     Some(name) if name == session_file_name(row.id) =>
       asset_reply(row.path, "application/x-ndjson; charset=utf-8")
-    Some(other) =>
-      text_reply(404, "Not Found", "no such session file: \{other}")
+    // `<key>/jobs/<job>`: a background job's record and a page of the file it
+    // wrote, which is what the waterfall shows when a reader opens a job row.
+    Some(name) =>
+      match name.strip_prefix("jobs/") {
+        Some(job) =>
+          job_reply(
+            row.path,
+            row.id,
+            @percent.decode_lossy(job),
+            start=job_offset_param(request_path, "start"),
+            cursor=job_offset_param(request_path, "cursor"),
+          )
+        None => text_reply(404, "Not Found", "no such session file: \{name}")
+      }
   }
 }
 
@@ -669,9 +707,28 @@ async fn build_export_html(
   shell_html : String,
   bundle_js : String,
 ) -> String {
-  let sessions : Array[@viz_export.Session] = []
-  for row in rows {
-    sessions.push(
+  // Read each file once: the session envelope and the run fold that carries it
+  // both come from the same text.
+  let texts : Array[(SessionListRow, String)] = [
+    for row in rows => (row, read_text_lossy(row.path))
+  ]
+  let (runs, roots) = @viz_export.bake_runs_with_roots(
+    [
+      for entry in texts => {
+        let (row, text) = entry
+        @viz_export.RunSource(
+          id=row.id,
+          store=row.root,
+          first_prompt=row.first_prompt,
+          text~,
+          jobs=read_session_job_metadata(row.path, row.id),
+        )
+      }
+    ],
+  )
+  let sessions : Array[@viz_export.Session] = [
+    for entry in texts => {
+      let (row, events) = entry
       Session(
         key=row.key,
         id=row.id,
@@ -680,11 +737,12 @@ async fn build_export_html(
         is_marker=row.is_marker,
         last_active=row.last_active.map(seconds => seconds.to_double()),
         first_prompt=row.first_prompt,
-        events=read_text_lossy(row.path),
-      ),
-    )
-  }
-  @viz_export.StandaloneExport(shell_html, bundle_js).render(sessions)
+        events~,
+        run_root?=roots.get("\{row.root}\u0000\{row.id}"),
+      )
+    }
+  ]
+  @viz_export.StandaloneExport(shell_html, bundle_js).render(sessions, runs~)
 }
 
 ///|
@@ -1067,6 +1125,25 @@ async fn SessionCatalog::rows(self : SessionCatalog) -> Array[SessionListRow] {
   }
   rows.sort_by(compare_session_list_rows)
   rows
+}
+
+///|
+/// One session file the catalog can see: its id, the store it belongs to, and
+/// its path. Built from the scan alone — unlike `rows`, nothing here opens a
+/// file, so a poller that already parsed a run pays no per-file read.
+async fn SessionCatalog::files(
+  self : SessionCatalog,
+) -> Array[(String, String, String)] {
+  let out : Array[(String, String, String)] = []
+  for root in self.roots {
+    for path in session_files_under(root.scan_path, root.recursive) {
+      guard session_id_from_file_name(path_tail(path)) is Some(id) else {
+        continue
+      }
+      out.push((id, root.path, path))
+    }
+  }
+  out
 }
 
 ///|

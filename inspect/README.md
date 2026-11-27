@@ -146,6 +146,78 @@ list refreshes every few seconds so new sessions appear. The setting is handed
 to the page as `window.__OPENSEEK_WATCH_MS__` in the served shell, so a
 standalone export never polls.
 
+## Trajectory waterfall
+
+`GET /api/trajectory/<root session id>` folds one run — the root session plus
+every `<root>-sr-N` sub-run it spawned — into a single JSON document: every
+session, turn, model call, tool step, `.mbtx` script and its nested PTC calls,
+background job and `job_wait` block on one millisecond axis, each with a start,
+an end (absent while the work is still open) and a status.
+
+The folding is derived from the durable `.jsonl` events alone, so it works on
+old logs and needs no new log format. Two things are recovered rather than
+stored: a child session's parent is its id (`<parent>-sr-N`), and the step that
+spawned it is the parent's tool call that was open when the child's first event
+landed. When no call covers that instant the child's turn hangs under the run
+span itself, and the metadata says which rule placed it.
+
+A `.mbtx` program's nested PTC calls arrive in the tool result's trace. When that
+trace carries the unix milliseconds the call opened and ended — the PTC server
+stamps both — the call is a real interval under the script; a call the program
+never closed runs to the program's own end and reads as interrupted. A trace
+written before those stamps existed keeps its zero-width marker at the script's
+end, flagged `timing: unknown`, rather than a bar invented from nothing.
+
+In the viewer, the `Trajectory` link in a session header opens the waterfall at
+`#t=<root session id>`. The axis folds idle stretches into fixed slots by
+default, so a run resumed the next morning still reads as one screen; a slot is
+hatched and labelled with how long that stretch really was, and `Idle at scale`
+switches the same axis to true wall-clock spacing. `--watch` keeps it live: a
+run that has not finished is re-folded every poll and its newest span is drawn
+to the reader's clock. A frozen `--export` archive bakes one document per run it
+holds, so its runs offer the same link; a run it never saw has none, because
+there is no server there to fold one.
+
+`?cursor=<token>` makes that poll cheap. The reply carries a `cursor` that
+stamps every participating file (mtime, seconds and nanoseconds, folded to one
+short token); echoing it back asks "has anything moved?". When nothing has, the
+answer is `{"unchanged": true, "cursor": "..."}` and the server reads no file
+at all. Otherwise it re-reads only the files whose stamp moved and reuses the
+parsed events of the rest, which is what keeps a long run's idle children off
+the hot path. Lane labels come from those same events, so this route never pays
+the sidebar's per-file prompt read.
+
+## A job's own output
+
+A background job's text is not in the session log — the log names the job and
+records when it ran, and the bytes it wrote stay in their own file under
+`<store>/sessions/<id>/jobs/<generation>/`. The waterfall's job rows ask for
+them here:
+
+`GET /api/sessions/<key>/jobs/<job>` answers
+`{found, job, output}`, where `job` is the durable record narrowed to what a
+reader draws — state (and exit code), command, size, whether the engine stopped
+keeping the whole log — and `output` is one page of the file:
+`{text, start_offset, next_offset, size, head_omitted, stale}`.
+
+- Without a cursor the page is the **tail**, up to 64 KiB, so a 40 MB log still
+  answers in one reply; `head_omitted` says earlier output exists and was not
+  sent.
+- `?cursor=<byte>` continues from where a page ended. That is how an open log
+  follows a running job: the viewer re-asks on the same tick as the trace and
+  appends what the file gained.
+- `?start=<ms>` picks among generations. A legacy counter id (`bg-1`) repeats
+  across a session's engine runs; the record whose `started_at_ms` is closest to
+  the instant the waterfall drew the span wins. Without it the newest record
+  answers.
+- Pages are cut on UTF-8 boundaries, so a window that starts mid-character still
+  decodes. A cursor the file outgrew (a rewritten or truncated log) answers
+  `stale: true` with no text, and the viewer reads the tail again.
+- No record, no output file, or a file that cannot be read answers with an
+  `error` string; a directory of copied logs has no jobs directory beside it and
+  says so. This route never writes, so pointing `inspect` at a live store stays
+  safe.
+
 ## Standalone export
 
 `--export <path>` writes a single self-contained HTML file with every discovered
@@ -157,13 +229,16 @@ moon run inspect -- \
 ```
 
 The exported file inlines the compiled frontend bundle and bakes each API
-response the server would return — the `/api/sessions` listing plus one envelope
-per session — into a `window.__OPENSEEK_DATA__` map. The frontend answers its two
-fetches from that map before touching the network, so the file opens directly
-from disk (`file://`), with no server and no network. Because the bundle that
-understands these logs ships alongside them, an export keeps rendering unchanged
-as the live `.jsonl` format and parser evolve — it is a frozen archive, not a
-live view.
+response the server would return — the `/api/sessions` listing, one envelope per
+session, and one `/api/trajectory/<root>` document per run the archive holds —
+into a `window.__OPENSEEK_DATA__` map. The frontend answers its fetches from that
+map before touching the network, so the file opens directly from disk
+(`file://`), with no server and no network: the waterfall of an exported run is
+as available as its session log. A run's document is keyed by its root and folds
+the `<root>-sr-N` children beside it, so the archive's lanes match the live
+ones. Because the bundle that understands these logs ships alongside them, an
+export keeps rendering unchanged as the live `.jsonl` format and parser evolve —
+it is a frozen archive, not a live view.
 
 If the server cannot find the generated JavaScript bundle, pass it explicitly:
 
