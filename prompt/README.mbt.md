@@ -23,9 +23,10 @@ rule when its Markdown input changes.
   prompt or read at session startup.
 - `moonbit_syntax_and_api.mbt.md`: MoonBit syntax and library API teaching,
   manifest examples, and complete programs illustrating the language and APIs.
-  Verified examples live under `share/examples/`: a whole-line markdown link
-  to a `.mbtx` file is expanded into a fenced block by `md_to_mbt_string`, so
-  the prompt shows code that CI type-checks and runs.
+  Prompt-only examples live under [`prompt/examples/`](examples/). The
+  `md_to_mbt_string` generator inlines whole-line links to `.mbtx` files as
+  code blocks, so the examples do not need to ship in `share/`. CI type-checks
+  these scripts and runs the deterministic examples.
 
 Each prompt source has its own dev-build rule and generated MoonBit string
 function. The built-in prompt includes the core first and, by default,

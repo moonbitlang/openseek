@@ -1,10 +1,8 @@
 ///|
-/// The PTC examples under share/examples are shown to the model inline by the
-/// system prompt; these tests run them through the real sandbox and host so
-/// what the model is shown is what the host accepts. `dispatch` comes from
-/// mbtx_test.mbt.
-async fn example_source(name : String) -> String {
-  @fs.read_text(@fs.realpath("share/examples/\{name}"))
+/// These tests run the PTC example scripts through the real sandbox and host.
+/// `dispatch` comes from mbtx_test.mbt.
+async fn example_source(path : String) -> String {
+  @fs.read_text(@fs.realpath(path))
 }
 
 ///|
@@ -46,7 +44,7 @@ async test "ptc_guarded_edit example applies a clean fix and reports a reverted 
         program_service=service,
         foreground_timeout_ms=120000,
       )
-      let source = example_source("ptc_guarded_edit.mbtx")
+      let source = example_source("prompt/examples/ptc_guarded_edit.mbtx")
       let path = "\{ws}/lib/lib.mbt"
       let applied = @async.with_timeout(180000, () => {
         dispatch(tool, {
@@ -115,7 +113,7 @@ async test "ptc_search_filter example keeps the selected sources with their URLs
         dispatch(tool, {
           "description": "search example",
           "ptc": true,
-          "source": example_source("ptc_search_filter.mbtx"),
+          "source": example_source("share/examples/ptc_search_filter.mbtx"),
           "cwd": ws,
           "args": ["python", "python.org"],
         })

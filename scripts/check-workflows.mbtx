@@ -15,7 +15,10 @@ async fn main {
   let temporary = @fs.tmpdir(prefix="bundled-check-")
   defer (@fs.remove(temporary, recursive=true) catch { _ => () })
   let mut checked = 0
-  for directory in ["share/workflow", "share/examples", "share/artifact"] {
+  for
+    directory in [
+      "share/workflow", "share/examples", "share/artifact", "prompt/examples",
+    ] {
     let scripts = @fs.readdir(directory, sort=true).filter(name => {
       name.has_suffix(".mbtx")
     })
@@ -26,18 +29,18 @@ async fn main {
       let relative = "\{directory}/\{script}"
       println("Checking \{relative}")
       let code = @process.run(
-        "moon",
-        [
-          "check",
-          "--target",
-          "wasm",
-          "--deny-warn",
-          "--target-dir",
-          temporary + "/script-\{checked}",
-          relative,
-        ],
-        stdin=Empty,
-      ).exit_code
+          "moon",
+          [
+            "check",
+            "--target",
+            "wasm",
+            "--deny-warn",
+            "--target-dir",
+            temporary + "/script-\{checked}",
+            relative,
+          ],
+          stdin=Empty,
+        ).exit_code
       if code != 0 {
         @env.exit(code)
       }
@@ -58,10 +61,10 @@ async fn main {
   }
   println("Checking share/artifact/rabbita")
   let code = @process.run(
-    "moon",
-    ["-C", component, "check", "--target", "js", "--deny-warn"],
-    stdin=Empty,
-  ).exit_code
+      "moon",
+      ["-C", component, "check", "--target", "js", "--deny-warn"],
+      stdin=Empty,
+    ).exit_code
   if code != 0 {
     @env.exit(code)
   }

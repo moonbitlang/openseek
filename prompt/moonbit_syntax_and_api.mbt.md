@@ -1,6 +1,6 @@
 # MoonBit Syntax And Library APIs
 
-Each language section states its rules and links a verified example: a script under `share/examples/` that CI type-checks under deny-warn and runs, shown inline.
+The examples below are inline scripts that CI checks with `--deny-warn`.
 
 ## Writing mbtx programs
 
@@ -26,7 +26,7 @@ A minimal `moon check` script:
 
 Below is a complete example of CLI parsing using argparse:
 
-[share/examples/cli_count_input.mbtx](../share/examples/cli_count_input.mbtx)
+[examples/cli_count_input.mbtx](examples/cli_count_input.mbtx)
 
 For a nonzero exit, import `"moonbitlang/core/env"` and call `@env.exit(1)`.
 
@@ -55,25 +55,25 @@ Shell utilities can be expressed in MoonBit, including on Windows:
 
 An example of using rg in `mbtx`:
 
-[share/examples/command_output.mbtx](../share/examples/command_output.mbtx)
+[examples/command_output.mbtx](examples/command_output.mbtx)
 
 Use `@builtin/ide.mbtx` with `args=["doc", "@moonbitlang/core/async/shell"]` for a package API overview, or `args=["doc", "@moonbitlang/core/async/shell.<Type>"]` for a specific type's definition and documentation, as in `args=["doc", "@moonbitlang/core/async/shell.Stdin"]`.
 
 For compiler feedback, stream the line-delimited JSON from one `moon check` rather than collecting it and parsing it afterward:
 
-[share/examples/check_diagnostics.mbtx](../share/examples/check_diagnostics.mbtx)
+[examples/check_diagnostics.mbtx](examples/check_diagnostics.mbtx)
 
 ## Guarded edits through PTC
 
 A script may run `moon check --output-json` itself to find its targets:
 
-[share/examples/ptc_guarded_edit.mbtx](../share/examples/ptc_guarded_edit.mbtx)
+[examples/ptc_guarded_edit.mbtx](examples/ptc_guarded_edit.mbtx)
 
 ## Delegating from a script
 
 The following example starts child agents through the host-tool SDK:
 
-[share/examples/subagent_scouts.mbtx](../share/examples/subagent_scouts.mbtx)
+[examples/subagent_scouts.mbtx](examples/subagent_scouts.mbtx)
 
 ## CI monitoring program
 
@@ -180,13 +180,13 @@ pkgtype(kind: "executable")
 
 - Syntax the compiler rejects, each shown working in the verified example below: parameters and `self` are never `mut`, a mutable local is `let mut` (there is no `var`), and only a struct field you assign is declared `mut field : T`; keywords such as `test`, `type`, `method`, and `ref` cannot name a binding; negation is the `!` prefix, not `.not()`; a bare `{}` is ambiguous and an error under deny-warn, so an empty map is `Map([])` and the no-op expression is `()`; match arms are separated by newlines, never `|`; lambdas are arrows (`x => ...`, `(a, b) => { ... }`), and an async lambda is `async fn(x) { ... }`.
 
-[share/examples/syntax_basics.mbtx](../share/examples/syntax_basics.mbtx)
+[examples/syntax_basics.mbtx](examples/syntax_basics.mbtx)
 
 ## Checked Error Handling
 
 Errors are a checked effect on the function, not a value it returns: a parser returns `Json` on success and its failures travel in `raise`. Call raising functions directly from functions marked `raise` and handle errors only at a real boundary, such as a CLI path that needs its own stderr text. Use `fail("message")` for a one-off internal failure and a small `suberror` for user-facing errors; never encode failure as `null`, `()`, or another success sentinel. `async fn` raises by default; mark an async helper `noraise` when it must not. In tests, call raising functions directly and let a raise fail the test. The verified example, compiled and run by CI:
 
-[share/examples/checked_errors.mbtx](../share/examples/checked_errors.mbtx)
+[examples/checked_errors.mbtx](examples/checked_errors.mbtx)
 
 ## Strings, Maps, JSON, And Tests
 
@@ -197,7 +197,7 @@ Errors are a checked effect on the function, not a value it returns: a parser re
 
 The verified example, compiled and run by CI:
 
-[share/examples/strings_and_views.mbtx](../share/examples/strings_and_views.mbtx)
+[examples/strings_and_views.mbtx](examples/strings_and_views.mbtx)
 
 - Build JSON values with the `Json(value)` constructor — it accepts any value whose type implements `ToJson`. Use `null` for a JSON null and `Json::empty_object()` for an empty object. Do not create JSON with `Json::Object(...)`, `Json::String(...)`, or `Json::True`; use variants mainly for pattern matching.
 - For integer JSON numbers, use `Json::number(n.to_double(), repr=text.to_owned())` when you need output to preserve integer spelling.

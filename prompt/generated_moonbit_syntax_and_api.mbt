@@ -5,7 +5,7 @@ fn moonbit_syntax_and_api() -> String {
   (
     #|# MoonBit Syntax And Library APIs
     #|
-    #|Each language section states its rules and links a verified example: a script under `share/examples/` that CI type-checks under deny-warn and runs, shown inline.
+    #|The examples below are inline scripts that CI checks with `--deny-warn`.
     #|
     #|## Writing mbtx programs
     #|
