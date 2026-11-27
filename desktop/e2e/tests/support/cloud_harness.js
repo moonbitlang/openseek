@@ -279,6 +279,17 @@ export class CloudHarness {
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     this.requests.push({ side: 'cloud', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
+    const github = path.match(/^\/v1\/sessions\/([^/]+)\/github\/([^/]+)$/);
+    if (github && request.method() === 'POST') {
+      return json(await this.device.dispatchRpc({ method: github[2], params: request.postDataJSON() }));
+    }
+    const artifacts = path.match(/^\/v1\/sessions\/([^/]+)\/artifacts$/);
+    if (artifacts) {
+      const remove = request.method() === 'DELETE';
+      return json(this.device.replyFor({ method: remove ? 'session.artifacts_remove' : 'session.artifacts_list',
+        params: { session: artifacts[1], artifact: remove ? request.postDataJSON() : undefined } }));
+    }
+    if (path === '/v1/me/connectors/list') return json({ connectors: [], authorization: null, error: null });
     const moonide = path.match(/^\/v1\/sessions\/[^/]+\/moonide\/(hover|definition|references|diagnostics|codelens)$/);
     if (moonide && request.method() === 'POST') {
       const empty = {

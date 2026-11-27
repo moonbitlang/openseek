@@ -263,3 +263,38 @@ test('Cloud overview distinguishes an unborn branch, a non-repository and a fail
   await expect(overview).toContainText('No changed files.');
   await expect(overview).not.toContainText('HTTP 403');
 });
+
+test('Cloud GitHub panel checks out the selected PR in the owning workspace', async ({ page }) => {
+  const cloud = new CloudReviewHarness(page);
+  const item = { number: 42, title: 'Cloud change', url: 'https://github.com/acme/repo/pull/42', draft: false };
+  cloud.device.mockRpc({
+    'github.list': ({ params }) => ({
+      repository: 'acme/repo', repository_url: 'https://github.com/acme/repo',
+      items: params.kind === 'issues' ? [] : [item], has_more: false,
+    }),
+    'github.pull_request': () => ({
+      item, state: 'OPEN', mergeable: 'MERGEABLE', base: 'main', head: 'feature',
+      body_html: '<p>Workspace review</p>', additions: 2, deletions: 1, changed_files: 1,
+      checks: [], comments: [], created_at: '2026-01-02T00:00:00Z', reviewers: [], assignees: [], labels: [],
+    }),
+    'github.checkout': () => ({ status: 'uncommitted_changes' }),
+  });
+  await cloud.install();
+  await cloud.goto();
+  await cloud.openReview();
+  await page.getByTitle('New tab', { exact: true }).click();
+  await page.getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  const panel = page.locator('.github-panel');
+  await panel.locator('.github-item-open').click();
+  await expect(panel.locator('.github-description')).toContainText('Workspace review');
+  await panel.getByRole('button', { name: 'Check out PR #42 in Cloud' }).click();
+  await expect(page.getByRole('dialog')).toContainText(/uncommitted changes/i);
+  const requests = cloud.requests.filter(r => r.path.includes('/github/github.'));
+  expect(requests.some(r => r.path.endsWith('/github.checkout'))).toBe(true);
+  for (const request of requests) {
+    expect(request.path).toContain('/v1/sessions/' + sessionA + '/github/');
+    expect(request.headers.authorization).toBe('Bearer ts_fixture-123');
+    expect(JSON.parse(request.body)).not.toHaveProperty('cwd');
+  }
+  expect(cloud.hostRequests.filter(r => r.method.startsWith('github.'))).toEqual([]);
+});

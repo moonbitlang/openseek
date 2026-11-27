@@ -185,6 +185,8 @@ fn checkout_button(
     }
   } else if updating {
     ui(locale, UpdateCheckout(item.number))
+  } else if state.scope is Some({ host: Cloud(..), .. }) {
+    ui(locale, CheckoutInCloud(item.number))
   } else {
     ui(locale, CheckoutLocally(item.number))
   }

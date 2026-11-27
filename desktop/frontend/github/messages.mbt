@@ -22,6 +22,7 @@ priv enum UiMessage {
   UpdatingCheckout(Int32)
   CheckingOut(Int32)
   UpdateCheckout(Int32)
+  CheckoutInCloud(Int32)
   CheckoutLocally(Int32)
   PullRequestsLabel
   CreatedByMeLabel
@@ -320,6 +321,14 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "PR #\{number} のチェックアウトを更新"
     (Spanish, UpdateCheckout(number)) =>
       "Actualizar la copia local de la PR #\{number}"
+    (English, CheckoutInCloud(number)) => "Check out PR #\{number} in Cloud"
+    (SimplifiedChinese, CheckoutInCloud(number)) =>
+      "在 Cloud 工作区检出 PR #\{number}"
+    (TraditionalChinese, CheckoutInCloud(number)) =>
+      "在 Cloud 工作區簽出 PR #\{number}"
+    (Japanese, CheckoutInCloud(number)) =>
+      "Cloud で PR #\{number} をチェックアウト"
+    (Spanish, CheckoutInCloud(number)) => "Obtener la PR #\{number} en Cloud"
     (English, CheckoutLocally(number)) => "Check out PR #\{number} locally"
     (SimplifiedChinese, CheckoutLocally(number)) =>
       "在本地检出 PR #\{number}"
