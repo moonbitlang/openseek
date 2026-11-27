@@ -44,7 +44,7 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
     error => raise AuthError("could not open the sign-in listener: \{error}")
   }
   defer server.close()
-  let port = server.addr.port.to_int()
+  let port = server.local_addr().port.to_int()
 
   // Start explicit account selection, independently of the browser cookie.
   let url = start_url(server_url~, oauth_state~, challenge~, port~)
@@ -156,7 +156,7 @@ async fn wait_for_code(
   oauth_state~ : String,
 ) -> (String, @http.ServerConnection) {
   for ;; {
-    let (conn, _) = server.accept()
+    let conn = server.accept()
     let outcome = try {
       errdefer conn.close()
       serve_callback(conn, oauth_state~)
@@ -206,7 +206,7 @@ async fn respond_html(
     "Content-Type": "text/html; charset=utf-8",
     "Connection": "close",
   })
-  conn.write_string(body)
+  conn.text.write(body)
   conn.end_response()
 }
 

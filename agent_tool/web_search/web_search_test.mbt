@@ -70,14 +70,14 @@ async test "web_search executes end-to-end against a mock messages endpoint" {
           conn.send_response(200, "OK", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write_string(sample_response_body())
+          conn.text.write(sample_response_body())
         },
         max_connections=4,
       )
     }
     let tool = @web_search.definition(
       api_key="test-key",
-      base_url="http://127.0.0.1:\{server.addr.port}/anthropic/v1",
+      base_url="http://127.0.0.1:\{server.local_addr().port}/anthropic/v1",
     )
     assert_eq(tool.name, "web_search")
     guard tool.execute is Async(execute) else {
@@ -112,7 +112,7 @@ async test "web_search surfaces a provider error as a recoverable tool error" {
           conn.send_response(401, "Unauthorized", extra_headers={
             "Content-Type": "application/json",
           })
-          conn.write_string(
+          conn.text.write(
             "{\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}",
           )
         },
@@ -121,7 +121,7 @@ async test "web_search surfaces a provider error as a recoverable tool error" {
     }
     let tool = @web_search.definition(
       api_key="bad-key",
-      base_url="http://127.0.0.1:\{server.addr.port}/anthropic/v1",
+      base_url="http://127.0.0.1:\{server.local_addr().port}/anthropic/v1",
     )
     guard tool.execute is Async(execute) else {
       fail("expected async executor")

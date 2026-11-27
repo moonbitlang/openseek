@@ -19,7 +19,7 @@ import {
   "moonbitlang/openseek_tools@0.4.2" @tools,
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
@@ -191,8 +191,20 @@ async fn main {
 
   // 1. The diagnostics, from the script's own check.
   let lines : Array[String] = []
-  let code = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => {
-    lines.push(line)
+  let mut code = 0
+  @async.with_task_group(group => {
+    let proc = @process.spawn(
+      group,
+      "moon",
+      ["check", "--output-json"],
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Inherit,
+    )
+    while proc.stdout.text.read_line() is Some(line) {
+      lines.push(line)
+    }
+    code = proc.wait()
   })
   let sites : Array[Site] = []
   let skipped : Array[Skipped] = []
@@ -381,12 +393,24 @@ async fn main {
   if !dry_run && fixed > 0 {
     let mut errors_after = 0
     let mut warnings_after = 0
-    let code_after = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => {
-      if line.contains("\"level\":\"error\"") {
-        errors_after += 1
-      } else if line.contains("\"level\":\"warning\"") {
-        warnings_after += 1
+    let mut code_after = 0
+    @async.with_task_group(group => {
+      let proc = @process.spawn(
+        group,
+        "moon",
+        ["check", "--output-json"],
+        stdin=Empty,
+        stdout=Collect,
+        stderr=Inherit,
+      )
+      while proc.stdout.text.read_line() is Some(line) {
+        if line.contains("\"level\":\"error\"") {
+          errors_after += 1
+        } else if line.contains("\"level\":\"warning\"") {
+          warnings_after += 1
+        }
       }
+      code_after = proc.wait()
     })
     if code_after != 0 && errors_after == 0 {
       // The same rule as the first check: a failed run with no diagnostic is

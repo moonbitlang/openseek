@@ -19,11 +19,15 @@ async fn AuthSession::revoke_after_cancelled_exchange(
     revoke.wait()
   }) catch {
     error =>
-      @xlog.warn(category="auth") <?
-        {
-          "message": "cancelled sign-in session revoke failed",
-          "error": "\{error}",
-        }
+      if @xlog.warn(category="auth") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field(
+          "message", "cancelled sign-in session revoke failed",
+        )
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
   }
 }
 
@@ -58,8 +62,13 @@ async fn revoke_session(session : AuthSession) -> Unit {
   if session.device is Some(device) {
     revoke_device(session.server_url, device) catch {
       error =>
-        @xlog.warn(category="auth") <?
-          { "message": "device revoke failed", "error": "\{error}" }
+        if @xlog.warn(category="auth") is Some(event) {
+          event
+          ..write_object_begin()
+          ..write_object_field("message", "device revoke failed")
+          ..write_object_field("error", "\{error}")
+          .write_object_end()
+        }
     }
   }
   guard @async.with_timeout_opt(RevokeTimeoutMs, () => {

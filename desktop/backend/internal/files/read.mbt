@@ -29,7 +29,7 @@ pub async fn materialize_semantic_selection(
   let files : Set[String] = Set([])
   for match_ in payload.matches {
     source_units += match_.matched_source.length() + match_.file.length()
-    files.add(match_.file)
+    files.insert(match_.file)
   }
   guard source_units <= MaxSemanticSelectionArtifactUnits else {
     raise InvalidRequest("semantic selection is too large to materialize")
@@ -508,8 +508,14 @@ async fn file_signature(absolute : String) -> @protocol.FileSignature {
   } catch {
     @os_error.OsError(NotFound | NotDirectory, ..) => return Missing
     error => {
-      @xlog.warn(category="filesystem") <?
-        { "event": "stat_failed", "path": absolute, "error": "\{error}" }
+      if @xlog.warn(category="filesystem") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "stat_failed")
+        ..write_object_field("path", absolute)
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       return Failed("\{error}")
     }
   }
@@ -522,7 +528,7 @@ fn file_stamp(
   ctime : @fs.Timestamp,
   size : Int64,
 ) -> String {
-  "\{mtime.sec()}:\{mtime.nsec()}:\{ctime.sec()}:\{ctime.nsec()}:\{size}"
+  "\{mtime.sec()}:\{mtime.subsec_nanos()}:\{ctime.sec()}:\{ctime.subsec_nanos()}:\{size}"
 }
 
 ///|

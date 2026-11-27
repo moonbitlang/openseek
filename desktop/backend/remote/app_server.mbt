@@ -30,7 +30,7 @@ async fn run_app_server(
   @async.with_task_group(group => {
     state.start_services(group)
     let announcement = AppServerAnnouncement::{
-      port: server.addr.port.to_int(),
+      port: server.local_addr().port.to_int(),
       instance,
     }
     announce.write(@utf8.encode(@json.to_json(announcement).stringify() + "\n"))
@@ -45,7 +45,7 @@ async fn run_app_server(
       }
     })
     for ;; {
-      let (conn, _) = server.accept()
+      let conn = server.accept()
       group.spawn_bg(allow_failure=true, () => {
         defer conn.close()
         let request = @async.with_timeout(10_000, () => conn.read_request())
@@ -71,7 +71,7 @@ async fn run_app_server(
             guard body.length() + read <= 65536 else {
               raise @host.HostError("Initialize too large")
             }
-            body.write_bytes(Bytes::from_array(chunk[:read]))
+            body.write_bytesview(Bytes::from_array(chunk[:read]))
           }
           let request : AppServerInitializeRequest = @json.from_json(
             @json.parse(@utf8.decode(body.to_bytes())),

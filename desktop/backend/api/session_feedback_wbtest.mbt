@@ -46,7 +46,7 @@ async test "feedback uploads metadata and both complete files from one conversat
   @fs.write_text(viz.join("viz_app.js").to_string(), "/* bundled visualizer */")
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
-  let origin = "http://127.0.0.1:\{server.addr.port}"
+  let origin = "http://127.0.0.1:\{server.local_addr().port}"
   @fs.write_text(root.join("auth.json").to_string(), share_account_fixture())
   let state = ApiState(
     engine="unused",
@@ -78,7 +78,7 @@ async test "feedback uploads metadata and both complete files from one conversat
   )
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
-      let (connection, _) = server.accept()
+      let connection = server.accept()
       defer connection.close()
       let request = connection.read_request()
       assert_true(request.meth is Post)
@@ -138,7 +138,7 @@ async test "feedback uploads metadata and both complete files from one conversat
         }
       }
       connection.send_response(201, "Created")
-      connection.write_string("{\"id\":\"fb_test\"}")
+      connection.text.write("{\"id\":\"fb_test\"}")
       connection.end_response()
     })
     let reply = state.publish_feedback(payload, account, server_url=origin)
@@ -174,12 +174,12 @@ async test "feedback uploads metadata and both complete files from one conversat
       ] : Array[(Int32, String, @protocol.SessionFeedbackReply)]) {
     @async.with_task_group(group => {
       let receiver = group.spawn(() => {
-        let (connection, _) = server.accept()
+        let connection = server.accept()
         defer connection.close()
         ignore(connection.read_request())
         connection.skip_request_body()
         connection.send_response(code, "Fixture")
-        connection.write_string(body)
+        connection.text.write(body)
         connection.end_response()
       })
       assert_eq(

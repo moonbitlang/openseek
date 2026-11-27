@@ -1,7 +1,7 @@
 ---
 import {
   "moonbitlang/core/async",
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
 }
@@ -51,19 +51,26 @@ async fn main {
   let mut shown = 0
   let mut total = 0
   // `--` keeps moonx from reading rg's leading flags as its own options.
-  let rg = @shell.Cmd(
-    "moonx",
-    [RgPackage, "--", ..defaults, ..args],
-    stderr=Inherit,
-  )
-  let exit_code = rg.each_line(line => {
-    total += 1
-    let bytes = @utf8.encode(line).length() + 1
-    if shown == total - 1 && bytes <= remaining {
-      println(line)
-      shown += 1
-      remaining -= bytes
+  let mut exit_code = 0
+  @async.with_task_group(group => {
+    let proc = @process.spawn(
+      group,
+      "moonx",
+      [RgPackage, "--", ..defaults, ..args],
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Inherit,
+    )
+    while proc.stdout.text.read_line() is Some(line) {
+      total += 1
+      let bytes = @utf8.encode(line).length() + 1
+      if shown == total - 1 && bytes <= remaining {
+        println(line)
+        shown += 1
+        remaining -= bytes
+      }
     }
+    exit_code = proc.wait()
   }) catch {
     error => {
       println(

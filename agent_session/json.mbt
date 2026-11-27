@@ -234,7 +234,7 @@ pub impl FromJson for Session with fn from_json(
     }
     { "events": _, .. } =>
       json_decode_error(path.add_key("events"), "expected events array")
-    _ => @vector.new()
+    _ => @vector.Vector::empty()
   }
   Session(
     id,

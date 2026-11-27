@@ -1078,7 +1078,7 @@ async fn run_text_search(
           let length = chunk
             .length()
             .min(MaxTextSearchStderrBytes - retained_bytes)
-          retained.write_bytes(chunk[:length])
+          retained.write_bytesview(chunk[:length])
           retained_bytes += length
         }
       }

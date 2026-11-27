@@ -5,7 +5,7 @@ async fn fake_control(
   server : @http.Server,
   frames : @async.Queue[String],
 ) -> Unit {
-  let (conn, _) = server.accept()
+  let conn = server.accept()
   defer conn.close()
   let request = conn.read_request()
   let ws = @websocket.from_http_server(request, conn)
@@ -34,7 +34,7 @@ async test "a registered connector tells the relay about a settled run" {
     group.spawn_bg(no_wait=true, () => fake_control(server, frames))
     group.spawn_bg(no_wait=true, () => {
       actor.connect_once({
-        relay_url: "ws://127.0.0.1:\{server.addr.port}/v1/tunnel",
+        relay_url: "ws://127.0.0.1:\{server.local_addr().port}/v1/tunnel",
         device_token: "odt_test",
         device_name: "Test Mac",
       })

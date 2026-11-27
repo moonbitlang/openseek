@@ -49,7 +49,7 @@ async test "resumed inline images are sent directly in user and tool content" {
         assert_eq(request.path, "/chat/completions")
         chats.push(@json.parse(data))
         connection.send_response(200, "OK")
-        connection.write_string(
+        connection.text.write(
           (
             {
               "choices": [
@@ -70,7 +70,7 @@ async test "resumed inline images are sent directly in user and tool content" {
     let client = @client.Client(
       api_key="test",
       model=Deepseek(V4Flash),
-      api_url="http://127.0.0.1:\{server.addr.port}/chat/completions",
+      api_url="http://127.0.0.1:\{server.local_addr().port}/chat/completions",
     )
     let url = image.data_url()
     assert_eq(messages[1].content.text(), "beforeafter")

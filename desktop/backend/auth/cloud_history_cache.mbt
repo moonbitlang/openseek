@@ -59,7 +59,7 @@ pub async fn AuthStore::cloud_history_cache(
             let session = prefix.to_owned()
             if valid_cache_id(session) &&
               !self.cloud_history_deleted.contains((user, session)) {
-              sessions.add(session)
+              sessions.insert(session)
             }
           }
         }
@@ -100,7 +100,7 @@ pub async fn AuthStore::cloud_history_cache(
     }
     Remove(session~) => {
       if valid_cache_id(session) {
-        self.cloud_history_deleted.add((user, session))
+        self.cloud_history_deleted.insert((user, session))
         for view in [@protocol.CloudHistoryView::Detail, Minimal] {
           @fsx.remove_if_exists(pages(view).join(session + ".json"))
         }

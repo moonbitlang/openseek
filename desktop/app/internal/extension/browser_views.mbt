@@ -155,7 +155,7 @@ pub fn BrowserViews::view_event(
   event : @proton.WebContentsEvent,
 ) -> Unit {
   match event {
-    LoadingChanged(is_loading=true) => self.loading.add(id)
+    LoadingChanged(is_loading=true) => self.loading.insert(id)
     LoadingChanged(is_loading=false) | Closed => self.loading.remove(id)
     _ => ()
   }
@@ -615,11 +615,13 @@ fn external_link_policy() -> @proton.WebContentsPolicy {
 async fn open_page_link(url : String) -> Unit noraise {
   ignore(open_external({ url, })) catch {
     error =>
-      @xlog.error() <?
-        {
-          "event": "external_link_open_failed",
-          "url": url,
-          "error": @debug.render(Repr(error)),
-        }
+      if @xlog.error() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "external_link_open_failed")
+        ..write_object_field("url", url)
+        ..write_object_field("error", @debug.render(Repr(error)))
+        .write_object_end()
+      }
   }
 }

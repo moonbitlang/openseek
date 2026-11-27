@@ -141,15 +141,13 @@ fn symbol_request(
   query : String,
   generation : Int32,
 ) -> @cmd.Cmd {
-  guard input.owner is @interop.Host(owner) &&
-    input.root is Some(root) &&
-    @resource.belongs_to(root, owner.channel) else {
-    return @cmd.none
-  }
+  let owner = input.owner
+  guard input.root is Some(root) else { return @cmd.none }
   @symbols.search(
     owner,
     query,
     root~,
+    cloud?=input.cloud_access,
     loaded=items => emit(SymbolsLoaded(owner~, query~, generation~, items~)),
     failed=emit(SymbolsRequestFailed(owner~, query~, generation~)),
   )

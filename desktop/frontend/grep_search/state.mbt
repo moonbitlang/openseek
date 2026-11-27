@@ -611,7 +611,7 @@ fn Page::toggle_semantic_selection(self : Page, keys : Array[String]) -> Page {
     if all_selected {
       selected.remove(key)
     } else {
-      selected.add(key)
+      selected.insert(key)
     }
   }
   {

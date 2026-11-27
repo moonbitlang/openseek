@@ -1,32 +1,38 @@
 ---
 import {
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
 }
 ---
 
 ///|
 fn main {
-  // `Cmd` takes an argv array, not a shell line: nothing expands `*.mbt`
-  // before rg sees it, so rg applies it as its own glob. A glob with no `/`
-  // matches the basename at any depth. rg ships no `moonbit` file type, so
-  // `-g` is the filter — and `*.mbt` excludes `.mbti` and `.mbt.md`; widen it
-  // to `*.mbt*` when those should count. rg here is cli/rg, ripgrep ported to
-  // MoonBit and run through moonx; `--` keeps moonx off rg's flags.
-  let out = @shell.Cmd("moonx", [
-    "cli/rg@0.1.1", "--",
-    // A regex needle is one ordinary string element, so double the
-    // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
-     "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
-  ]).output()
-  // Redirect input with `Cmd(prog, args, stdin=Text(s))` or `stdin=FromFile(p)`.
-  // Redirect output with `Cmd(.., stdout=ToFile(...))` to a file under
+  // `@process.run` takes an argv array, not a shell line: nothing expands
+  // `*.mbt` before rg sees it, so rg applies it as its own glob. A glob with
+  // no `/` matches the basename at any depth. rg ships no `moonbit` file type,
+  // so `-g` is the filter — and `*.mbt` excludes `.mbti` and `.mbt.md`; widen
+  // it to `*.mbt*` when those should count. rg here is cli/rg, ripgrep ported
+  // to MoonBit and run through moonx; `--` keeps moonx off rg's flags.
+  let out = @process.run(
+    "moonx",
+    [
+      "cli/rg@0.1.1", "--",
+      // A regex needle is one ordinary string element, so double the
+      // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
+       "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
+    ],
+    stdin=Empty,
+    stdout=Collect,
+    stderr=Collect,
+  )
+  // Redirect input with `stdin=FromFile(p)` or `stdin=FeedFromParent`.
+  // Redirect output with `stdout=ToFile(...)` to a file under
   // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
   // directory, and that directory is the one place a snippet may write (`/tmp`
   // itself is refused).
 
   // `test` is a keyword, don't write `let test = ...`
   // Slicing clamps instead of panicking, so this is safe on shorter output.
-  println(out.stdout()[:8000]) // at most 8000 UTF-16 code units
-  println(out.stderr()[:8000])
-  println("exit=\{out.exit_code()}") // `rg` exits 1 when nothing matched
+  println(out.stdout_text()[:8000]) // at most 8000 UTF-16 code units
+  println(out.stderr_text()[:8000])
+  println("exit=\{out.exit_code}") // `rg` exits 1 when nothing matched
 }

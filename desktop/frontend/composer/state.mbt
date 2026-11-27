@@ -356,7 +356,10 @@ fn Input::completion(
       }
     }
     Symbols => {
-      guard owner.host() is Some(_) && self.root is Some(_) else { return None }
+      guard self.root is Some(_) &&
+        (owner is Host(_) || self.cloud_access is Some(_)) else {
+        return None
+      }
       let items = symbols.items.filter(item => {
         trigger.matches([item.label, item.detail])
       })

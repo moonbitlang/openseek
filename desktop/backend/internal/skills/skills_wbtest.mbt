@@ -143,7 +143,7 @@ async fn fake_registry(
     }
     error => raise error
   }
-  let base = "http://127.0.0.1:\{server.addr.port}"
+  let base = "http://127.0.0.1:\{server.local_addr().port}"
   let widget_v1 = zip_of([
     ("SKILL.md", skill_body),
     ("reference/usage.md", reference_body),
@@ -229,21 +229,21 @@ async fn fake_registry(
         let path = request.path.replace_all(old="%40", new="@")
         if path == "/api/v0/skills" {
           conn.send_response(200, "OK", extra_headers=json_headers)
-          conn.write_string(
+          conn.text.write(
             catalog_response.unwrap_or(Json::array(catalog)).stringify(),
           )
         } else if path == "/api/v0/skills/acme/bare@1.0.0" {
           // Missing required release coordinates are a malformed response.
           conn.send_response(200, "OK", extra_headers=json_headers)
-          conn.write_string("{\"module\":\"acme/bare\"}")
+          conn.text.write("{\"module\":\"acme/bare\"}")
         } else if path == "/api/v0/skills/acme/malformed@1.0.0" {
           // Empty-string coordinates: registry corruption, not absence.
           conn.send_response(200, "OK", extra_headers=json_headers)
-          conn.write_string("{\"archive_url\":\"\",\"archive_digest\":\"\"}")
+          conn.text.write("{\"archive_url\":\"\",\"archive_digest\":\"\"}")
         } else if path.strip_prefix(SkillsPrefix) is Some(entry) &&
           skills.get(entry.to_owned()) is Some(skill) {
           conn.send_response(200, "OK", extra_headers=json_headers)
-          conn.write_string(
+          conn.text.write(
             skill_entry_body(
               base,
               entry.to_owned(),
@@ -285,7 +285,7 @@ async fn fake_registry(
           conn.write(archive)
         } else {
           conn.send_response(404, "Not Found", extra_headers=json_headers)
-          conn.write_string("{\"detail\":\"Skill not found\"}")
+          conn.text.write("{\"detail\":\"Skill not found\"}")
         }
       },
       max_connections=16,

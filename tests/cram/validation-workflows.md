@@ -158,7 +158,7 @@ $ moonx "$CHECK" 2> check.err
 
 ```mooncram
 $ tail -n 1 check.err
-Failure(* FAILED: moon check failed (exit=*)) (glob)
+Failure: * FAILED: moon check failed (exit=*) (glob)
 ```
 
 `moonx "$CHECK_TEST"` also fails at the check step, without printing a test summary:
@@ -170,5 +170,5 @@ $ moonx "$CHECK_TEST" 2> check-test.err
 
 ```mooncram
 $ tail -n 1 check-test.err
-Failure(* FAILED: moon check failed (exit=*)) (glob)
+Failure: * FAILED: moon check failed (exit=*) (glob)
 ```

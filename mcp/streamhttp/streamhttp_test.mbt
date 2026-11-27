@@ -81,7 +81,7 @@ async fn mock_mcp_endpoint(group : @async.TaskGroup) -> (String, SeenHeaders)? {
               "Content-Type": "application/json",
               "Mcp-Session-Id": "session-123",
             })
-            conn.write_string(reply.stringify())
+            conn.text.write(reply.stringify())
           }
           { "method": "tools/list", "id": id, .. } => {
             for key, value in request.headers {
@@ -99,7 +99,7 @@ async fn mock_mcp_endpoint(group : @async.TaskGroup) -> (String, SeenHeaders)? {
             // A notification event before the reply, framed with lone CRs (the
             // third terminator SSE permits), then the reply as a CRLF-framed
             // multi-line data event.
-            conn.write_string(
+            conn.text.write(
               "event: message\rdata: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\r\r",
             )
             conn.flush_partial_data()
@@ -107,7 +107,7 @@ async fn mock_mcp_endpoint(group : @async.TaskGroup) -> (String, SeenHeaders)? {
             // which JSON tolerates only between tokens. The reply is spelled
             // out here rather than built and stringified, because the split is
             // the point of the test.
-            conn.write_string(
+            conn.text.write(
               "data: {\"jsonrpc\":\"2.0\",\"id\":\{id.stringify()},\r\ndata: \"result\":{\"tools\":[{\"name\":\"fetch\",\"description\":\"Fetch a URL\",\"inputSchema\":{\"type\":\"object\"}}]}}\r\n\r\n",
             )
             conn.flush_partial_data()
@@ -122,7 +122,7 @@ async fn mock_mcp_endpoint(group : @async.TaskGroup) -> (String, SeenHeaders)? {
       max_connections=8,
     )
   }
-  Some(("http://127.0.0.1:\{server.addr.port}/mcp", seen))
+  Some(("http://127.0.0.1:\{server.local_addr().port}/mcp", seen))
 }
 
 ///|
@@ -215,7 +215,7 @@ async test "a server ping mid-stream is answered while the stream is open" {
               // Ask the client for a ping mid-stream and WAIT for its pong
               // before answering the request — the old inline-SSE design
               // deadlocked exactly here.
-              conn.write_string(
+              conn.text.write(
                 "data: {\"jsonrpc\":\"2.0\",\"id\":\"srv-ping\",\"method\":\"ping\"}\n\n",
               )
               conn.flush_partial_data()
@@ -226,7 +226,7 @@ async test "a server ping mid-stream is answered while the stream is open" {
                 "id": id,
                 "result": { "tools": [{ "name": "late" }] },
               }
-              conn.write_string("data: \{reply.stringify()}\n\n")
+              conn.text.write("data: \{reply.stringify()}\n\n")
             }
             // The pong (a response, no method) — route it to the stream handler.
             { "id": "srv-ping", .. } => {
@@ -241,7 +241,7 @@ async test "a server ping mid-stream is answered while the stream is open" {
     }
     let conn = connect_or_fail(
       group,
-      "http://127.0.0.1:\{server.addr.port}/mcp",
+      "http://127.0.0.1:\{server.local_addr().port}/mcp",
     )
     let tools = @async.with_timeout_opt(10000, () => conn.client().list_tools())
     guard tools is Some(tools) else {
@@ -274,7 +274,7 @@ async test "an http error fails the request fast" {
               conn.send_response(500, "Internal Server Error", extra_headers={
                 "Content-Type": "text/plain",
               })
-              conn.write_string("boom")
+              conn.text.write("boom")
             }
             _ => conn.send_response(202, "Accepted")
           }
@@ -284,7 +284,7 @@ async test "an http error fails the request fast" {
     }
     let conn = connect_or_fail(
       group,
-      "http://127.0.0.1:\{server.addr.port}/mcp",
+      "http://127.0.0.1:\{server.local_addr().port}/mcp",
     )
     // Bounded well below any outer timeout: the failure must arrive promptly.
     let outcome = @async.with_timeout_opt(5000, () => {
@@ -337,7 +337,7 @@ async test "an expired legacy session fails the request and ends the connection"
                 "Content-Type": "application/json",
                 "Mcp-Session-Id": "session-123",
               })
-              conn.write_string(reply.stringify())
+              conn.text.write(reply.stringify())
             }
             { "method": "tools/list", .. } =>
               conn.send_response(404, "Not Found")
@@ -349,7 +349,7 @@ async test "an expired legacy session fails the request and ends the connection"
     }
     let conn = connect_or_fail(
       group,
-      "http://127.0.0.1:\{server.addr.port}/mcp",
+      "http://127.0.0.1:\{server.local_addr().port}/mcp",
     )
     let client = conn.client()
     let closed : @async.Queue[Unit] = Queue(kind=Unbounded)
@@ -413,7 +413,7 @@ async test "tools/list waits for the initialized notification to complete" {
               conn.send_response(200, "OK", extra_headers={
                 "Content-Type": "application/json",
               })
-              conn.write_string(reply.stringify())
+              conn.text.write(reply.stringify())
             }
             _ => conn.send_response(202, "Accepted")
           }
@@ -423,7 +423,7 @@ async test "tools/list waits for the initialized notification to complete" {
     }
     let conn = connect_or_fail(
       group,
-      "http://127.0.0.1:\{server.addr.port}/mcp",
+      "http://127.0.0.1:\{server.local_addr().port}/mcp",
     )
     let tools = conn.client().list_tools()
     assert_eq(tools[0].name, "ordered")
@@ -463,5 +463,5 @@ async fn answer_initialize(conn : @http.ServerConnection, id : Json) -> Unit {
   conn.send_response(200, "OK", extra_headers={
     "Content-Type": "application/json",
   })
-  conn.write_string(reply.stringify())
+  conn.text.write(reply.stringify())
 }

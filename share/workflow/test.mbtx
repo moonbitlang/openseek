@@ -1,11 +1,25 @@
 ---
 import {
   "moonbitlang/core/async",
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
 }
 ---
 
 async fn main {
-  let code = @shell.Cmd("moon", ["test"]).each_line(line => println(line))
+  let mut code = 0
+  @async.with_task_group(group => {
+    let proc = @process.spawn(
+      group,
+      "moon",
+      ["test"],
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Inherit,
+    )
+    while proc.stdout.text.read_line() is Some(line) {
+      println(line)
+    }
+    code = proc.wait()
+  })
   if code != 0 { fail("moon test failed (exit=\{code})") }
 }
