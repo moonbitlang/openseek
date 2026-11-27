@@ -319,6 +319,7 @@ fn AppFontSize::base_pixels(self : AppFontSize) -> Int32 {
 #derive(Eq, Compare)
 priv enum ApiProvider {
   Deepseek
+  SeekMoon
   Glm
   OpenRouter
   Custom
@@ -352,6 +353,7 @@ fn FollowupBehavior::wire(self : FollowupBehavior) -> String {
 fn ApiProvider::wire(self : ApiProvider) -> String {
   match self {
     Deepseek => "deepseek"
+    SeekMoon => "seekmoon"
     Glm => "glm"
     OpenRouter => "openrouter"
     Custom => "custom"
@@ -365,6 +367,7 @@ fn ApiProvider::wire(self : ApiProvider) -> String {
 fn ApiProvider::parse(value : String) -> ApiProvider {
   match value.trim() {
     "openseek" | "openseek-staging" | "deepseek" => Deepseek
+    "seekmoon" => SeekMoon
     "glm" => Glm
     "openrouter" => OpenRouter
     "custom" => Custom
@@ -377,7 +380,7 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
 /// the page's last model choice belong to different known model families.
 fn ApiProvider::default_model(self : ApiProvider) -> @deepseek.Model {
   match self {
-    Deepseek | OpenRouter | Custom => Deepseek(V4Flash)
+    Deepseek | SeekMoon | OpenRouter | Custom => Deepseek(V4Flash)
     Glm => Glm(G53)
   }
 }
@@ -395,7 +398,7 @@ fn @deepseek.Model::matches_provider(
   match (provider, self) {
     (Custom, Custom(_)) => true
     (_, Kimi(_)) => true
-    (Deepseek | OpenRouter, Deepseek(_)) | (Glm, Glm(_)) => true
+    (Deepseek | SeekMoon | OpenRouter, Deepseek(_)) | (Glm, Glm(_)) => true
     _ => false
   }
 }
@@ -3418,7 +3421,7 @@ fn Model::settle_api_setup(self : Model) -> Model {
 fn Model::api_ready(self : Model) -> Bool {
   guard self.host_settings() is Some({ endpoint, .. }) else { return false }
   match endpoint.provider {
-    Deepseek | Glm | OpenRouter => endpoint.key_saved()
+    Deepseek | SeekMoon | Glm | OpenRouter => endpoint.key_saved()
     Custom =>
       plausible_endpoint_url(endpoint.config(Custom).api_url.unwrap_or(""))
   }

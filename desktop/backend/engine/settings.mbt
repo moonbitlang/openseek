@@ -32,16 +32,24 @@ const EngineSettingsFileName = "engine-settings.json"
 const RelayServerOrigin : String = "https://seekmoon.moonbitlang.com"
 
 ///|
-/// The chat endpoint selection: where runs send their requests. SeekMoon
-/// runs only on bring-your-own-key providers. `Deepseek` is the official
-/// DeepSeek endpoint with the user's own key; `Glm` is the official Z.AI
-/// GLM endpoint with its own key; `Custom` is any other OpenAI-compatible
-/// endpoint, whose key is optional. The retired hosted proxy names
-/// (`openseek` / `openseek-staging`) still parse as `Deepseek` so old
-/// settings files and old clients degrade to the BYOK default instead of
-/// wedging.
+const SeekMoonDeepseekProxyPath : String = "/v1/deepseek/chat/completions"
+
+///|
+fn seekmoon_proxy_url(server_url : String) -> String {
+  server_url.trim_end(chars="/").to_owned() + SeekMoonDeepseekProxyPath
+}
+
+///|
+/// The chat endpoint selection: where runs send their requests. `Deepseek` is
+/// the official DeepSeek endpoint with the user's own key; `SeekMoon` proxies
+/// DeepSeek requests through the signed-in SeekMoon account; `Glm` is the
+/// official Z.AI GLM endpoint with its own key; `Custom` is any other
+/// OpenAI-compatible endpoint, whose key is optional. The retired hosted proxy
+/// names (`openseek` / `openseek-staging`) still parse as `Deepseek` so old
+/// settings files and old clients degrade cleanly.
 priv enum ApiProvider {
   Deepseek
+  SeekMoon
   Glm
   OpenRouter
   Custom
@@ -51,6 +59,7 @@ priv enum ApiProvider {
 fn ApiProvider::wire(self : ApiProvider) -> String {
   match self {
     Deepseek => "deepseek"
+    SeekMoon => "seekmoon"
     Glm => "glm"
     OpenRouter => "openrouter"
     Custom => "custom"
@@ -67,6 +76,7 @@ fn ApiProvider::wire(self : ApiProvider) -> String {
 fn ApiProvider::parse(value : String) -> ApiProvider? {
   match value {
     "openseek" | "openseek-staging" | "deepseek" => Some(Deepseek)
+    "seekmoon" => Some(SeekMoon)
     "glm" => Some(Glm)
     "openrouter" => Some(OpenRouter)
     "custom" => Some(Custom)
@@ -169,15 +179,24 @@ fn settings_status_payload(
   settings : EngineSettings,
   revision : Int32,
   custom_prompt~ : String = "",
+  account_session~ : () -> (String, String)? = () => None,
 ) -> @protocol.SettingsStatusPayload {
   let providers : Map[String, @protocol.ProviderStatus] = Map([])
-  for provider in [Deepseek, Glm, OpenRouter, Custom] {
+  let account = account_session()
+  for provider in [Deepseek, SeekMoon, Glm, OpenRouter, Custom] {
+    if provider is SeekMoon {
+      providers[provider.wire()] = {
+        api_url: account.map(pair => seekmoon_proxy_url(pair.0)),
+        has_api_key: account is Some(_),
+      }
+      continue
+    }
     let config = settings.provider_config(provider)
     let has_api_key = config.api_key is Some(_) ||
       (match provider {
         Deepseek => @env.get("DEEPSEEK") is Some(_)
         Glm => @env.get("GLM") is Some(_)
-        OpenRouter | Custom => false
+        OpenRouter | Custom | SeekMoon => false
       })
     providers[provider.wire()] = { api_url: config.api_url, has_api_key, }
   }
@@ -233,6 +252,7 @@ pub async fn settings_status(
     load_engine_settings(manager.runtime_dir),
     manager.settings_revision,
     custom_prompt=load_custom_prompt(),
+    account_session=manager.account_session,
   )
 }
 
@@ -302,6 +322,11 @@ pub async fn update_settings(
           "the \{name} endpoint URL is fixed; use the custom provider",
         )
       }
+      guard edit.api_key is None || !(provider is SeekMoon) else {
+        raise EngineError(
+          "the SeekMoon proxy uses your signed-in SeekMoon account and does not take an API key",
+        )
+      }
       let name = provider.wire()
       let fields = match providers.get(name) {
         Some(Object(fields)) => fields
@@ -352,6 +377,7 @@ pub async fn update_settings(
     decode_settings(raw),
     manager.settings_revision,
     custom_prompt=text,
+    account_session=manager.account_session,
   )
   if on_committed is Some(callback) {
     callback(status)
@@ -403,6 +429,7 @@ priv struct ResolvedEndpoint {
 ///|
 fn resolved_endpoint(
   settings : EngineSettings,
+  account_session~ : () -> (String, String)? = () => None,
 ) -> ResolvedEndpoint raise EngineError {
   match settings.provider {
     Deepseek => {
@@ -412,6 +439,14 @@ fn resolved_endpoint(
         missing="DeepSeek API key is required; add it in Settings or set DEEPSEEK",
       )
       { api_key: key, api_url: None, }
+    }
+    SeekMoon => {
+      guard account_session() is Some((server_url, token)) && !token.is_blank() else {
+        raise EngineError(
+          "Sign in to your SeekMoon account in Settings to use the SeekMoon DeepSeek proxy",
+        )
+      }
+      { api_key: token, api_url: Some(seekmoon_proxy_url(server_url)), }
     }
     Glm => {
       let key = configured_api_key(
@@ -466,7 +501,7 @@ pub async fn pattern_repair_environment(
 ) -> PatternRepairEnvironment {
   let settings = manager.settings_snapshot() catch { _ => return Unavailable }
   let (endpoint, key_env) = (
-    resolved_endpoint(settings),
+    resolved_endpoint(settings, account_session=manager.account_session),
     key_env_for(settings.provider, model),
   ) catch {
     EngineError(message) => return Configuration(message)
@@ -614,6 +649,7 @@ async test "missing settings read as the BYOK defaults" {
       "provider": "deepseek",
       "providers": {
         "deepseek": { "has_api_key": false },
+        "seekmoon": { "has_api_key": false },
         "glm": { "has_api_key": false },
         "openrouter": { "has_api_key": false },
         "custom": { "has_api_key": false },
@@ -637,6 +673,7 @@ async test "the DEEPSEEK env fallback reads as a usable key" {
       "provider": "deepseek",
       "providers": {
         "deepseek": { "has_api_key": true },
+        "seekmoon": { "has_api_key": false },
         "glm": { "has_api_key": false },
         "openrouter": { "has_api_key": false },
         "custom": { "has_api_key": false },
@@ -662,6 +699,7 @@ async test "a saved key round-trips as presence, never as text" {
       "provider": "deepseek",
       "providers": {
         "deepseek": { "has_api_key": true },
+        "seekmoon": { "has_api_key": false },
         "glm": { "has_api_key": false },
         "openrouter": { "has_api_key": false },
         "custom": { "has_api_key": false },
@@ -699,6 +737,7 @@ async test "retired hosted providers converge on the DeepSeek default" {
       "provider": "deepseek",
       "providers": {
         "deepseek": { "has_api_key": false },
+        "seekmoon": { "has_api_key": false },
         "glm": { "has_api_key": false },
         "openrouter": { "has_api_key": false },
         "custom": { "has_api_key": false },
@@ -736,6 +775,7 @@ async test "a present-but-blank field clears the stored value" {
       "provider": "custom",
       "providers": {
         "deepseek": { "has_api_key": false },
+        "seekmoon": { "has_api_key": false },
         "glm": { "has_api_key": false },
         "openrouter": { "has_api_key": false },
         "custom": { "has_api_key": false },
@@ -1025,6 +1065,7 @@ async test "the GLM provider stores its own key and reports presence" {
       "provider": "glm",
       "providers": {
         "deepseek": { "has_api_key": false },
+        "seekmoon": { "has_api_key": false },
         "glm": { "has_api_key": true },
         "openrouter": { "has_api_key": false },
         "custom": { "has_api_key": false },
@@ -1055,6 +1096,7 @@ async test "the GLM env fallback reads as a usable key" {
       "provider": "deepseek",
       "providers": {
         "deepseek": { "has_api_key": false },
+        "seekmoon": { "has_api_key": false },
         "glm": { "has_api_key": true },
         "openrouter": { "has_api_key": false },
         "custom": { "has_api_key": false },
@@ -1063,6 +1105,72 @@ async test "the GLM env fallback reads as a usable key" {
       "prompt_source": "builtin_moonbit_guide",
       "custom_prompt": "",
     })
+  })
+}
+
+///|
+async test "SeekMoon proxy resolves account session and rejects manual keys" {
+  with_settings_dir((dir, _unused) => {
+    let session : Ref[(String, String)?] = Ref(None)
+    let manager = new_engine_manager("openseek", runtime_dir=dir, account_session=() => {
+      session.val
+    })
+    let signed_out = update_settings(manager, {
+      provider: Some("seekmoon"),
+      providers: None,
+    })
+    assert_eq(signed_out.provider, "seekmoon")
+    assert_eq(
+      signed_out.providers.get("seekmoon").map(p => p.has_api_key),
+      Some(false),
+    )
+    let rejected_key = try {
+      ignore(
+        update_settings(manager, {
+          provider: None,
+          providers: Some({
+            "seekmoon": { api_url: None, api_key: Some("sk-nope"), },
+          }),
+        }),
+      )
+      false
+    } catch {
+      EngineError(_) => true
+      _ => false
+    }
+    assert_true(rejected_key)
+    let missing_signin = try {
+      ignore(
+        resolved_endpoint(
+          load_engine_settings(manager.runtime_dir),
+          account_session=manager.account_session,
+        ),
+      )
+      false
+    } catch {
+      EngineError(msg) => msg.contains("Sign in")
+      _ => false
+    }
+    assert_true(missing_signin)
+    session.val = Some(("https://seekmoon.moonbitlang.com/", "ts_session_tok"))
+    let signed_in = settings_status(manager)
+    assert_eq(
+      signed_in.providers.get("seekmoon").map(p => p.has_api_key),
+      Some(true),
+    )
+    assert_eq(
+      signed_in.providers.get("seekmoon").bind(p => p.api_url),
+      Some("https://seekmoon.moonbitlang.com/v1/deepseek/chat/completions"),
+    )
+    let endpoint = resolved_endpoint(
+      load_engine_settings(manager.runtime_dir),
+      account_session=manager.account_session,
+    )
+    assert_eq(endpoint.api_key, "ts_session_tok")
+    assert_eq(
+      endpoint.api_url,
+      Some("https://seekmoon.moonbitlang.com/v1/deepseek/chat/completions"),
+    )
   })
 }
 

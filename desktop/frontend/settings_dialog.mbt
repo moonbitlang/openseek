@@ -113,6 +113,7 @@ fn settings_page(
         } else {
           match model.api_provider() {
             Deepseek => @settings.text(model.locale, DeepseekKey)
+            SeekMoon => @settings.text(model.locale, SeekMoonAccountSignIn)
             Glm => @settings.text(model.locale, GlmKey)
             OpenRouter => @settings.text(model.locale, OpenRouterKey)
             Custom => @settings.text(model.locale, CustomEndpoint)

@@ -73,6 +73,7 @@ priv enum ShellMessage {
   SetupDeepSeek
   SetupGlm
   SetupOpenRouter
+  SetupSeekMoon
   SetupEndpoint
   NotNow
   DismissLabel
@@ -82,6 +83,7 @@ priv enum ShellMessage {
   NoEndpoint
   NoGlmKey
   NoOpenRouterKey
+  NoSeekMoonAccount
   NoDeepSeekKey
   SubmitFeedback
   CompactContext
@@ -557,6 +559,11 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, SetupOpenRouter) => "设置 OpenRouter"
     (TraditionalChinese, SetupOpenRouter) => "設定 OpenRouter"
     (Japanese, SetupOpenRouter) => "OpenRouter を設定"
+    (English, SetupSeekMoon) => "Sign in to SeekMoon"
+    (Spanish, SetupSeekMoon) => "Inicia sesión en SeekMoon"
+    (SimplifiedChinese, SetupSeekMoon) => "登录 SeekMoon 账号"
+    (TraditionalChinese, SetupSeekMoon) => "登入 SeekMoon 帳號"
+    (Japanese, SetupSeekMoon) => "SeekMoon にログイン"
     (English, SetupEndpoint) => "Set your endpoint URL"
     (Spanish, SetupEndpoint) => "Configura la URL de tu endpoint"
     (SimplifiedChinese, SetupEndpoint) => "设置端点 URL"
@@ -617,6 +624,16 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "尚未設定 OpenRouter API 金鑰，無法傳送。"
     (Japanese, NoOpenRouterKey) =>
       "OpenRouter API キーが未設定のため送信できません。"
+    (English, NoSeekMoonAccount) =>
+      "Not signed in to SeekMoon — Send is disabled."
+    (Spanish, NoSeekMoonAccount) =>
+      "No has iniciado sesión en SeekMoon; Enviar está deshabilitado."
+    (SimplifiedChinese, NoSeekMoonAccount) =>
+      "尚未登录 SeekMoon 账号，无法发送。"
+    (TraditionalChinese, NoSeekMoonAccount) =>
+      "尚未登入 SeekMoon 帳號，無法傳送。"
+    (Japanese, NoSeekMoonAccount) =>
+      "SeekMoon にログインしていないため送信できません。"
     (English, NoDeepSeekKey) =>
       "No DeepSeek API key configured — Send is disabled."
     (Spanish, NoDeepSeekKey) =>

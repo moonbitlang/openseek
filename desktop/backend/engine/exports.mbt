@@ -47,6 +47,9 @@ pub async fn ssh_model_credentials(
       }
       ("DEEPSEEK", key)
     }
+    // Never forward a SeekMoon account session token into a remote SSH host's
+    // ambient DEEPSEEK variable.
+    SeekMoon => ("DEEPSEEK", None)
     Glm => {
       let key = match settings.provider_config(Glm).api_key {
         Some(_) as key => key

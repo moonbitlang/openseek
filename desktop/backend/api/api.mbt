@@ -282,12 +282,22 @@ pub fn ApiState::ApiState(
   cloud_browser? : (String) -> @mcp.Tool,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
+  let auth_store = match auth {
+    Some(store) => store
+    None => @auth.AuthStore::empty()
+  }
   let engine_actor = @engine.new_engine_actor(
     engine,
     runtime_dir?,
     host_mcp?,
     moonbit=resources.moonbit,
     skills_dir?=resources.skills,
+    account_session=() => {
+      match (auth_store.session_server(), auth_store.account()) {
+        (Some(server_url), Some(account)) => Some((server_url, account.token))
+        _ => None
+      }
+    },
   )
   {
     connectors: Service(resources.skills),
@@ -305,10 +315,7 @@ pub fn ApiState::ApiState(
       resources~,
     ),
     hub: Hub(),
-    auth: match auth {
-      Some(store) => store
-      None => @auth.AuthStore::empty()
-    },
+    auth: auth_store,
     app_version,
     console_url,
     host_mcp,

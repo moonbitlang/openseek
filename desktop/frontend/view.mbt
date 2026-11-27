@@ -1205,6 +1205,7 @@ fn update_check_controls(
 fn provider_hint(model : Model, provider : ApiProvider) -> String {
   match provider {
     Deepseek => @settings.text(model.locale, DeepseekHint)
+    SeekMoon => @settings.text(model.locale, SeekMoonHint)
     Glm => @settings.text(model.locale, GlmHint)
     OpenRouter => @settings.text(model.locale, OpenRouterHint)
     Custom => @settings.text(model.locale, CustomHint)
@@ -1251,6 +1252,11 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         step(1, @settings.text(model.locale, DeepseekStepOne)),
         step(2, @settings.text(model.locale, CreateKey)),
         step(3, @settings.text(model.locale, DeepseekPasteKey)),
+      ]
+    SeekMoon =>
+      [
+        step(1, @settings.text(model.locale, SeekMoonStepOne)),
+        step(2, @settings.text(model.locale, SeekMoonStepTwo)),
       ]
     Glm =>
       [
@@ -1340,6 +1346,10 @@ fn api_settings_rows(
               label=@settings.text(model.locale, DeepseekOfficial),
             ),
             @select_control.ViewOption(
+              value="seekmoon",
+              label=@settings.text(model.locale, SeekMoonProxy),
+            ),
+            @select_control.ViewOption(
               value="glm",
               label=@settings.text(model.locale, GlmOfficial),
             ),
@@ -1398,8 +1408,9 @@ fn api_settings_rows(
   {
     let key_saved = model.host_settings() is Some({ endpoint, .. }) &&
       endpoint.key_saved()
+    let is_seekmoon = model.api_provider() is SeekMoon
     let key_label = match model.api_provider() {
-      Deepseek => @settings.text(model.locale, DeepseekApiKey)
+      Deepseek | SeekMoon => @settings.text(model.locale, DeepseekApiKey)
       Glm => @settings.text(model.locale, GlmApiKey)
       OpenRouter => @settings.text(model.locale, OpenRouterApiKey)
       Custom => @settings.text(model.locale, CustomApiKey)
@@ -1427,6 +1438,44 @@ fn api_settings_rows(
         ],
         desc=@settings.text(model.locale, KeyStorageDescription),
         stack=true,
+        hidden=is_seekmoon,
+      ),
+    )
+    rows.push(
+      @ui.form_row(
+        @settings.text(model.locale, Account),
+        [
+          @html.span(
+            class="form-row-description",
+            if key_saved {
+              @settings.text(model.locale, SeekMoonAccountSignedIn)
+            } else {
+              @settings.text(model.locale, SeekMoonAccountSignIn)
+            },
+          ),
+          @html.div(class="api-key-actions", [
+            connection_probe_status_line(model),
+            @html.div(
+              class="api-key-buttons",
+              if key_saved {
+                [connection_test_button(dispatch, model, compact=false)]
+              } else {
+                [
+                  @html.button(
+                    class="button primary",
+                    type_="button",
+                    disabled=model.remote_connecting,
+                    on_click=dispatch(RemoteConnectClicked),
+                    @settings.text(model.locale, SignIn),
+                  ),
+                ]
+              },
+            ),
+          ]),
+        ],
+        desc=@settings.text(model.locale, SeekMoonAccountDescription),
+        stack=true,
+        hidden=!is_seekmoon,
       ),
     )
   }
@@ -2760,6 +2809,7 @@ fn update_confirm_modal(
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let title = match model.api_provider() {
     Deepseek => shell_text(model.locale, SetupDeepSeek)
+    SeekMoon => shell_text(model.locale, SetupSeekMoon)
     Glm => shell_text(model.locale, SetupGlm)
     OpenRouter => shell_text(model.locale, SetupOpenRouter)
     Custom => shell_text(model.locale, SetupEndpoint)

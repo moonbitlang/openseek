@@ -5261,6 +5261,7 @@ fn update_msg(
           // modal optimistically; one that leaves it incomplete (Custom
           // with no URL yet) keeps the modal up mid-setup. A failed save
           // comes back as a toast.
+          SeekMoon => (@cmd.none, model)
           Deepseek | Glm | OpenRouter | Custom as provider => {
             let next = {
               ..model.edit_host_endpoint({

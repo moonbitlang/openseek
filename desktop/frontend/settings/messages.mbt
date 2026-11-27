@@ -69,10 +69,13 @@ pub(all) enum Message {
   CheckingUpdate
   UpToDate
   DeepseekHint
+  SeekMoonHint
   GlmHint
   OpenRouterHint
   CustomHint
   DeepseekStepOne
+  SeekMoonStepOne
+  SeekMoonStepTwo
   CreateKey
   DeepseekPasteKey
   GlmStepOne
@@ -87,6 +90,10 @@ pub(all) enum Message {
   GlmKeysLink
   ApiEndpoint
   DeepseekOfficial
+  SeekMoonProxy
+  SeekMoonAccountSignIn
+  SeekMoonAccountSignedIn
+  SeekMoonAccountDescription
   GlmOfficial
   CustomUrl
   EndpointUrl
@@ -676,6 +683,16 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "請求使用你的金鑰直接傳送至 api.deepseek.com。"
     (Japanese, DeepseekHint) =>
       "リクエストはあなたのキーを使用して api.deepseek.com に直接送信されます。"
+    (English, SeekMoonHint) =>
+      "DeepSeek requests go through SeekMoon using your signed-in account (admin allowlist required)."
+    (Spanish, SeekMoonHint) =>
+      "Las solicitudes de DeepSeek pasan por SeekMoon usando tu cuenta iniciada (requiere autorización de administrador)."
+    (SimplifiedChinese, SeekMoonHint) =>
+      "DeepSeek 请求将使用已登录的 SeekMoon 账号通过代理发送（需管理员授权）。"
+    (TraditionalChinese, SeekMoonHint) =>
+      "DeepSeek 請求將使用已登入的 SeekMoon 帳號透過代理傳送（需管理員授權）。"
+    (Japanese, SeekMoonHint) =>
+      "DeepSeek へのリクエストは、ログイン済みの SeekMoon アカウントでプロキシ経由で送信されます（管理者の許可が必要です）。"
     (English, GlmHint) => "Requests go straight to api.z.ai with your key."
     (Spanish, GlmHint) =>
       "Las solicitudes se envían directamente a api.z.ai con tu clave."
@@ -713,6 +730,26 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
       "開啟 platform.deepseek.com 並登入。"
     (Japanese, DeepseekStepOne) =>
       "platform.deepseek.com を開いてログインしてください。"
+    (English, SeekMoonStepOne) =>
+      "Sign in to your SeekMoon account below or under Settings → Account."
+    (Spanish, SeekMoonStepOne) =>
+      "Inicia sesión en tu cuenta de SeekMoon abajo o en Configuración → Cuenta."
+    (SimplifiedChinese, SeekMoonStepOne) =>
+      "在下方或「设置 → 账号」中登录你的 SeekMoon 账号。"
+    (TraditionalChinese, SeekMoonStepOne) =>
+      "在下方或「設定 → 帳號」中登入你的 SeekMoon 帳號。"
+    (Japanese, SeekMoonStepOne) =>
+      "下または「設定 → アカウント」から SeekMoon アカウントにログインしてください。"
+    (English, SeekMoonStepTwo) =>
+      "Ask an administrator to enable DeepSeek proxy access for your account."
+    (Spanish, SeekMoonStepTwo) =>
+      "Pide a un administrador que habilite el acceso al proxy de DeepSeek para tu cuenta."
+    (SimplifiedChinese, SeekMoonStepTwo) =>
+      "请联系管理员为你的账号开启 DeepSeek 代理访问权限。"
+    (TraditionalChinese, SeekMoonStepTwo) =>
+      "請聯絡管理員為你的帳號開啟 DeepSeek 代理存取權限。"
+    (Japanese, SeekMoonStepTwo) =>
+      "管理者にアカウントの DeepSeek プロキシ利用許可を有効にしてもらってください。"
     (English, CreateKey) => "Create an API key under API Keys."
     (Spanish, CreateKey) => "Crea una clave de API en API Keys."
     (SimplifiedChinese, CreateKey) => "在 API Keys 页面创建 API 密钥。"
@@ -824,6 +861,44 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, DeepseekOfficial) => "DeepSeek 官方"
     (TraditionalChinese, DeepseekOfficial) => "DeepSeek 官方"
     (Japanese, DeepseekOfficial) => "DeepSeek 公式"
+    (English, SeekMoonProxy) => "SeekMoon DeepSeek proxy (account)"
+    (Spanish, SeekMoonProxy) => "Proxy DeepSeek de SeekMoon (cuenta)"
+    (SimplifiedChinese, SeekMoonProxy) =>
+      "SeekMoon DeepSeek 代理（账号登录）"
+    (TraditionalChinese, SeekMoonProxy) =>
+      "SeekMoon DeepSeek 代理（帳號登入）"
+    (Japanese, SeekMoonProxy) =>
+      "SeekMoon DeepSeek プロキシ（アカウント）"
+    (English, SeekMoonAccountSignIn) =>
+      "Sign in to your SeekMoon account to use the DeepSeek proxy."
+    (Spanish, SeekMoonAccountSignIn) =>
+      "Inicia sesión en tu cuenta de SeekMoon para usar el proxy de DeepSeek."
+    (SimplifiedChinese, SeekMoonAccountSignIn) =>
+      "请先登录 SeekMoon 账号以使用 DeepSeek 代理。"
+    (TraditionalChinese, SeekMoonAccountSignIn) =>
+      "請先登入 SeekMoon 帳號以使用 DeepSeek 代理。"
+    (Japanese, SeekMoonAccountSignIn) =>
+      "DeepSeek プロキシを使用するには SeekMoon アカウントにログインしてください。"
+    (English, SeekMoonAccountSignedIn) =>
+      "Signed in — requests authenticate with your SeekMoon account session."
+    (Spanish, SeekMoonAccountSignedIn) =>
+      "Sesión iniciada: las solicitudes se autentican con tu sesión de SeekMoon."
+    (SimplifiedChinese, SeekMoonAccountSignedIn) =>
+      "已登录 — 请求将使用当前 SeekMoon 账号会话进行认证。"
+    (TraditionalChinese, SeekMoonAccountSignedIn) =>
+      "已登入 — 請求將使用目前 SeekMoon 帳號工作階段進行驗證。"
+    (Japanese, SeekMoonAccountSignedIn) =>
+      "ログイン済み — リクエストは現在の SeekMoon アカウントセッションで認証されます。"
+    (English, SeekMoonAccountDescription) =>
+      "No API key is stored on this device. Access and CNY spending limits are managed by your SeekMoon administrator."
+    (Spanish, SeekMoonAccountDescription) =>
+      "No se guarda ninguna clave de API en este dispositivo. El acceso y los límites de gasto en CNY los gestiona tu administrador de SeekMoon."
+    (SimplifiedChinese, SeekMoonAccountDescription) =>
+      "本机无需保存 API 密钥。访问权限与人民币额度上限由 SeekMoon 管理员配置。"
+    (TraditionalChinese, SeekMoonAccountDescription) =>
+      "本機無需儲存 API 金鑰。存取權限與人民幣額度上限由 SeekMoon 管理員設定。"
+    (Japanese, SeekMoonAccountDescription) =>
+      "このデバイスに API キーは保存されません。利用許可と CNY 上限は SeekMoon 管理者が管理します。"
     (English, GlmOfficial) => "Z.AI GLM (your API key)"
     (Spanish, GlmOfficial) => "Z.AI GLM (tu clave de API)"
     (SimplifiedChinese, GlmOfficial) => "Z.AI GLM"

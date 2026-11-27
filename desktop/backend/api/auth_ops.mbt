@@ -25,6 +25,10 @@ async fn auth_connect(state : ApiState) -> @protocol.AuthStatusPayload {
     error => raise @host.HostError("sign-in failed: \{error}")
   }
   state.hub.publish(AuthChanged(store.status()))
+  let settings = @engine.settings_status(state.manager) catch {
+    _ => return auth_status(state)
+  }
+  state.hub.publish(SettingsChanged(settings))
   auth_status(state)
 }
 
@@ -50,6 +54,10 @@ async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
   store.sign_out() catch {
     @auth.AuthError(message) => raise @host.HostError(message)
     error => raise @host.HostError("sign-out failed: \{error}")
+  }
+  if (@engine.settings_status(state.manager) catch { _ => None })
+    is Some(settings) {
+    state.hub.publish(SettingsChanged(settings))
   }
   auth_status(state)
 }

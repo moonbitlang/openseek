@@ -141,7 +141,9 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     ModelReady => ()
   }
   if self.api_setup_banner_visible() {
-    let text = if self.settings_status() is SetupRequired {
+    let text = if self.api_provider() is SeekMoon {
+      shell_text(self.locale, NoSeekMoonAccount)
+    } else if self.settings_status() is SetupRequired {
       shell_text(self.locale, NoEndpoint)
     } else if self.api_provider() is Glm {
       shell_text(self.locale, NoGlmKey)

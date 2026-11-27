@@ -53,7 +53,7 @@ pub fn mcp_status(EngineManager, @protocol.McpStatusPayload) -> @protocol.McpSta
 
 pub async fn migrate_global_store() -> Int32
 
-pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server, skills_dir? : @pathx.Path, moonbit? : @moonbit.ToolchainSource) -> EngineActor
+pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server, skills_dir? : @pathx.Path, moonbit? : @moonbit.ToolchainSource, account_session? : () -> (String, String)?) -> EngineActor
 
 pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
 
