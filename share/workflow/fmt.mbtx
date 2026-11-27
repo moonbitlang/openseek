@@ -1,11 +1,26 @@
 ---
 import {
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
 }
 ---
 
 fn main {
-  let code = @shell.Cmd("moon", ["fmt", ..@env.args()[1:]]).each_line(line => println(line))
+  let mut code = 0
+  @async.with_task_group(group => {
+    let proc = @process.spawn(
+      group,
+      "moon",
+      ["fmt", ..@env.args()[1:]],
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Inherit,
+    )
+    while proc.stdout.text.read_line() is Some(line) {
+      println(line)
+    }
+    code = proc.wait()
+  })
   if code != 0 { fail("moon fmt failed (exit=\{code})") }
 }

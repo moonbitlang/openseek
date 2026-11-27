@@ -484,8 +484,8 @@ pub(all) enum Msg {
   ToggleReviewProgress
   MbtiViewModeSelected(MbtiViewMode)
   MoonModViewModeSelected(MoonModViewMode)
-  PackageGraphRequestLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @common.Uri, generation~ : Int32, source~ : String)
-  PackageGraphRequestFailed(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @common.Uri, generation~ : Int32, message~ : String)
+  PackageGraphRequestLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, generation~ : Int32, source~ : String)
+  PackageGraphRequestFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, generation~ : Int32, message~ : String)
   ReviewActiveHunkChanged(ready~ : Bool, change~ : ChangedFile, review_generation~ : Int32, surface_generation~ : Int32, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
   ToggleActiveReviewHunk
   ToggleReviewHunk(change~ : ChangedFile, review_generation~ : Int32, surface_generation~ : Int32, hunk~ : ReviewHunk, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)

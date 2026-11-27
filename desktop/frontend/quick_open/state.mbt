@@ -27,11 +27,7 @@ pub fn State::open(
     current.owner == input.owner &&
     current.cloud_access == input.cloud_access &&
     current.root == input.root {
-    let value = if input.owner is @interop.Cloud(..) {
-      current.value
-    } else {
-      value_for_provider(current.value, provider)
-    }
+    let value = value_for_provider(current.value, provider)
     if value == current.value {
       return (focus_after_render(), self)
     }
@@ -239,7 +235,9 @@ fn State::change_value(
   if value == open.value {
     return (@cmd.none, self)
   }
-  if open.owner is @interop.Cloud(..) {
+  if open.owner is @interop.Cloud(..) &&
+    open.provider() is Files &&
+    !value.has_prefix("#") {
     // Ranking is local and the index load keeps its generation, so typing
     // re-ranks the same snapshot and leaves the phase alone.
     let next_open = { ..open, value, }
@@ -253,7 +251,7 @@ fn State::change_value(
       },
     )
   }
-  guard open.owner is @interop.Host(owner) else { return (@cmd.none, self) }
+  let owner = open.owner
   let cancel = self.cancel_file_request(open)
   let generation = self.generation + 1
   let keeps_file_rows = open.provider() is Files && !value.has_prefix("#")
@@ -271,6 +269,15 @@ fn State::change_value(
   let started = { ..self, open: Some(next_open), generation, }
   match next_open.provider() {
     Files => {
+      if owner is Cloud(..) {
+        let projected = with_file_candidates(input, next_open, [], Loading)
+        return (
+          cloud_file_request(emit, input, generation),
+          { ..started, open: Some(projected), },
+        )
+      }
+      guard owner is Host(owner) else { return (@cmd.none, self) }
+
       let projected = with_file_candidates(
         input,
         next_open,
@@ -448,12 +455,12 @@ fn State::begin_symbol_request(
   self : State,
   emit : @cmd.Emit[Msg],
   input : Input,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   query : String,
   generation : Int32,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
-    open.owner == @interop.Host(owner) &&
+    open.owner == owner &&
     open.provider() is Symbols &&
     open.query() == query &&
     open.generation == generation &&
@@ -472,13 +479,13 @@ fn State::begin_symbol_request(
 /// there is nowhere useful to navigate.
 fn State::apply_symbol_result(
   self : State,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   query : String,
   generation : Int32,
   items : Array[@symbols.Symbol],
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == @interop.Host(owner) &&
+    open.owner == owner &&
     open.provider() is Symbols &&
     open.query() == query &&
     open.generation == generation &&
@@ -500,12 +507,12 @@ fn State::apply_symbol_result(
 ///|
 fn State::fail_symbol_request(
   self : State,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   query : String,
   generation : Int32,
 ) -> State {
   guard self.open is Some(open) &&
-    open.owner == @interop.Host(owner) &&
+    open.owner == owner &&
     open.provider() is Symbols &&
     open.query() == query &&
     open.generation == generation &&

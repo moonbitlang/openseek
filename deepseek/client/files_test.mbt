@@ -269,7 +269,7 @@ async test "image upload preserves typed JSON decoding errors" {
       try server.client().upload_image(b"GIF87a", filename="image.gif") catch {
         @client.MalformedResponseJson(error) => {
           assert_eq(response, "not JSON")
-          assert_true(error is InvalidChar(_, _))
+          assert_true(error.to_string().contains("Invalid character"))
         }
         @client.InvalidResponseShape(error) => {
           assert_eq(response, "{}")

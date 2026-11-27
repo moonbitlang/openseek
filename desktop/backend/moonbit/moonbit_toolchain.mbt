@@ -103,19 +103,23 @@ async fn initialize_moonbit(
   version : String,
   runtime_dir : @pathx.Path?,
 ) -> Unit {
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_initialize",
-      "moon_home": moon_home.to_string(),
-      "version": version,
-    }
+  if @xlog.debug() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_moonbit_initialize")
+    ..write_object_field("moon_home", moon_home.to_string())
+    ..write_object_field("version", version)
+    .write_object_end()
+  }
   if is_moonbit_bundled(moon_home, version) {
-    @xlog.debug() <?
-      {
-        "event": "desktop_moonbit_initialize_reuse",
-        "moon_home": moon_home.to_string(),
-        "version": version,
-      }
+    if @xlog.debug() is Some(event) {
+      event
+      ..write_object_begin()
+      ..write_object_field("event", "desktop_moonbit_initialize_reuse")
+      ..write_object_field("moon_home", moon_home.to_string())
+      ..write_object_field("version", version)
+      .write_object_end()
+    }
     return
   }
   bundle_moonbit(
@@ -133,12 +137,14 @@ async fn initialize_moonbit(
     "version=\{version}",
     create_mode=CreateOrTruncate,
   )
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_initialize_complete",
-      "moon_home": moon_home.to_string(),
-      "version": version,
-    }
+  if @xlog.debug() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_moonbit_initialize_complete")
+    ..write_object_field("moon_home", moon_home.to_string())
+    ..write_object_field("version", version)
+    .write_object_end()
+  }
 }
 
 ///|
@@ -211,43 +217,57 @@ async fn prepare_moonbit_payload(
   version~ : String,
   runtime_dir? : @pathx.Path,
 ) -> Unit {
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_prepare_payload",
-      "seed_dir": seed_dir.to_string(),
-      "moon_home": moon_home.to_string(),
-      "moon_exists": @fsx.exists(moonbit_command(moon_home)),
-      "moonc_exists": @fsx.exists(moonbit_compiler_command(moon_home)),
-    }
+  if @xlog.debug() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_moonbit_prepare_payload")
+    ..write_object_field("seed_dir", seed_dir.to_string())
+    ..write_object_field("moon_home", moon_home.to_string())
+    ..write_object_field("moon_exists", @fsx.exists(moonbit_command(moon_home)))
+    ..write_object_field(
+      "moonc_exists",
+      @fsx.exists(moonbit_compiler_command(moon_home)),
+    )
+    .write_object_end()
+  }
   if is_moonbit_bundled(moon_home, version) {
-    @xlog.debug() <?
-      {
-        "event": "desktop_moonbit_prepare_payload_reuse",
-        "seed_dir": seed_dir.to_string(),
-        "moon_home": moon_home.to_string(),
-        "version": version,
-      }
+    if @xlog.debug() is Some(event) {
+      event
+      ..write_object_begin()
+      ..write_object_field("event", "desktop_moonbit_prepare_payload_reuse")
+      ..write_object_field("seed_dir", seed_dir.to_string())
+      ..write_object_field("moon_home", moon_home.to_string())
+      ..write_object_field("version", version)
+      .write_object_end()
+    }
     ensure_moonx_alias(moon_home)
     return
   }
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_prepare_payload_refresh",
-      "seed_dir": seed_dir.to_string(),
-      "moon_home": moon_home.to_string(),
-    }
+  if @xlog.debug() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_moonbit_prepare_payload_refresh")
+    ..write_object_field("seed_dir", seed_dir.to_string())
+    ..write_object_field("moon_home", moon_home.to_string())
+    .write_object_end()
+  }
   @fsx.remove_if_exists(moon_home)
   copy_moonbit_seed_dir(seed_dir, moon_home)
   initialize_moonbit(moon_home, version, runtime_dir)
   ensure_moonx_alias(moon_home)
-  @xlog.debug() <?
-    {
-      "event": "desktop_moonbit_prepare_payload_complete",
-      "seed_dir": seed_dir.to_string(),
-      "moon_home": moon_home.to_string(),
-      "moon_exists": @fsx.exists(moonbit_command(moon_home)),
-      "moonc_exists": @fsx.exists(moonbit_compiler_command(moon_home)),
-    }
+  if @xlog.debug() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_moonbit_prepare_payload_complete")
+    ..write_object_field("seed_dir", seed_dir.to_string())
+    ..write_object_field("moon_home", moon_home.to_string())
+    ..write_object_field("moon_exists", @fsx.exists(moonbit_command(moon_home)))
+    ..write_object_field(
+      "moonc_exists",
+      @fsx.exists(moonbit_compiler_command(moon_home)),
+    )
+    .write_object_end()
+  }
 }
 
 ///|

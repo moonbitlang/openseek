@@ -387,7 +387,7 @@ async fn local_lan_ip() -> String? {
   let probe = @socket.UdpClient(@socket.Addr::parse("8.8.8.8:53")) catch {
     _ => return None
   }
-  let addr = probe.addr
+  let addr = probe.local_addr()
   probe.close()
   // The probe forces an IPv4 route, so the local address is IPv4; bail on the
   // unexpected IPv6 case rather than mis-format it.
@@ -508,7 +508,7 @@ async fn send_reply(
     headers.set(@http.CaseInsensitiveString("Set-Cookie"), cookie)
   }
   conn.send_response(reply.code, reply.reason, extra_headers=headers)
-  conn.write_string(reply.body)
+  conn.text.write(reply.body)
   conn.end_response()
 }
 
@@ -732,7 +732,7 @@ async fn file_mtime(path : String) -> (Int64, Int32)? {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return None }
   defer file.close()
   let stamp = file.mtime() catch { _ => return None }
-  Some((stamp.sec(), stamp.nsec()))
+  Some((stamp.sec(), stamp.subsec_nanos()))
 }
 
 ///|
@@ -1147,7 +1147,7 @@ fn session_id_from_file_name(name : String) -> String? {
 ///|
 async fn session_file_stamp(path : String) -> (Int64?, Int32) {
   let stamp = @fs.mtime(path) catch { _ => return (None, 0) }
-  (Some(stamp.sec()), stamp.nsec())
+  (Some(stamp.sec()), stamp.subsec_nanos())
 }
 
 ///|

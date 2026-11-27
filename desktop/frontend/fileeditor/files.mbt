@@ -179,20 +179,25 @@ fn read_file(
 }
 
 ///|
-/// Ask the owning Desktop Host to run `moon tree --package --json` beside an
+/// Ask the session workspace to run `moon tree --package --json` beside an
 /// exact `moon.mod`. This auxiliary failure is kept separate from the source
 /// read so the editable manifest remains available when Moon cannot render it.
 fn read_package_graph(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
-  epoch : Int32,
+  ctx : Ctx,
   path : @common.Uri,
   generation : Int32,
-  root~ : @common.Uri?,
 ) -> @cmd.Cmd {
-  guard root is Some(root) &&
-    @resource.belongs_to(root, owner.channel) &&
-    @resource.relative_to(path, root) is Some(relative) else {
+  let owner = ctx.owner
+  let epoch = ctx.request_epoch
+  guard navigation_context_for_file(
+      owner,
+      ctx.root(),
+      path,
+      cloud?=ctx.cloud_files,
+    )
+    is Some(context) &&
+    ctx.relative(path) is Some(relative) else {
     return dispatch(
       PackageGraphRequestFailed(
         owner~,
@@ -205,10 +210,12 @@ fn read_package_graph(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        owner.channel,
+      let reply = request_moonide(
+        context,
+        path,
         @commands.moon_package_graph,
-        { session: owner.session, root: root.path, path: relative.0, },
+        { session: owner.session(), root: context.root.path, path: relative.0, },
+        "package-graph",
       ) catch {
         error => {
           scheduler.add(
@@ -218,7 +225,7 @@ fn read_package_graph(
                 epoch~,
                 path~,
                 generation~,
-                message=@interop.bridge_error_text(error),
+                message=review_error_text(error, ctx.locale),
               ),
             ),
           )

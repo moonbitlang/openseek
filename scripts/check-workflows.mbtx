@@ -2,7 +2,7 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
 }
 ---
@@ -25,15 +25,19 @@ async fn main {
     for script in scripts {
       let relative = "\{directory}/\{script}"
       println("Checking \{relative}")
-      let code = @shell.Cmd("moon", [
-        "check",
-        "--target",
-        "wasm",
-        "--deny-warn",
-        "--target-dir",
-        temporary + "/script-\{checked}",
-        relative,
-      ]).status()
+      let code = @process.run(
+        "moon",
+        [
+          "check",
+          "--target",
+          "wasm",
+          "--deny-warn",
+          "--target-dir",
+          temporary + "/script-\{checked}",
+          relative,
+        ],
+        stdin=Empty,
+      ).exit_code
       if code != 0 {
         @env.exit(code)
       }
@@ -53,9 +57,11 @@ async fn main {
     )
   }
   println("Checking share/artifact/rabbita")
-  let code = @shell.Cmd("moon", [
-    "-C", component, "check", "--target", "js", "--deny-warn",
-  ]).status()
+  let code = @process.run(
+    "moon",
+    ["-C", component, "check", "--target", "js", "--deny-warn"],
+    stdin=Empty,
+  ).exit_code
   if code != 0 {
     @env.exit(code)
   }

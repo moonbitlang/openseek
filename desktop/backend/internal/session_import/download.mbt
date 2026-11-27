@@ -69,7 +69,7 @@ async fn download(input : String) -> String {
       guard bytes.length() + chunk.length() <= MaxBytes else {
         raise SessionImportError("JSON must be no larger than 16 MiB.")
       }
-      bytes.write_bytes(chunk)
+      bytes.write_bytesview(chunk)
     }
     @utf8.decode(bytes.to_bytes())
   })

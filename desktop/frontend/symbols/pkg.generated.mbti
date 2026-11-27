@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/sub",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
 }
@@ -13,9 +14,9 @@ import {
 // Values
 pub fn decode(@protocol.WorkspaceSymbolsReply) -> Array[Symbol]
 
-pub fn search(@interop.ConversationKey, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @cmd.Cmd
+pub fn search(@interop.ConversationIdentity, String, root~ : @common.Uri, cloud? : @cloud_client.Access, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @cmd.Cmd
 
-pub fn searching(@interop.ConversationKey, String, root~ : @common.Uri, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @sub.Sub
+pub fn searching(@interop.ConversationIdentity, String, root~ : @common.Uri, cloud? : @cloud_client.Access, loaded~ : (Array[Symbol]) -> @cmd.Cmd, failed~ : @cmd.Cmd) -> @sub.Sub
 
 // Errors
 

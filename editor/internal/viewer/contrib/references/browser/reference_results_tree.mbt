@@ -1205,7 +1205,7 @@ fn reference_results_summary(
   let reference_count = model.references.length()
   let files : Set[String] = Set([])
   for group in model.groups {
-    files.add(group.uri_string)
+    files.insert(group.uri_string)
   }
   let group_count = files.length()
   if reference_count > 0 {

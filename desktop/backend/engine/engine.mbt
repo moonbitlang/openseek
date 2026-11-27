@@ -149,13 +149,15 @@ async fn ServeEngine::close_and_wait(self : ServeEngine) -> Unit {
     self.wait_retired()
     return
   }
-  @xlog.warn() <?
-    {
-      "event": "desktop_engine_cancel",
-      "reason": "graceful close timeout",
-      "session": self.session_key,
-      "pid": self.process.pid,
-    }
+  if @xlog.warn() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_engine_cancel")
+    ..write_object_field("reason", "graceful close timeout")
+    ..write_object_field("session", self.session_key)
+    ..write_object_field("pid", self.process.pid)
+    .write_object_end()
+  }
   self.process.cancel()
   guard @async.with_timeout_opt(ServeCancelWaitMs, () => self.wait_process())
     is Some(_) else {
@@ -382,13 +384,15 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
     }
     if @async.with_timeout_opt(ServeCloseGraceMs, () => self.wait_process())
       is None {
-      @xlog.warn() <?
-        {
-          "event": "desktop_engine_cancel",
-          "reason": "failed command close timeout",
-          "session": self.session_key,
-          "pid": self.process.pid,
-        }
+      if @xlog.warn() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_engine_cancel")
+        ..write_object_field("reason", "failed command close timeout")
+        ..write_object_field("session", self.session_key)
+        ..write_object_field("pid", self.process.pid)
+        .write_object_end()
+      }
       self.process.cancel()
     }
   }
@@ -1417,12 +1421,14 @@ async fn add_moonbit_path_for_native_engine(
     source~,
   )
   toolchain.apply_to_env(env)
-  @xlog.debug() <?
-    {
-      "event": "desktop_engine_moonbit_path",
-      "bin_dir": toolchain.bin_dir.to_string(),
-      "path_prefix": first_path_entry(path_env_value(env)),
-    }
+  if @xlog.debug() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_engine_moonbit_path")
+    ..write_object_field("bin_dir", toolchain.bin_dir.to_string())
+    ..write_object_field("path_prefix", first_path_entry(path_env_value(env)))
+    .write_object_end()
+  }
 }
 
 ///|
@@ -1546,13 +1552,15 @@ async fn start_serve_engine(
     if startup_engine is Some(engine) {
       // Nothing was admitted yet; the writer task closes stdin on its way out.
       engine.discard_commands("the engine failed to start")
-      @xlog.debug() <?
-        {
-          "event": "desktop_engine_cancel",
-          "reason": "startup rollback",
-          "session": engine.session_key,
-          "pid": engine.process.pid,
-        }
+      if @xlog.debug() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_engine_cancel")
+        ..write_object_field("reason", "startup rollback")
+        ..write_object_field("session", engine.session_key)
+        ..write_object_field("pid", engine.process.pid)
+        .write_object_end()
+      }
       engine.process.cancel()
       if slot.engine is Some(current) && physical_equal(current, engine) {
         slot.engine = None
@@ -1581,18 +1589,24 @@ async fn start_serve_engine(
     env~,
     host_mcp=manager.mcp.server is Some(_),
   )
-  @xlog.debug() <?
-    {
-      "event": "desktop_engine_spawn",
-      "program": program,
-      "cwd": config.cwd.map(cwd => cwd.to_string()).unwrap_or(""),
-      "session_key": config.session,
-      "runtime_dir": manager.runtime_dir
-      .map(dir => dir.to_string())
-      .unwrap_or(""),
-      "path_prefix": first_path_entry(path_env_value(env)),
-      "inherit_env": false,
-    }
+  if @xlog.debug() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_engine_spawn")
+    ..write_object_field("program", program)
+    ..write_object_field(
+      "cwd",
+      config.cwd.map(cwd => cwd.to_string()).unwrap_or(""),
+    )
+    ..write_object_field("session_key", config.session)
+    ..write_object_field(
+      "runtime_dir",
+      manager.runtime_dir.map(dir => dir.to_string()).unwrap_or(""),
+    )
+    ..write_object_field("path_prefix", first_path_entry(path_env_value(env)))
+    ..write_object_field("inherit_env", false)
+    .write_object_end()
+  }
   let engine_id = @uuid.mint()
   let process = @process.spawn(
     group,
@@ -1613,13 +1627,15 @@ async fn start_serve_engine(
   let writer = process.stdin
   let reader = process.stdout
   let stderr_reader = process.stderr
-  @xlog.info() <?
-    {
-      "event": "desktop_engine_spawned",
-      "program": program,
-      "session_key": config.session,
-      "pid": process.pid,
-    }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_engine_spawned")
+    ..write_object_field("program", program)
+    ..write_object_field("session_key", config.session)
+    ..write_object_field("pid", process.pid)
+    .write_object_end()
+  }
   manager.mcp.current_engine_id = Some(engine_id)
   // No registration event arrives when this launch has no configuration.
   if manager.mcp.server is None && !mcp_configured(config, env) {
@@ -1701,26 +1717,30 @@ async fn ServeEngine::run(
   defer self.message_receipts.close(Closed)
   let code = self.consume(manager, reader) catch {
     error => {
-      @xlog.error() <?
-        {
-          "event": "desktop_engine_consumer_failed",
-          "session": self.session_key,
-          "pid": self.process.pid,
-          "run_id": self.phase.latest_run().unwrap_or(""),
-          "error": "\{error}",
-        }
+      if @xlog.error() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_engine_consumer_failed")
+        ..write_object_field("session", self.session_key)
+        ..write_object_field("pid", self.process.pid)
+        ..write_object_field("run_id", self.phase.latest_run().unwrap_or(""))
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       // This task is the pipe's drain, not only its interpreter: with it
       // gone nothing reads stdout, the OS pipe fills, and the child freezes
       // mid-turn on a blocked write, so waiting for it to exit on its own
       // would wait forever. Kill it instead, so the retirement below reaps a
       // real exit and settles the open run.
-      @xlog.warn() <?
-        {
-          "event": "desktop_engine_cancel",
-          "reason": "event consumer failed",
-          "session": self.session_key,
-          "pid": self.process.pid,
-        }
+      if @xlog.warn() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_engine_cancel")
+        ..write_object_field("reason", "event consumer failed")
+        ..write_object_field("session", self.session_key)
+        ..write_object_field("pid", self.process.pid)
+        .write_object_end()
+      }
       self.process.cancel()
       // A wait that errors yields no status; absence stays absent rather
       // than becoming a fabricated exit code downstream.
@@ -2141,16 +2161,18 @@ async fn ServeEngine::retire(
 ) -> Unit {
   let engine = self
   let sink = self.sink
-  @xlog.info() <?
-    {
-      "event": "desktop_engine_exited",
-      "session": engine.session_key,
-      "pid": engine.process.pid,
-      // Absent when the process handle yielded no status (a forced
-      // retirement whose wait failed) — never a fabricated sentinel.
-      "exit_code": code.map_or(null, c => Json(c)),
-      "run_id": engine.phase.latest_run().unwrap_or(""),
-    }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_engine_exited")
+    ..write_object_field("session", engine.session_key)
+    ..write_object_field("pid", engine.process.pid)
+    // Absent when the process handle yielded no status (a forced
+    // retirement whose wait failed) — never a fabricated sentinel.
+    ..write_object_field("exit_code", code.map_or(null, c => Json(c)))
+    ..write_object_field("run_id", engine.phase.latest_run().unwrap_or(""))
+    .write_object_end()
+  }
   engine.discard_commands("the engine exited")
   // Capture ownership only if the slot still contains THIS engine by
   // identity. Correct replacement waits on this handle through final
@@ -2177,12 +2199,14 @@ async fn ServeEngine::retire(
       // retry. Nothing else is owed: what this conversation committed is a
       // question the transcript read answers.
       error =>
-        @xlog.debug() <?
-          {
-            "event": "desktop_follower_final_scan_failed",
-            "session": engine.session_key,
-            "error": "\{error}",
-          }
+        if @xlog.debug() is Some(event) {
+          event
+          ..write_object_begin()
+          ..write_object_field("event", "desktop_follower_final_scan_failed")
+          ..write_object_field("session", engine.session_key)
+          ..write_object_field("error", "\{error}")
+          .write_object_end()
+        }
     }
   }
   match engine.phase {
