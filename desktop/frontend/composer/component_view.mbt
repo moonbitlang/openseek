@@ -349,7 +349,13 @@ fn Entry::view(
       WorktreePlacementNotice => "worktree-placement"
       MissingWorktreeNoticeComponent(_) => "missing-worktree"
     }
-    if component.render(locale~, self.identity(), action_emit) is Some(html) {
+    if component.render(
+        locale~,
+        self.identity(),
+        action_emit,
+        holds_draft=self.holds_draft(),
+      )
+      is Some(html) {
       context[key] = html
     }
   }
