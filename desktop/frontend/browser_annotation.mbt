@@ -3,7 +3,7 @@
 priv struct BrowserAnnotationSession {
   id : Int32
   request : String
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   codex : Bool
   state : @preview.Annotation
 }
@@ -60,7 +60,12 @@ fn update_browser_annotation(
         page.url is Some(_) else {
         return (@cmd.none, model)
       }
-      guard model.active_checkout() is Some(context) else {
+      let owner = model.dock_owner()
+      guard !owner.session().is_empty() &&
+        (
+          !(owner is @interop.Cloud(..)) ||
+          model.cloud.can_compose(owner.session())
+        ) else {
         return model.notify_error(
           dispatch, "Open a chat before adding a browser annotation.",
         )
@@ -70,7 +75,7 @@ fn update_browser_annotation(
       let session : BrowserAnnotationSession = {
         id,
         request,
-        owner: context.owner,
+        owner,
         codex: model.screen is Codex,
         state: Selecting,
       }
@@ -98,8 +103,7 @@ fn update_browser_annotation(
         session.state is Selecting else {
         return (@cmd.none, model)
       }
-      guard model.active_checkout() is Some(context) &&
-        context.owner == session.owner &&
+      guard model.dock_owner() == session.owner &&
         (model.screen is Codex) == session.codex &&
         desired_browser_view(model) == Some(session.id) else {
         return (@cmd.none, { ..model, browser_annotation: None, })
@@ -120,6 +124,26 @@ fn update_browser_annotation(
       let mention : @composer.Mention = {
         ref_: BrowserAnnotation(element~),
         range: None,
+      }
+      if session.owner is @interop.Cloud(..) {
+        let model = { ..model, browser_annotation: None, }
+        guard model.composer_input().quote_target() is Some(identity) &&
+          identity.owner == session.owner else {
+          return (@cmd.none, model)
+        }
+        return (
+          dispatch(
+            ComposerReply({
+              identity,
+              content: @composer.Annotation(mention),
+              images: [],
+              send: false,
+              accepted: @cmd.none,
+              declined: @cmd.none,
+            }),
+          ),
+          model,
+        )
       }
       let model = if session.codex {
         { ..model, codex: model.codex.with_browser_annotation(mention), }
@@ -150,8 +174,7 @@ fn reconcile_browser_annotation(
   guard model.browser_annotation is Some(session) else {
     return (@cmd.none, model)
   }
-  if model.active_checkout() is Some(context) &&
-    context.owner == session.owner &&
+  if model.dock_owner() == session.owner &&
     (model.screen is Codex) == session.codex &&
     desired_browser_view(model) == Some(session.id) {
     return (@cmd.none, model)

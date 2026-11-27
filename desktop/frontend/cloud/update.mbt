@@ -1857,6 +1857,7 @@ fn State::submit(
       | Annotation(..)
       | ReviewChanges(_)
       | SemanticSearch(_)
+      | BrowserAnnotation(..)
       | SemanticSearchArtifact(_))
     }) else {
     return (state, @cmd.none, None)
