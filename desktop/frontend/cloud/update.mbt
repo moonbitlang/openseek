@@ -1853,6 +1853,7 @@ fn State::submit(
     draft.mentions.all(mention => {
       mention.ref_
       is (File(..)
+      | Symbol(..)
       | OfficeSelection(..)
       | Skill(..)
       | Annotation(..)

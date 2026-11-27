@@ -48,7 +48,7 @@ fn symbol_run(name : String, path : String) -> @quick_open.State raise {
   )
   let (_, ready, _) = opened.handle(
     emit(),
-    @quick_open.SymbolsLoaded(owner=owner(), query="", generation=1, items=[
+    @quick_open.SymbolsLoaded(owner=Host(owner()), query="", generation=1, items=[
       {
         name,
         kind: Some(12),
@@ -163,7 +163,7 @@ fn cloud_input(
 }
 
 ///|
-test "Cloud file Quick Open ranks the complete index and treats hash as file text" {
+test "Cloud file Quick Open ranks the complete index and matches a hash within a file name" {
   let input = cloud_input()
   let owner = @interop.Cloud(account="account", session="cloud-session")
   let (_, opened) = @quick_open.State::empty().open(
@@ -174,7 +174,7 @@ test "Cloud file Quick Open ranks the complete index and treats hash as file tex
   // Typing while the complete index is in flight does not obsolete its result.
   let (_, typed, _) = opened.handle(
     emit(),
-    @quick_open.ValueChanged("#literal"),
+    @quick_open.ValueChanged("src/#literal"),
     input,
   )
   let (_, loaded, _) = typed.handle(
@@ -188,12 +188,12 @@ test "Cloud file Quick Open ranks the complete index and treats hash as file tex
   let (_, closed, accepted) = loaded.handle(emit(), @quick_open.Pick(0), input)
   assert_false(closed.is_open())
   assert_eq(accepted, Some({ path: "src/#literal.mbt", range: None, }))
-  let (_, unsupported) = @quick_open.State::empty().open(
+  let (_, symbol_search) = @quick_open.State::empty().open(
     emit(),
     input,
     @quick_open.Symbols,
   )
-  assert_false(unsupported.is_open())
+  assert_true(symbol_search.is_open())
 }
 
 ///|
