@@ -93,14 +93,3 @@ async fn ApiState::cloud_mcp(
     }
   }
 }
-
-///|
-/// A replacement desktop page cannot return replies through the old page's
-/// WebSockets. Keep its questions open and deliver subsequent answers as input.
-pub fn ApiState::detach_cloud_questions(self : ApiState) -> Unit {
-  for _, client in self.cloud_clients {
-    for request in client.questions.snapshot().requests {
-      client.questions.detach(request.session)
-    }
-  }
-}
