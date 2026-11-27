@@ -4,8 +4,8 @@ fn quiet() -> @cmd.Emit[@session_changes.Msg] {
 }
 
 ///|
-fn conversation(session : String) -> @interop.ConversationKey {
-  { channel: Local, session, }
+fn conversation(session : String) -> @interop.ConversationIdentity {
+  Host({ channel: Local, session, })
 }
 
 ///|
@@ -42,7 +42,7 @@ fn listed(
 ///|
 /// Open the overview on `key` and answer with `artifacts`.
 fn loaded(
-  key : @interop.ConversationKey,
+  key : @interop.ConversationIdentity,
   artifacts : Array[@protocol.SessionArtifact],
 ) -> @session_changes.State {
   let (_, checking) = @session_changes.update(

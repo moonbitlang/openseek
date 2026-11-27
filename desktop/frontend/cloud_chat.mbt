@@ -246,6 +246,31 @@ fn update_cloud(
   let docks = model.docks.copy()
   let pending_previews = model.pending_previews.copy()
   let file_commands : Array[@cmd.Cmd] = []
+  let mut changes = model.changes
+  if model.overview_conversation() is Some(Cloud(account~, session~) as owner) &&
+    cloud.user_id == Some(account) &&
+    message is @cloud.WatchEvent(epoch, id, stream, incoming) &&
+    epoch == cloud.epoch &&
+    id == session &&
+    stream.active &&
+    cloud.conversations.get(id) is Some(conversation) &&
+    conversation.stream == Some(stream) &&
+    (
+      incoming is ArtifactsChanged(..) ||
+      (
+        incoming is Snapshot(_) &&
+        before.conversations.get(id) is Some({ last_seq: None, .. })
+      )
+    ) {
+    let (cmd, refreshed) = @session_changes.update(
+      dispatch.map(msg => Changes(msg)),
+      Changed(owner),
+      changes,
+      account?=model.account,
+    )
+    changes = refreshed
+    file_commands.push(cmd)
+  }
   if before.epoch != cloud.epoch && before.user_id is Some(account) {
     let (panel, clear) = @fileeditor.forget_cloud_files(file_panel, account)
     file_panel = panel
@@ -280,6 +305,7 @@ fn update_cloud(
   }
   let next = {
     ..model,
+    changes,
     docks,
     pending_previews,
     file_panel,

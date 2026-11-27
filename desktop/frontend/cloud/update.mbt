@@ -1088,6 +1088,18 @@ pub fn update(
             navigation~,
           )
         }
+        ArtifactsChanged(session~, seq~) => {
+          guard session == id &&
+            conversation.last_seq is Some(last) &&
+            seq > last else {
+            return (state, @cmd.none, None)
+          }
+          (
+            state.replace(id, { ..conversation, last_seq: Some(seq), }),
+            @cmd.none,
+            None,
+          )
+        }
         EngineFailed(session~, seq~, error~) => {
           guard session == id &&
             conversation.last_seq is Some(last) &&

@@ -100,7 +100,7 @@ pub(all) struct LauncherActions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
-  github : @cmd.Cmd
+  github : @cmd.Cmd?
   workflows : @cmd.Cmd
   jobs : @cmd.Cmd?
 }

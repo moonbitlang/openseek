@@ -302,6 +302,7 @@ fn QueueRequest::decode_reply(
 pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
+  ArtifactsChanged(session~ : String, seq~ : Int32)
   NativeEvent(EngineFrame)
   EngineFailed(session~ : String, seq~ : Int32, error~ : String)
 }
@@ -351,6 +352,16 @@ fn decode_control_event(
       _ => raise @cloud_client.RequestError(Malformed)
     }
     Snapshot(snapshot)
+  } else if json
+    is {
+      "kind": "session_artifacts_changed",
+      "session_id": String(session),
+      "seq": Number(seq, ..),
+      ..
+    } &&
+    seq > 0 &&
+    seq == seq.to_int().to_double() {
+    ArtifactsChanged(session~, seq=seq.to_int())
   } else if json is { "kind": "engine_failed", .. } {
     guard json
       is {

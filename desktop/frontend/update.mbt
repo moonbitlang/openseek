@@ -2186,6 +2186,7 @@ fn update(
         dispatch.map(msg => Changes(msg)),
         Opened(conversation),
         model.changes,
+        account?=model.account,
       )
       (changes_cmd, { ..model, changes, })
     }
@@ -7388,10 +7389,11 @@ fn update_msg(
         dispatch.map(msg => Changes(msg)),
         msg,
         model.changes,
+        account?=model.account,
       )
       let mut next = { ..model, changes, }
       if msg is (Listed(_, ..) | Removed(_, _, _)) &&
-        changes.conversation is Some(conversation) &&
+        changes.conversation is Some(Host(conversation)) &&
         changes.phase is (Loaded(artifacts) | Reloading(artifacts)) &&
         next.device_state(conversation.channel) is Some(dev) {
         let urls = extract_pull_request_urls(artifacts)
@@ -8398,11 +8400,11 @@ fn update_device_msg(
         model
       }
       // Attachment changes are not replayed across a connection gap.
-      let model = if model.changes.conversation is Some(conversation) &&
+      let model = if model.changes.conversation is Some(Host(conversation)) &&
         conversation.channel == channel {
         let (cmd, changes) = @session_changes.update(
           dispatch.map(msg => Changes(msg)),
-          Changed(conversation),
+          Changed(Host(conversation)),
           model.changes,
         )
         commands.push(cmd)
@@ -10545,10 +10547,10 @@ fn update_device_msg(
     }
     ArtifactsChanged(session) => {
       let key : @interop.ConversationKey = { channel, session, }
-      let owned_by_overview = model.changes.conversation == Some(key)
+      let owned_by_overview = model.changes.conversation == Some(Host(key))
       let (cmd, changes) = @session_changes.update(
         dispatch.map(msg => Changes(msg)),
-        Changed(key),
+        Changed(Host(key)),
         model.changes,
       )
       // When the overview is already watching this conversation, its own

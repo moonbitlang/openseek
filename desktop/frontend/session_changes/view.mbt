@@ -71,7 +71,7 @@ pub extend Checkout with Debug::{to_repr}
 /// The attached items worth a row: what the host last listed, without the
 /// pull request the checkout row already shows.
 fn attached(
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
   checkout : Checkout?,
   state : State,
 ) -> Array[@protocol.SessionArtifact] {
@@ -93,7 +93,7 @@ fn attached(
 /// checkout to describe and nothing attached.
 pub fn summary(
   locale~ : @i18n.Locale = English,
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
   checkout : Checkout?,
   state : State,
 ) -> String? {
@@ -131,7 +131,7 @@ pub fn summary(
 /// that unfolds into theirs. Each pull request or branch with a page opens it.
 pub fn rows(
   locale~ : @i18n.Locale = English,
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
   checkout : Checkout?,
   state : State,
   emit : @cmd.Emit[Msg],

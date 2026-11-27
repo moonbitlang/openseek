@@ -19,22 +19,22 @@
 ///|
 pub(all) enum Msg {
   /// The overview came on screen for this conversation.
-  Opened(@interop.ConversationKey)
+  Opened(@interop.ConversationIdentity)
   /// The host saved a new list for this conversation, or may have while it
   /// was unreachable: whatever the overview holds for it is out of date.
-  Changed(@interop.ConversationKey)
+  Changed(@interop.ConversationIdentity)
   /// The host answered list question number `serial`.
   Listed(serial~ : Int32, Result[@protocol.SessionArtifacts, String])
   /// The user folded or unfolded the conversation's merged pull requests.
-  MergedToggled(@interop.ConversationKey)
+  MergedToggled(@interop.ConversationIdentity)
   /// The user asked to take `artifact` off the conversation's list.
-  Remove(@interop.ConversationKey, @protocol.SessionArtifact)
+  Remove(@interop.ConversationIdentity, @protocol.SessionArtifact)
   /// The user asked to take every one of `artifacts` off the conversation's
   /// list at once: each is removed as if asked for on its own.
-  RemoveAll(@interop.ConversationKey, Array[@protocol.SessionArtifact])
+  RemoveAll(@interop.ConversationIdentity, Array[@protocol.SessionArtifact])
   /// The host answered the removal of `artifact` with the list that remains.
   Removed(
-    @interop.ConversationKey,
+    @interop.ConversationIdentity,
     @protocol.SessionArtifact,
     Result[@protocol.SessionArtifacts, String],
   )
@@ -88,7 +88,7 @@ pub extend Phase with Eq::{equal, not_equal}
 pub struct State {
   /// The conversation the phase describes; `None` before the overview first
   /// shows.
-  conversation : @interop.ConversationKey?
+  conversation : @interop.ConversationIdentity?
   phase : Phase
   /// Counts list questions, so the answer to a superseded one is recognized
   /// and dropped instead of overwriting its successor's.
@@ -152,7 +152,7 @@ pub fn State::initial() -> State {
 /// conversation it was asked about: for any other, nothing has been asked.
 pub fn State::phase_for(
   self : State,
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
 ) -> Phase {
   if self.conversation == Some(conversation) {
     self.phase
@@ -166,6 +166,7 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   msg : Msg,
   state : State,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, State) {
   match msg {
     // One question at a time per conversation; another conversation's
@@ -180,9 +181,16 @@ pub fn update(
             conversation,
             state.next_generation(),
             waiting=Reloading(artifacts),
+            account?,
           )
         Unchecked | CheckFailed(_) =>
-          ask(emit, conversation, state.next_generation(), waiting=Checking)
+          ask(
+            emit,
+            conversation,
+            state.next_generation(),
+            waiting=Checking,
+            account?,
+          )
       }
     // A change to a list the overview is not showing changes nothing here:
     // that conversation is asked about when the overview shows it. For the
@@ -196,7 +204,7 @@ pub fn update(
         Loaded(artifacts) | Reloading(artifacts) => Reloading(artifacts)
         Unchecked | Checking | CheckFailed(_) => Checking
       }
-      ask(emit, conversation, state.next_generation(), waiting~)
+      ask(emit, conversation, state.next_generation(), waiting~, account?)
     }
     Listed(serial~, result) => {
       guard serial == state.serial &&
@@ -206,10 +214,13 @@ pub fn update(
       }
       match result {
         Ok(list) =>
-          look_up(emit, conversation.channel, list.artifacts, {
-            ..state,
-            phase: Loaded(list.artifacts),
-          })
+          look_up(
+            emit,
+            conversation,
+            list.artifacts,
+            { ..state, phase: Loaded(list.artifacts), },
+            account?,
+          )
         Err(message) => (@cmd.none, { ..state, phase: CheckFailed(message), })
       }
     }
@@ -220,9 +231,9 @@ pub fn update(
       (@cmd.none, { ..state, merged_open: !state.merged_open, })
     }
     Remove(conversation, artifact) =>
-      remove(emit, conversation, [artifact], state)
+      remove(emit, conversation, [artifact], state, account?)
     RemoveAll(conversation, artifacts) =>
-      remove(emit, conversation, artifacts, state)
+      remove(emit, conversation, artifacts, state, account?)
     // The reply is the list as the removal left it, which another client may
     // already have changed again, and an answer still out may predate the
     // removal. Neither is the last word: the list is asked for again, showing
@@ -239,6 +250,7 @@ pub fn update(
             conversation,
             { ..state, removing, remove_error: None, },
             waiting=Reloading(list.artifacts),
+            account?,
           )
         Err(message) =>
           (@cmd.none, { ..state, removing, remove_error: Some(message), })
@@ -334,9 +346,10 @@ pub fn update(
 /// removals in flight together never undo one another.
 fn remove(
   emit : @cmd.Emit[Msg],
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
   artifacts : Array[@protocol.SessionArtifact],
   state : State,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, State) {
   guard state.conversation == Some(conversation) else {
     return (@cmd.none, state)
@@ -358,11 +371,24 @@ fn remove(
           )
         },
         () => {
-          @interop.bridge_request(
-            conversation.channel,
-            @commands.session_artifacts_remove,
-            { session: conversation.session, artifact, },
-          )
+          match conversation {
+            Host(key) =>
+              @interop.bridge_request(
+                key.channel,
+                @commands.session_artifacts_remove,
+                { session: key.session, artifact, },
+              )
+            Cloud(..) =>
+              @json.from_json(
+                cloud_request(
+                  conversation,
+                  account,
+                  "artifacts",
+                  Delete,
+                  body=artifact.to_json(),
+                ),
+              )
+          }
         },
       ),
     )
@@ -381,9 +407,10 @@ fn State::next_generation(self : State) -> State {
 /// not looked up yet, through the host on `channel`.
 fn look_up(
   emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  conversation : @interop.ConversationIdentity,
   artifacts : Array[@protocol.SessionArtifact],
   state : State,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, State) {
   let generation = state.generation
   let lookups = state.lookups.copy()
@@ -414,11 +441,24 @@ fn look_up(
           )
         },
         () => {
-          @interop.bridge_request(
-            channel,
-            @commands.github_pull_request_summary,
-            { url, },
-          )
+          match conversation {
+            Host(key) =>
+              @interop.bridge_request(
+                key.channel,
+                @commands.github_pull_request_summary,
+                { url, },
+              )
+            Cloud(..) =>
+              @json.from_json(
+                cloud_request(
+                  conversation,
+                  account,
+                  "github/github.pull_request_summary",
+                  Post,
+                  body={ "url": url },
+                ),
+              )
+          }
         },
       ),
     )
@@ -432,19 +472,27 @@ fn look_up(
 /// own and its merged pull requests folded.
 fn ask(
   emit : @cmd.Emit[Msg],
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
   state : State,
   waiting~ : Phase,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, State) {
   let serial = state.serial + 1
   let cmd = @cmd.attempt(
     result => emit(Listed(serial~, result.map_err(@interop.bridge_error_text))),
     () => {
-      @interop.bridge_request(
-        conversation.channel,
-        @commands.session_artifacts_list,
-        { session: conversation.session, },
-      )
+      match conversation {
+        Host(key) =>
+          @interop.bridge_request(
+            key.channel,
+            @commands.session_artifacts_list,
+            { session: key.session, },
+          )
+        Cloud(..) =>
+          @json.from_json(
+            cloud_request(conversation, account, "artifacts", Get),
+          )
+      }
     },
   )
   let state = if state.conversation == Some(conversation) {
@@ -468,4 +516,26 @@ fn PullRequest::from_reply(reply : @protocol.GitPullRequest) -> PullRequest? {
     _ => return None
   }
   Some({ number: reply.number, title: reply.title, state, url: reply.url, })
+}
+
+///|
+async fn cloud_request(
+  owner : @interop.ConversationIdentity,
+  account : @protocol.AccountSession?,
+  path : String,
+  method_ : @http.RequestMethod,
+  body? : Json,
+) -> Json {
+  guard owner is Cloud(account=id, session~) &&
+    account is Some(auth) &&
+    auth.user.user_id == id else {
+    fail("Cloud account changed")
+  }
+  @cloud_client.request(
+    @cloud_client.CloudOrigin,
+    "/v1/sessions/\{@uri.encode_component(session)}/" + path,
+    method_,
+    token=auth.token,
+    body?,
+  )
 }

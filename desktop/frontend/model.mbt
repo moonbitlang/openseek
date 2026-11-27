@@ -3884,13 +3884,20 @@ fn Model::active_conversation(self : Model) -> Conversation? {
 ///|
 /// The conversation the overview describes: the OpenSeek conversation on
 /// screen, while the overview is shown.
-fn Model::overview_conversation(self : Model) -> @interop.ConversationKey? {
+fn Model::overview_conversation(self : Model) -> @interop.ConversationIdentity? {
+  if self.overview_open &&
+    self.screen is Chat &&
+    self.cloud_identity() is Some(owner) {
+    return Some(owner)
+  }
   guard self.overview_open &&
     self.screen is Chat &&
     self.chat_column() is Transcript(conversation~, ..) else {
     return None
   }
-  Some({ channel: conversation.device, session: conversation.session_id, })
+  Some(
+    Host({ channel: conversation.device, session: conversation.session_id, }),
+  )
 }
 
 ///|

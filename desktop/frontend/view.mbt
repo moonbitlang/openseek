@@ -1840,7 +1840,7 @@ fn overview_view(
     model.overview,
     changes=@session_changes.summary(
       locale=model.locale,
-      key,
+      Host(key),
       checkout,
       model.changes,
     ).map(summary => {
@@ -1848,7 +1848,7 @@ fn overview_view(
       rows: () => {
         @session_changes.rows(
           locale=model.locale,
-          key,
+          Host(key),
           checkout,
           model.changes,
           dispatch.map(msg => Changes(msg)),
@@ -2394,7 +2394,19 @@ fn view(
                 @conversation_overview.view(
                   locale=model.locale,
                   model.overview,
-                  changes=Some(model.file_panel.overview_changes(model.locale)),
+                  changes=Some({
+                    ..model.file_panel.overview_changes(model.locale),
+                    rows: () => {
+                      model.file_panel.overview_changes(model.locale).rows() +
+                      @session_changes.rows(
+                        locale=model.locale,
+                        owner,
+                        None,
+                        model.changes,
+                        dispatch.map(msg => Changes(msg)),
+                      )
+                    },
+                  }),
                   dispatch.map(msg => Overview(msg)),
                 )
               } else {

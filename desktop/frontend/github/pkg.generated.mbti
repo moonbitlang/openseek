@@ -4,6 +4,8 @@ package "openseek_desktop/frontend/github"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/json",
+  "openseek_desktop/commands",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -48,13 +50,14 @@ pub fn CheckoutPhase::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct CheckoutScope {
-  channel : @interop.ChannelId
+  host : GithubHost
   cwd : String
   branch : String?
   head : String?
 }
 pub fn CheckoutScope::equal(Self, Self) -> Bool
 pub fn CheckoutScope::not_equal(Self, Self) -> Bool
+pub async fn[Payload : @json.ToJson, Reply : @json.FromJson] CheckoutScope::request(Self, @commands.Command[Payload, Reply], Payload) -> Reply
 
 #derive(Eq)
 pub(all) struct Detail {
@@ -66,6 +69,14 @@ pub(all) struct Detail {
 }
 pub fn Detail::equal(Self, Self) -> Bool
 pub fn Detail::not_equal(Self, Self) -> Bool
+
+#derive(Eq)
+pub(all) enum GithubHost {
+  Desktop(@interop.ChannelId)
+  Cloud(account~ : String, session~ : String, token~ : String)
+}
+pub fn GithubHost::equal(Self, Self) -> Bool
+pub fn GithubHost::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct Group {

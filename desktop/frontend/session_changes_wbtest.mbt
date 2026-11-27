@@ -23,7 +23,7 @@ test "showing the overview reads the attached changes of the conversation on scr
   let dispatch = test_dispatch()
   let model = test_model()
   let (_, shown) = update(dispatch, ToggleOverview, model)
-  assert_true(shown.changes.conversation == Some(current_key(model)))
+  assert_true(shown.changes.conversation == Some(Host(current_key(model))))
   assert_true(shown.changes.phase is Checking)
   // The answer is routed back into the changes card.
   let (_, answered) = update(
