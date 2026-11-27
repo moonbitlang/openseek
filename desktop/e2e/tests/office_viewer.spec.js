@@ -12,9 +12,11 @@ async function annotateSelection(preview) {
   await preview.locator('textarea').press('Enter');
 }
 
-test('saved citations show full feedback and keep the separate prompt', async ({ page }) => {
+test('saved citations show Office feedback inline and code feedback on hover', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const comment = 'Revise this explanation. '.repeat(5) + '\nKeep <script> as plain text. 修改这里。';
+  const codeComment = 'Handle the empty case.\nRetain the existing behavior.';
+  const prompt = '> Show the browser fixture\n\nExplain the changes.';
   const selection = (comment) => `<office_selection>\n${JSON.stringify({
     schema: 'office.selection.materialized.v1',
     selection: { text: 'Selected passage', pages: [2] },
@@ -22,12 +24,16 @@ test('saved citations show full feedback and keep the separate prompt', async ({
     ...(comment === undefined ? {} : { comment }),
   })}\n</office_selection>`;
   app.sessionEvents = [{ sequence: 1, item: { kind: 'user', payload: { content: [
-    'Show the browser fixture and explain the changes.',
+    prompt,
     '', '<user_mentions>',
     selection(comment),
     '<annotation file="src/main.mbt" lines="2-3">',
     '<quote>', 'let count = 0', '</quote>',
-    '<user_comment>', 'Handle the empty case.\nRetain the existing behavior.', '</user_comment>',
+    '<user_comment>', codeComment, '</user_comment>',
+    '</annotation>',
+    '<annotation file="src/main.mbt" lines="8-9" side="original">',
+    '<quote>', 'let count = 1', '</quote>',
+    '<user_comment>', 'Keep the old default.', '</user_comment>',
     '</annotation>',
     selection(),
     '<file path="README.md"/>',
@@ -37,12 +43,10 @@ test('saved citations show full feedback and keep the separate prompt', async ({
   await app.goto();
   await app.openSession();
   const sent = page.locator('.msg.user');
-  await expect(sent.locator('.mention-chip')).toHaveCount(4);
-  await expect(sent.locator('.msg-content')).toHaveText([
-    comment,
-    'Handle the empty case.\nRetain the existing behavior.',
-    'Show the browser fixture and explain the changes.',
-  ]);
+  await expect(sent.locator('.mention-chip')).toHaveCount(5);
+  await expect(sent.getByRole('button', { name: /src\/main\.mbt:2-3/ })).toHaveAttribute('title', codeComment);
+  await expect(sent.getByTitle('Keep the old default.', { exact: true })).toContainText('src/main.mbt:8-9 (original)');
+  await expect(sent.locator('.msg-content')).toHaveText([comment, prompt]);
   await expect(sent.locator('script')).toHaveCount(0);
 });
 

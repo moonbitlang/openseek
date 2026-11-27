@@ -876,7 +876,11 @@ fn user_text_nodes(
             [glyph, label],
           )
         } else {
-          @html.span(class="mention-body", [glyph, label])
+          @html.span(
+            class="mention-body",
+            title?=if mention is Annotation(..) { Some(title) } else { None },
+            [glyph, label],
+          )
         }
         chips.push(@html.div(class="mention-chip", [chip]))
       }
@@ -890,7 +894,7 @@ fn user_text_nodes(
       }
       body.push(@html.div(class="mention-tray", chips))
       for mention in parsed.mentions {
-        if mention.comment() is Some(comment) {
+        if mention is OfficeSelection(_) && mention.comment() is Some(comment) {
           body.push(@html.div(class="msg-content", inline_code_nodes(comment)))
         }
       }
