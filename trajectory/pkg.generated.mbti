@@ -1,0 +1,200 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/trajectory"
+
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/openseek/agent_session",
+}
+
+// Values
+pub fn activity_of(Trajectory, Int64, buckets? : Int32, compress? : Bool) -> Array[ActivityBucket]
+
+pub fn activity_on(TimeAxis, Trajectory, buckets? : Int32) -> Array[ActivityBucket]
+
+pub fn axis_of(Trajectory, Int64, compress? : Bool) -> TimeAxis
+
+pub fn axis_ticks(TimeAxis, Int64, Int64, tz_offset_ms? : Int64) -> Array[AxisTick]
+
+pub fn belongs_to_run(String, String) -> Bool
+
+pub fn build_trajectory(String, Array[SessionLog], job_records? : Array[JobMetadata]) -> Trajectory
+
+pub fn build_trajectory_parsed(String, Array[ParsedSessionLog], job_records? : Array[JobMetadata]) -> Trajectory
+
+pub fn child_session_ids_from_events(Array[@agent_session.SessionEvent]) -> Array[String]
+
+pub fn child_session_ids_from_text(String) -> Array[String]
+
+pub fn lane_title(String) -> String
+
+pub fn layout_span(TrajectorySpan, Int64, Int64, Int64) -> WaterfallRow
+
+pub fn layout_span_on(TimeAxis, TrajectorySpan, Int64) -> WaterfallRow
+
+pub fn layout_trajectory(Trajectory, Int64, compress? : Bool) -> Array[WaterfallRow]
+
+pub fn layout_trajectory_on(TimeAxis, Trajectory, Int64) -> Array[WaterfallRow]
+
+pub fn parent_session_of(String) -> String?
+
+pub fn parse_trajectory(@json.Json) -> Trajectory raise TrajectoryParseError
+
+pub fn session_depth_of(String) -> Int32
+
+pub fn tick_step_ms(Int64) -> Int64
+
+pub fn time_axis(Array[TrajectorySpan], Int64, Int64, Int64, compress~ : Bool) -> TimeAxis
+
+// Errors
+pub suberror TrajectoryParseError
+
+// Types and methods
+pub(all) struct ActivityBucket {
+  llm : Int32
+  tool : Int32
+  failed : Int32
+}
+
+#derive(Eq)
+pub(all) struct AxisTick {
+  at_ms : Int64
+  axis_ms : Int64
+  is_day : Bool
+}
+
+#derive(Eq)
+pub(all) struct JobMetadata {
+  session_id : String
+  job_id : String
+  started_at_ms : Int64
+  finished_at_ms : Int64?
+  status : SpanStatus
+}
+
+#derive(Eq)
+pub(all) enum MilestoneTag {
+  Compaction
+  Steer
+  RuntimeNotice
+  ContextYield
+  TurnStart
+}
+pub fn MilestoneTag::tag(Self) -> String
+
+pub(all) struct ParsedSessionLog {
+  id : String
+  events : Array[@agent_session.SessionEvent]
+  title : String?
+}
+
+pub(all) struct SessionLog {
+  id : String
+  text : String
+  title : String?
+}
+
+#derive(Eq)
+pub(all) enum SpanKind {
+  Run
+  Turn
+  LlmCall
+  ToolExec
+  WorkflowScript
+  PtcToolCall
+  BackgroundJob
+  JobWait
+  Milestone
+}
+pub fn SpanKind::tag(Self) -> String
+
+#derive(Eq)
+pub(all) enum SpanStatus {
+  Running
+  Succeeded
+  Failed
+  Aborted
+  Interrupted
+  Yielded
+}
+pub fn SpanStatus::tag(Self) -> String
+
+pub(all) struct TimeAxis {
+  segments : Array[(Int64, Int64)]
+  gaps : Array[(Int64, Int64)]
+  gap_ms : Int64
+  length_ms : Int64
+  idle_count : Int32
+}
+
+#derive(Eq)
+pub(all) struct Trajectory {
+  root_session_id : String
+  t0_ms : Int64
+  t_end_ms : Int64
+  live : Bool
+  sessions : Array[TrajectorySession]
+  spans : Array[TrajectorySpan]
+  stats : TrajectoryStats
+}
+pub fn Trajectory::to_json(Self) -> @json.Json
+
+#derive(Eq)
+pub(all) struct TrajectorySession {
+  session_id : String
+  parent_session_id : String?
+  title : String
+  depth : Int32
+  started_at_ms : Int64
+  ended_at_ms : Int64?
+}
+pub fn TrajectorySession::to_json(Self) -> @json.Json
+
+#derive(Eq)
+pub(all) struct TrajectorySpan {
+  id : String
+  parent_id : String?
+  session_id : String
+  title : String
+  depth : Int32
+  kind : SpanKind
+  status : SpanStatus
+  label : String
+  started_at_ms : Int64
+  ended_at_ms : Int64?
+  job_id : String?
+  job_ids : Array[String]
+  sequence : Int32?
+  tag : MilestoneTag?
+  metadata : Map[String, @json.Json]
+}
+pub fn TrajectorySpan::duration_ms(Self, Int64) -> Int64
+pub fn TrajectorySpan::to_json(Self) -> @json.Json
+
+#derive(Eq)
+pub(all) struct TrajectoryStats {
+  wall_ms : Int64
+  llm_ms : Int64
+  tool_ms : Int64
+  wait_ms : Int64
+  job_ms : Int64
+  prompt_tokens : Int64
+  completion_tokens : Int64
+  critical_path_ms : Int64
+  critical_path : Array[String]
+  span_count : Int32
+  turn_count : Int32
+  session_count : Int32
+}
+pub fn TrajectoryStats::to_json(Self) -> @json.Json
+
+pub(all) struct WaterfallRow {
+  span : TrajectorySpan
+  left_percent : Double
+  width_percent : Double
+  duration_ms : Int64
+  open_right_edge : Bool
+}
+
+// Type aliases
+
+// Traits
