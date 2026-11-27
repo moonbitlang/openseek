@@ -1,3 +1,5 @@
+Developing, refactoring, testing, and looking up APIs in MoonBit projects.
+
 # MoonBit development
 
 The following workflow applies when the task is MoonBit code.

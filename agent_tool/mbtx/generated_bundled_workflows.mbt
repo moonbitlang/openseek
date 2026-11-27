@@ -11,11 +11,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import { "moonbitlang/core/env" }
           #|---
           #|
-          #|fn main {
-          #|  guard @env.args() is [_, id] else {
-          #|    fail("agent-guide: expected exactly one guide ID")
-          #|  }
-          #|  let content = match id {
+          #|fn content(id : String) -> String raise {
+          #|  match id {
           #|    "artifacts" => (
           #|      #|# Session file artifacts
           #|      #|
@@ -1280,16 +1277,6 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|  deliverables that are not evidence citations.
           #|      #|
           #|    )
-          #|    "slides" => (
-          #|      #|# Slides
-          #|      #|
-          #|      #|- Presentation design guidelines: `slides/design`
-          #|      #|- Writing style for presentations: `slides/writing`
-          #|      #|- Typst layout guidelines: `slides/typst-layout`
-          #|      #|- Typst syntax cautions: `slides/typst-syntax-cautions`
-          #|      #|- Touying for PDF animations: `slides/typst-touying`
-          #|      #|
-          #|    )
           #|    "slides/design" => (
           #|      #|# Presentation Design Guidelines
           #|      #|
@@ -1496,9 +1483,16 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      #|- Motivate learning with real situations and connect it to practice through tasks, checklists, or exercises. Section summaries should answer the section's questions rather than repeat every slide title.
           #|      #|
           #|    )
-          #|    _ => fail("agent-guide: unknown guide ID: \{id}")
+          #|    _ => fail("agent-guide: unknown guide ID: " + id)
           #|  }
-          #|  let response : Json = { "version": 1, "id": id, "format": "markdown", "content": content }
+          #|}
+          #|
+          #|fn main {
+          #|  let response : Json = match @env.args() {
+          #|    [_] => {"version":1,"guides":[{"id":"artifacts","description":"Creating, packaging, and presenting session artifacts, including interactive answers."},{"id":"desktop-proton","description":"Building native MoonBit desktop applications with Proton."},{"id":"desktop-proton/examples","description":"Small Proton examples for native desktop applications."},{"id":"diagrams","description":"Choosing between prose, tables, charts, and diagrams, and selecting a diagram format."},{"id":"diagrams/charts","description":"Quantitative charts for trends, comparisons, distributions, and correlations."},{"id":"diagrams/diago","description":"Architecture and dependency diagrams with Diago or D2."},{"id":"diagrams/katex","description":"Explanatory diagrams drawn with KaTeX boxes and arrows."},{"id":"diagrams/mermaid","description":"Flowcharts and state diagrams with Mermaid."},{"id":"diagrams/plantuml","description":"Sequence and class diagrams with PlantUML."},{"id":"frontend-rabbita","description":"Building browser UIs and full-stack MoonBit applications with Rabbita."},{"id":"git-shipping","description":"Git authorship, commits, pull requests, and CI investigations."},{"id":"markdown-replies","description":"Markdown conventions for all user-facing replies."},{"id":"mcp","description":"Discovering and using external services through MCP."},{"id":"moonbit-development","description":"Developing, refactoring, testing, and looking up APIs in MoonBit projects."},{"id":"moongrep","description":"Structural code search and linting with moongrep."},{"id":"presentation","description":"Presenting local files, previewing deliverables, citing sources, and offering interactive answers."},{"id":"slides/design","description":"Visual design for presentation slides."},{"id":"slides/typst-layout","description":"Slide layout in Typst."},{"id":"slides/typst-syntax-cautions","description":"Common Typst syntax mistakes in slide source."},{"id":"slides/typst-touying","description":"PDF slide animations and progressive reveals with Touying."},{"id":"slides/writing","description":"Writing and editing slide text."}]}
+          #|    [_, id] => { "version": 1, "id": id, "format": "markdown", "content": content(id) }
+          #|    _ => fail("agent-guide: expected zero or one guide ID")
+          #|  }
           #|  println(response.stringify())
           #|}
           #|

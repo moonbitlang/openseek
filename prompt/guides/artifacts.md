@@ -1,3 +1,5 @@
+Creating, packaging, and presenting session artifacts, including interactive answers.
+
 # Session file artifacts
 
 Write a completed file with ordinary code, then reference it in the final answer.

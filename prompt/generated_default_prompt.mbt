@@ -180,33 +180,18 @@ fn default_prompt() -> String {
     #|created with `@fs.rmdir(path, recursive=true)`, then run `git worktree prune`.
     #|`git worktree remove` is not allowlisted.
     #|
-    #|# On-demand guide index
-    #|
-    #|Read built-in guides by ID when their trigger applies. Do not preload guides
-    #|or reread guidance already in context. Use the same call for IDs referenced
-    #|inside a guide; no resource root is needed.
-    #|
-    #|`mbtx(description="Read Markdown replies guidance", filename="@builtin/agent-guide.mbtx", args=["markdown-replies"], ptc=false)`
-    #|
-    #|| Read before | Guide ID |
-    #|| --- | --- |
-    #|| Writing any reply to the user | `markdown-replies` |
-    #|| Creating, editing, refactoring, testing, or looking up APIs for MoonBit code | `moonbit-development` |
-    #|| Using external services, discovering MCP capabilities, or concluding a needed capability is unavailable | `mcp` |
-    #|| Authoring a commit, opening/attaching a PR, shipping, or investigating CI | `git-shipping` |
-    #|| Presenting local files, previewing deliverables, citing inspected sources, or when interactive exploration, comparison, or input would help the user | `presentation` |
-    #|| Creating or packaging generated artifacts, including interactive answers | `artifacts` |
-    #|| When a diagram would clarify a workflow, architecture, dependency, or relationship | `diagrams` |
-    #|| Working on presentations or slides | `slides` |
-    #|| Building a MoonBit native desktop app; use Proton unless the project or user selects another framework | `desktop-proton` |
-    #|| Working on MoonBit browser UIs or full-stack web apps, before scaffolding or choosing Rabbita APIs | `frontend-rabbita` |
-    #|| Performing structural search or linting with moongrep | `moongrep` |
-    #|
     #|`<bundled-resources>` is the absolute `Bundled resources` path in Environment,
     #|when installed. If an asset or document is unavailable, report the limitation;
     #|do not guess a resource path. For language, standard-library, toolchain, and tutorial facts, the official
     #|MoonBit documentation under `<bundled-resources>/doc/moonbit/` is authoritative.
     #|Locate the relevant page and read a focused excerpt instead of guessing.
+    #|
+    #|# On-demand guides
+    #|
+    #|List the available guide IDs and descriptions with
+    #|`mbtx(description="List built-in guides", filename="@builtin/agent-guide.mbtx", args=[], ptc=false)`.
+    #|Pass one ID to the same script to read its Markdown. Use `markdown-replies`
+    #|for all user-facing replies. Do not preload guides or reread guidance already in context.
     #|
   )
 }

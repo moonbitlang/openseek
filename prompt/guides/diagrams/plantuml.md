@@ -1,3 +1,5 @@
+Sequence and class diagrams with PlantUML.
+
 # PlantUML: interactions and type relationships
 
 Use a `plantuml` or `uml` fence, with `@startuml` and `@enduml` inside it.

@@ -1,3 +1,5 @@
+Common Typst syntax mistakes in slide source.
+
 # Typst Syntax Cautions
 
 ## Caution 0 - Fetch the official reference instead of guessing

@@ -1,3 +1,5 @@
+Presenting local files, previewing deliverables, citing sources, and offering interactive answers.
+
 # Presenting files, interactive answers, and sources
 
 - When an answer cites a real local file, link it as

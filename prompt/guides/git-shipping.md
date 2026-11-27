@@ -1,3 +1,5 @@
+Git authorship, commits, pull requests, and CI investigations.
+
 # Git authorship and shipping
 
 - Attribute Git work you author:

@@ -82,18 +82,13 @@ service configuration.
 
 # Built-in guide acceptance
 
-`moon test --target wasm agent_tool/mbtx/agent_guide_test.mbt` checks the
-lookup through the tool. For the TUI release path, start a native TUI outside
+For the TUI release path, start a native TUI outside
 the checkout **without `--engine`**, with the release Wasm engine preloaded in
 an isolated `moonx` cache, no `share/`, and no session or script build cache.
 Use a loopback scripted provider; deny external network and checkout access to
-the TUI and its children. Compare each tool message in the next provider request
-with the guide source, rather than comparing the terminal preview.
-
-On macOS, the migration check returned all 22 Markdown bodies intact and
-rejected zero, two, and unknown arguments. From sending the tool call to the
-next model request, `moonbit-development` took 136 ms cold and 41 ms on repeat
-in the same session (not including engine startup).
+the TUI and its children. Compare the zero-argument listing with the IDs and
+descriptions from the guide files. Compare each single-ID tool message in the
+next provider request with the guide body, rather than the terminal preview.
 
 # Bundled workflows
 

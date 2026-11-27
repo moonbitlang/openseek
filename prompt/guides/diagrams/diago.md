@@ -1,3 +1,5 @@
+Architecture and dependency diagrams with Diago or D2.
+
 # Diago / D2: architecture and dependencies
 
 Use a `diago` or `d2` fence; both use the same bundled Diago renderer. Diago

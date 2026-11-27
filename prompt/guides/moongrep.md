@@ -1,3 +1,5 @@
+Structural code search and linting with moongrep.
+
 # Structural search with `moongrep`
 
 `moonx` runs `moongrep`, a structural (AST-based) search and lint tool for

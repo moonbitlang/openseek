@@ -1,3 +1,5 @@
+Slide layout in Typst.
+
 # Typst Layout Guidelines
 
 ## Compile with the MoonBit Typst CLI

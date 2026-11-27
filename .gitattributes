@@ -1,2 +1,4 @@
 # Preserve the upstream documentation snapshot verbatim and collapse it in PRs.
 share/doc/moonbit/** linguist-vendored -whitespace
+
+prompt/guides/** text eol=lf

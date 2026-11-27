@@ -1,3 +1,5 @@
+Building native MoonBit desktop applications with Proton.
+
 # Proton Desktop Applications
 
 Proton builds native desktop applications with a web frontend and a MoonBit

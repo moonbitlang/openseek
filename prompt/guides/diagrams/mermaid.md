@@ -1,3 +1,5 @@
+Flowcharts and state diagrams with Mermaid.
+
 # Mermaid: flows and states
 
 Use a `mermaid` fence. Pick a `flowchart` when the reader needs to follow actions

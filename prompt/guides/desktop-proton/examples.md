@@ -1,3 +1,5 @@
+Small Proton examples for native desktop applications.
+
 # Small Proton examples
 
 These examples use Proton 0.5.1 APIs. Start with a generated **minimal**

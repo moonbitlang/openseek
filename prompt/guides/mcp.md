@@ -1,3 +1,5 @@
+Discovering and using external services through MCP.
+
 # MCP services
 
 MCP servers can connect external services: chat, issue trackers, calendars,

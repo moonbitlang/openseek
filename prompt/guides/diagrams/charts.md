@@ -1,3 +1,5 @@
+Quantitative charts for trends, comparisons, distributions, and correlations.
+
 # Quantitative charts
 
 Use a chart when the shape of the data matters more than reading individual

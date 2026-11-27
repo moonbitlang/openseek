@@ -1,3 +1,5 @@
+Building browser UIs and full-stack MoonBit applications with Rabbita.
+
 # Rabbita Frontend and Full-Stack Applications
 
 Use Rabbita for MoonBit browser UIs unless the project or user selects another

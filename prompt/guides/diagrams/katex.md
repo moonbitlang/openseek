@@ -1,3 +1,5 @@
+Explanatory diagrams drawn with KaTeX boxes and arrows.
+
 # Drawing flowcharts with KaTeX block math
 
 KaTeX can draw a flowchart from ordinary boxes and arrows, with text, formulas,

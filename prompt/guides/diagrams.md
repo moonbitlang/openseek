@@ -1,3 +1,5 @@
+Choosing between prose, tables, charts, and diagrams, and selecting a diagram format.
+
 # Choosing diagrams and charts in SeekMoon
 
 Use a diagram when it makes a branch, boundary, dependency, or message order
