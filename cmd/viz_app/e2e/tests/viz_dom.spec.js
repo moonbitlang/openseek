@@ -509,12 +509,19 @@ test('the prompt rail previews typed prompts and jumps to them', async ({ page }
   await expect(marks).toHaveCount(2);
 
   // Hovering a tick raises the Codex-style preview: the prompt in bold, its
-  // wall-clock stamp, and the opening of the reply it drew.
+  // local wall-clock stamp, and the opening of the reply it drew.
+  const firstStamp = new Date(1788316865000);
+  const pad = (n) => String(n).padStart(2, '0');
+  const offsetMin = -firstStamp.getTimezoneOffset();
+  const tzLabel = offsetMin === 0
+    ? 'UTC'
+    : `UTC${offsetMin > 0 ? '+' : '-'}${Math.floor(Math.abs(offsetMin) / 60)}${Math.abs(offsetMin) % 60 === 0 ? '' : `:${pad(Math.abs(offsetMin) % 60)}`}`;
+  const expectedLocalStamp = `${firstStamp.getFullYear()}-${pad(firstStamp.getMonth() + 1)}-${pad(firstStamp.getDate())} ${pad(firstStamp.getHours())}:${pad(firstStamp.getMinutes())} ${tzLabel}`;
   await marks.first().hover();
   const firstPreview = marks.first().locator('.rail-preview');
   await expect(firstPreview).toBeVisible();
   await expect(firstPreview).toContainText('Ship the viewer change');
-  await expect(firstPreview).toContainText('2026-09-02 02:41 UTC');
+  await expect(firstPreview).toContainText(expectedLocalStamp);
   await expect(firstPreview).toContainText('On it.');
 
   // The steer's span contains the failed tool call, and its preview says so.

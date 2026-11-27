@@ -30,6 +30,14 @@ fn set_hash_value(key : String, value : String) -> Unit {
 }
 
 ///|
+fn normalize_trajectory_hash(root : String) -> Unit {
+  guard read_hash_params() is Some(params) else { return }
+  params.set("t", root)
+  params.delete("resolve")
+  params.save()
+}
+
+///|
 fn visible_elements(selector : String) -> Array[@dom.Element] {
   @dom.document()
   .query_selector_all(selector)
@@ -280,4 +288,14 @@ fn install_error_shortcuts(
     event.prevent_default()
     action()
   })
+}
+
+///|
+/// Drop a parameter from the URL hash without leaving the page. Used when the
+/// trajectory page closes: its `t=` must not outlive the view, or a refresh
+/// would reopen it.
+fn remove_hash_value(key : String) -> Unit {
+  guard read_hash_params() is Some(params) else { return }
+  params.delete(key)
+  params.save()
 }

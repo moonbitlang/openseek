@@ -15,6 +15,7 @@ pub fn render_session(
   session : @agent_session.Session,
   mode : ViewMode,
   subrun_children~ : Map[String, @agent_session.Session] = Map([]),
+  tz_offset_ms~ : Int64 = 0L,
 ) -> @html.Html {
   let subrun = SubrunView::{
     parent: session.id().value(),
@@ -24,8 +25,8 @@ pub fn render_session(
     delegated: is_subrun_session_id(session.id().value()),
   }
   match mode {
-    RawLog => render_raw(session, subrun)
-    ModelView => render_model(session, subrun)
+    RawLog => render_raw(session, subrun, tz_offset_ms~)
+    ModelView => render_model(session, subrun, tz_offset_ms~)
   }
 }
 
@@ -70,6 +71,7 @@ pub fn render_notices(parsed : @session_log.ParsedLog) -> @html.Html {
 fn render_raw(
   session : @agent_session.Session,
   subrun : SubrunView,
+  tz_offset_ms~ : Int64,
 ) -> @html.Html {
   let briefs = tool_call_briefs(session)
   let failed = raw_failed_call_ids(session)
@@ -82,7 +84,7 @@ fn render_raw(
     return empty_state("This session has no events yet.")
   }
   let blocks : Array[@html.Html] = [
-    prompt_rail(session, subrun),
+    prompt_rail(session, subrun, tz_offset_ms~),
     ..[
       for index, turn in turns => {
         turn_block(
@@ -1598,6 +1600,7 @@ priv struct PromptMark {
 fn prompt_marks(
   session : @agent_session.Session,
   delegated~ : Bool,
+  tz_offset_ms~ : Int64,
 ) -> Array[PromptMark] {
   let marks : Array[PromptMark] = []
   for event in session.events() {
@@ -1606,7 +1609,7 @@ fn prompt_marks(
         if user_input(message.content().text(), delegated~) is Typed {
           marks.push({
             seq: event.sequence(),
-            time: wall_clock_label(event.unix_ms()),
+            time: wall_clock_label(event.unix_ms(), tz_offset_ms~),
             text: message.content().text(),
             errors: 0,
             reply: "",
@@ -1639,8 +1642,9 @@ fn prompt_marks(
 fn prompt_rail(
   session : @agent_session.Session,
   subrun : SubrunView,
+  tz_offset_ms~ : Int64,
 ) -> @html.Html {
-  let marks = prompt_marks(session, delegated=subrun.delegated)
+  let marks = prompt_marks(session, delegated=subrun.delegated, tz_offset_ms~)
   guard !marks.is_empty() else { return @html.nothing }
   let items : Array[@html.Html] = [
     for mark in marks => {
@@ -1681,18 +1685,47 @@ fn prompt_rail(
 }
 
 ///|
-/// A unix-ms stamp as `YYYY-MM-DD HH:MM UTC` (the app header's spelling), or
-/// `""` for the 0 sentinel of an event appended without a clock. Pure civil-
-/// from-days arithmetic so the label is identical on every target and in
-/// every test environment.
-fn wall_clock_label(unix_ms : Int64) -> String {
+fn floor_div_mod(value : Int64, divisor : Int64) -> (Int64, Int64) {
+  let mut q = value / divisor
+  let mut r = value % divisor
+  if r < 0L {
+    q -= 1L
+    r += divisor
+  }
+  (q, r)
+}
+
+///|
+fn tz_suffix(tz_offset_ms : Int64) -> String {
+  let total_min = (tz_offset_ms / 60_000L).to_int()
+  if total_min == 0 {
+    return "UTC"
+  }
+  let sign = if total_min > 0 { "+" } else { "-" }
+  let abs_min = if total_min < 0 { -total_min } else { total_min }
+  let hours = abs_min / 60
+  let mins = abs_min % 60
+  if mins == 0 {
+    "UTC\{sign}\{hours}"
+  } else {
+    "UTC\{sign}\{hours}:\{pad2(mins)}"
+  }
+}
+
+///|
+/// A unix-ms stamp as `YYYY-MM-DD HH:MM UTC[±H[:MM]]` (matching the app header),
+/// or `""` for the 0 sentinel of an event appended without a clock. Pure
+/// civil-from-days arithmetic so the label is identical on every target and
+/// in every test environment.
+fn wall_clock_label(unix_ms : Int64, tz_offset_ms~ : Int64) -> String {
   guard unix_ms > 0 else { return "" }
-  let seconds = unix_ms / 1000
-  let days = (seconds / 86400).to_int()
-  let day_seconds = (seconds % 86400).to_int()
+  let seconds = unix_ms / 1000L + tz_offset_ms / 1000L
+  let (days_i64, day_seconds_i64) = floor_div_mod(seconds, 86400L)
+  let days = days_i64.to_int()
+  let day_seconds = day_seconds_i64.to_int()
   let z = days + 719468
-  let era = z / 146097
-  let doe = z % 146097
+  let era = if z >= 0 { z / 146097 } else { (z - 146096) / 146097 }
+  let doe = z - era * 146097
   let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
   let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
   let mp = (5 * doy + 2) / 153
@@ -1701,7 +1734,8 @@ fn wall_clock_label(unix_ms : Int64) -> String {
   let year = yoe + era * 400 + (if month <= 2 { 1 } else { 0 })
   let hour = day_seconds / 3600
   let minute = day_seconds % 3600 / 60
-  "\{year}-\{pad2(month)}-\{pad2(day)} \{pad2(hour)}:\{pad2(minute)} UTC"
+  let suffix = tz_suffix(tz_offset_ms)
+  "\{year}-\{pad2(month)}-\{pad2(day)} \{pad2(hour)}:\{pad2(minute)} \{suffix}"
 }
 
 ///|
@@ -1714,13 +1748,23 @@ fn pad2(n : Int32) -> String {
 }
 
 ///|
-test "wall_clock_label converts unix ms to a civil UTC stamp" {
-  // 2026-09-02 02:41:05 UTC
-  inspect(wall_clock_label(1788316865000), content="2026-09-02 02:41 UTC")
+test "wall_clock_label converts unix ms to civil UTC or offset stamps" {
+  // 2026-09-02 02:41:05 UTC -> 10:41 UTC+8
+  inspect(
+    wall_clock_label(1788316865000, tz_offset_ms=0L),
+    content="2026-09-02 02:41 UTC",
+  )
+  inspect(
+    wall_clock_label(1788316865000, tz_offset_ms=28_800_000L),
+    content="2026-09-02 10:41 UTC+8",
+  )
   // The unix epoch itself, exercising the year/month arithmetic at a boundary.
-  inspect(wall_clock_label(31536000000), content="1971-01-01 00:00 UTC")
+  inspect(
+    wall_clock_label(31536000000, tz_offset_ms=0L),
+    content="1971-01-01 00:00 UTC",
+  )
   // Events appended without a clock keep the 0 sentinel and get no stamp.
-  inspect(wall_clock_label(0), content="")
+  inspect(wall_clock_label(0, tz_offset_ms=0L), content="")
 }
 
 ///|
@@ -1748,7 +1792,7 @@ test "prompt_marks segments errors and replies by typed prompt" {
       User(UserMessage(Content([Text(@agent_session.GoalContinuePrompt)]))),
     )
     .append(Terminal(Finished("done again")))
-  let marks = prompt_marks(s, delegated=false)
+  let marks = prompt_marks(s, delegated=false, tz_offset_ms=0L)
   inspect(marks.length(), content="2")
   inspect(marks[0].text, content="ship the feature")
   inspect(marks[0].errors, content="1")
@@ -1756,7 +1800,10 @@ test "prompt_marks segments errors and replies by typed prompt" {
   inspect(marks[1].errors, content="0")
   inspect(marks[1].reply, content="Docs updated.")
   // A sub-run child's user messages are its parent's task: no marks at all.
-  inspect(prompt_marks(s, delegated=true).length(), content="0")
+  inspect(
+    prompt_marks(s, delegated=true, tz_offset_ms=0L).length(),
+    content="0",
+  )
 }
 
 // ---- model projection view -------------------------------------------------
@@ -1765,6 +1812,7 @@ test "prompt_marks segments errors and replies by typed prompt" {
 fn render_model(
   session : @agent_session.Session,
   subrun : SubrunView,
+  tz_offset_ms~ : Int64,
 ) -> @html.Html {
   // The projection keys each tool message only by id and drops is_error / tool
   // name, so recover them from the durable events for display (the messages fed
@@ -1813,7 +1861,10 @@ fn render_model(
   if cards.is_empty() {
     return empty_state("The model projection is empty.")
   }
-  @html.div(class="log model-log") <| [prompt_rail(session, subrun), ..cards]
+  @html.div(class="log model-log") <| [
+    prompt_rail(session, subrun, tz_offset_ms~),
+    ..cards,
+  ]
 }
 
 ///|
@@ -3236,13 +3287,17 @@ fn subrun_transcript(child : @agent_session.Session) -> @html.Html {
   // parent document's ids.
   let saved = anchor_namespace.val
   anchor_namespace.val = "\{child.id().value()}--"
-  let body = render_raw(child, {
-    parent: child.id().value(),
-    children: Map([]),
-    // Known for certain here, whatever the child's id looks like: this
-    // transcript is nested inside the parent's own tool result.
-    delegated: true,
-  })
+  let body = render_raw(
+    child,
+    {
+      parent: child.id().value(),
+      children: Map([]),
+      // Known for certain here, whatever the child's id looks like: this
+      // transcript is nested inside the parent's own tool result.
+      delegated: true,
+    },
+    tz_offset_ms=0L,
+  )
   anchor_namespace.val = saved
   @html.details(class="subrun-transcript") <| [
     @html.summary(class="subrun-transcript-label") <| [

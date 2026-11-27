@@ -1,13 +1,99 @@
 import path from 'node:path';
 
+/// Build the document `/api/trajectory/<root>` serves, from the compact fixture
+/// shape a test wants to read: absolute milliseconds, and only the fields that
+/// case is about. Everything the viewer needs but the test does not state
+/// (span ids, the stats block) is filled in here.
+export function traceDocument({
+  rootId = 'viz-1',
+  t0 = 0,
+  tEnd = 10_000,
+  live = false,
+  sessions = [],
+  spans = [],
+  stats = {},
+} = {}) {
+  const lanes = sessions.length > 0
+    ? sessions
+    : [{ session_id: rootId, title: 'main', depth: 0, start: t0 }];
+  const build = span => ({
+    id: span.id,
+    session_id: span.session_id ?? rootId,
+    title: span.title ?? 'main',
+    depth: span.depth ?? 0,
+    kind: span.kind,
+    status: span.status ?? 'succeeded',
+    label: span.label ?? span.kind,
+    started_at_ms: span.start,
+    ...(span.end === undefined ? {} : { ended_at_ms: span.end }),
+    ...(span.parent === undefined ? {} : { parent_id: span.parent }),
+    ...(span.job === undefined ? {} : { job_id: span.job }),
+    ...(span.jobs === undefined ? {} : { job_ids: span.jobs }),
+    ...(span.tag === undefined ? {} : { tag: span.tag }),
+    ...(span.sequence === undefined ? {} : { sequence: span.sequence }),
+    metadata: span.metadata ?? {},
+  });
+  const sum = kind => spans
+    .filter(span => span.kind === kind && span.end !== undefined)
+    .reduce((ms, span) => ms + (span.end - span.start), 0);
+  const totals = (kind, key) => ({ [key]: sum(kind) });
+  return {
+    root_session_id: rootId,
+    t0_ms: t0,
+    t_end_ms: tEnd,
+    live,
+    sessions: lanes.map(lane => ({
+      session_id: lane.session_id,
+      title: lane.title ?? 'main',
+      depth: lane.depth ?? 0,
+      started_at_ms: lane.start,
+      ...(lane.end === undefined ? {} : { ended_at_ms: lane.end }),
+      ...(lane.parent === undefined ? {} : { parent_session_id: lane.parent }),
+    })),
+    spans: spans.map(build),
+    stats: {
+      wall_ms: Math.max(0, tEnd - t0),
+      ...totals('llm', 'llm_ms'),
+      ...totals('tool', 'tool_ms'),
+      ...totals('wait', 'wait_ms'),
+      ...totals('job', 'job_ms'),
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      critical_path_ms: 0,
+      critical_path: [],
+      span_count: spans.length,
+      turn_count: spans.filter(span => span.kind === 'turn').length,
+      session_count: lanes.length,
+      ...stats,
+    },
+  };
+}
+
 export class VizBrowserHarness {
   constructor(page) {
     this.page = page;
     this.pageErrors = [];
     this.apiRequests = [];
+    // Every `/api/...` path the page actually requested. A baked export must
+    // leave this empty: it answers from its own document.
+    this.apiCalls = [];
     this.sessionId = 'viz-1';
     this.extraSessionRows = [];
     this.childEvents = new Map();
+    // The trace `/api/trajectory/<root>` serves; `null` answers 404, which is
+    // what a session with no sub-runs and no spans looks like.
+    this.trajectory = null;
+    // The cursor the server would put in the document. When set, a poll that
+    // sends it back gets `unchanged`, like the real route.
+    this.trajectoryCursor = null;
+    this.trajectoryRequests = [];
+    // Background jobs the server would answer for, keyed `<session>/<job>`:
+    // the record plus a page of the file the job wrote. A missing key is a
+    // session with no such record.
+    this.jobLogs = new Map();
+    // Every job request the page made, path and query included, so a test can
+    // see which job was asked for and from which cursor.
+    this.jobRequests = [];
     this.events = [
       JSON.stringify({
         version: 1,
@@ -165,7 +251,11 @@ export class VizBrowserHarness {
       }, watchMs);
     }
     this.page.on('request', request => {
-      if (new URL(request.url()).pathname.startsWith('/api/sessions')) {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith('/api/')) {
+        this.apiCalls.push(pathname);
+      }
+      if (pathname.startsWith('/api/sessions')) {
         this.apiRequests.push(request.url());
       }
     });
@@ -175,6 +265,11 @@ export class VizBrowserHarness {
       }, {
         '/api/sessions': JSON.stringify(this.sessionRows()),
         [`/api/sessions/${this.sessionId}`]: JSON.stringify(this.sessionEnvelope()),
+        // `inspect --export` bakes one trajectory document per run it holds;
+        // a harness run stands in for the root the page was opened at.
+        ...(this.trajectory === null
+          ? {}
+          : { [`/api/trajectory/${this.sessionId}`]: JSON.stringify(this.trajectory) }),
         ...artifacts,
       });
     }
@@ -188,6 +283,30 @@ export class VizBrowserHarness {
     if (standalone) {
       return;
     }
+    await this.page.route('**/api/trajectory/**', route => {
+      const url = new URL(route.request().url());
+      this.trajectoryRequests.push(url.pathname + url.search);
+      const cursor = url.searchParams.get('cursor');
+      if (cursor && cursor === this.trajectoryCursor) {
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ unchanged: true, cursor }),
+        });
+      }
+      if (this.trajectory === null) {
+        return route.fulfill({ status: 404, contentType: 'text/plain', body: 'not found' });
+      }
+      const document = typeof this.trajectory === 'string'
+        ? this.trajectory
+        : JSON.stringify({
+            ...this.trajectory,
+            ...(this.trajectoryCursor ? { cursor: this.trajectoryCursor } : {}),
+          });
+      return route.fulfill({
+        contentType: 'application/json',
+        body: document,
+      });
+    });
     await this.page.route('**/api/sessions**', route => {
       const url = new URL(route.request().url());
       if (url.pathname === '/api/sessions') {
@@ -204,6 +323,31 @@ export class VizBrowserHarness {
       const body = envelope.found && known === String(envelope.events_bytes)
         ? { found: true, unchanged: true, events_bytes: envelope.events_bytes }
         : envelope;
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+    });
+    await this.page.route('**/api/sessions/*/jobs/**', route => {
+      const url = new URL(route.request().url());
+      this.jobRequests.push(url.pathname + url.search);
+      const match = url.pathname.match(/\/api\/sessions\/([^/]+)\/jobs\/([^/]+)$/);
+      const key = match === null
+        ? ''
+        : `${decodeURIComponent(match[1])}/${decodeURIComponent(match[2])}`;
+      const stored = this.jobLogs.get(key);
+      // A function answers per request, which is how a test follows a running
+      // job page by page.
+      const body = typeof stored === 'function' ? stored(url) : stored;
+      if (body === undefined) {
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            found: false,
+            error: `no saved record for job ${key}`,
+          }),
+        });
+      }
       return route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify(body),

@@ -11,7 +11,12 @@ fn read_hash_params() -> HashParams? {
     return None
   }
   let hash : String = location.get_with_string("hash")
-  let query = if hash.has_prefix("#") { hash[1:].to_owned() } else { hash }
+  let raw = if hash.is_empty() || hash == "#" {
+    initial_hash_override()
+  } else {
+    hash
+  }
+  let query = if raw.has_prefix("#") { raw[1:].to_owned() } else { raw }
   let params : @js.Value = @js.globalThis.new_with_string("URLSearchParams", [
     query,
   ])
@@ -118,11 +123,33 @@ extern "js" fn data_transfer_file(
 ) -> @dom.Blob = "(t, i) => t.files[i]"
 
 ///|
-extern "js" fn format_unix_ms_utc(milliseconds : Double) -> String =
+extern "js" fn format_unix_ms_local(milliseconds : Double) -> String =
   #|(milliseconds) => {
   #|  const date = new Date(milliseconds);
   #|  if (!Number.isFinite(date.getTime())) return "";
-  #|  return date.toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  #|  const pad = (n) => String(n).padStart(2, "0");
+  #|  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  #|}
+
+///|
+extern "js" fn local_tz_offset_ms(milliseconds : Double) -> Double =
+  #|(milliseconds) => {
+  #|  const date = new Date(milliseconds);
+  #|  return Number.isFinite(date.getTime()) ? -date.getTimezoneOffset() * 60000 : 0;
+  #|}
+
+///|
+extern "js" fn local_tz_label(milliseconds : Double) -> String =
+  #|(milliseconds) => {
+  #|  const date = new Date(milliseconds);
+  #|  if (!Number.isFinite(date.getTime())) return "LOCAL";
+  #|  const offsetMin = -date.getTimezoneOffset();
+  #|  if (offsetMin === 0) return "UTC";
+  #|  const sign = offsetMin > 0 ? "+" : "-";
+  #|  const abs = Math.abs(offsetMin);
+  #|  const h = Math.floor(abs / 60);
+  #|  const m = abs % 60;
+  #|  return m === 0 ? `UTC${sign}${h}` : `UTC${sign}${h}:${String(m).padStart(2, "0")}`;
   #|}
 
 ///|
@@ -138,3 +165,42 @@ extern "js" fn main_scrolled_to_bottom() -> Bool = "() => { const main = documen
 ///|
 /// Scroll `.main` to its bottom once the freshly rendered events are laid out.
 extern "js" fn scroll_main_to_bottom() -> Unit = "() => { requestAnimationFrame(() => requestAnimationFrame(() => { const main = document.querySelector('.main'); if (main) main.scrollTop = main.scrollHeight; })); }"
+
+///|
+/// An initial hash injected into a generated temporary HTML snapshot so
+/// `file://` opens directly on `#t=<root>&job=<id>` even when the OS launcher
+/// drops URL fragments.
+extern "js" fn initial_hash_override() -> String = "() => (typeof window !== 'undefined' && typeof window.__OPENSEEK_INITIAL_HASH__ === 'string') ? window.__OPENSEEK_INITIAL_HASH__ : ''"
+
+///|
+/// Scroll the first failed step of the open waterfall into view: the error card
+/// in the stats header is the only caller.
+extern "js" fn scroll_to_first_failure() -> Unit = "() => { const row = document.querySelector('.waterfall-row.status-failed'); if (row) row.scrollIntoView({block: 'center'}); }"
+
+///|
+/// Scroll the job row named by `#t=<root>&job=<id>` into view.
+extern "js" fn scroll_to_focused_job() -> Unit = "() => { const row = document.querySelector('.waterfall-row.job-focus'); if (row) row.scrollIntoView({block: 'center'}); }"
+
+///|
+/// Read the current scroll offset (px) of `.waterfall-body` relative to `.main`'s
+/// top viewport edge, plus `.main`'s client height.
+extern "js" fn read_waterfall_scroll_top() -> Int32 = "() => { const main = document.querySelector('.main'); const body = document.querySelector('.waterfall-body'); if (!main || !body) return 0; const mRect = main.getBoundingClientRect(); const bRect = body.getBoundingClientRect(); return Math.max(0, Math.floor(mRect.top - bRect.top)); }"
+
+///|
+extern "js" fn read_waterfall_viewport_h() -> Int32 = "() => { const main = document.querySelector('.main'); return main ? Math.max(300, Math.floor(main.clientHeight)) : 900; }"
+
+///|
+/// Scroll `.main` so the virtualized row at `index` sits near the center.
+extern "js" fn scroll_to_waterfall_row(
+  index : Int32,
+  row_height : Int32,
+) -> Unit = "(index, rowHeight) => { requestAnimationFrame(() => { const main = document.querySelector('.main'); const body = document.querySelector('.waterfall-body'); if (!main || !body) return; const mRect = main.getBoundingClientRect(); const bRect = body.getBoundingClientRect(); const bodyTop = main.scrollTop + (bRect.top - mRect.top); const target = Math.max(0, bodyTop + index * rowHeight - Math.floor(main.clientHeight / 2)); main.scrollTop = target; }); }"
+
+///|
+/// The browser's wall clock in unix milliseconds. A trace span that has not
+/// ended is stretched to this instant, so its bar grows while the run is still
+/// going instead of sitting frozen at its start.
+///
+/// `Date.now()` yields a JavaScript number, which this backend's `Int64` cannot
+/// represent (it is a BigInt): hand it over as one or every conversion throws.
+extern "js" fn browser_now_ms() -> Int64 = "() => BigInt(Date.now())"

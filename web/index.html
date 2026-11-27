@@ -805,6 +805,437 @@
     .badge-failed { background: var(--badge-failed-bg); color: var(--badge-failed-fg); }
 
     .empty-state { color: var(--muted); margin-top: 24px; }
+
+    /* ---- trajectory waterfall -------------------------------------------------
+       One run's whole timeline: every session it spawned, every turn, every
+       step, laid out on one clock. Rows are a two-column grid (label | track)
+       with the duration trailing, so bars line up vertically across sessions
+       however deeply a row is indented. */
+    .trajectory-open {
+      margin-left: auto; align-self: center;
+      font-size: 12px; color: var(--accent); text-decoration: none;
+      border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px;
+      white-space: nowrap;
+    }
+    .trajectory-open:hover { border-color: var(--accent); }
+
+    .trajectory-totals {
+      color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums;
+      display: flex; flex-wrap: wrap; gap: 4px 14px;
+    }
+
+    /* One column template for every band of the view — scale, ruler, activity
+       strip, rows and their grid — so a mark above a bar names the same
+       instant as the bar itself. */
+    .trajectory-view {
+      --wf-columns: minmax(240px, 34%) 1fr 72px;
+    }
+    .waterfall { padding: 4px 0 60px; }
+    .waterfall-row {
+      display: grid;
+      grid-template-columns: var(--wf-columns);
+      align-items: center;
+      gap: 10px;
+      padding: 2px 0;
+      border-radius: 4px;
+    }
+    .waterfall-virtual .waterfall-row {
+      height: 32px;
+      box-sizing: border-box;
+    }
+    .waterfall-virtual .waterfall-label {
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .waterfall-spacer {
+      pointer-events: none;
+    }
+    /* Zebra rows: at a few hundred rows the eye needs a guide back from a bar
+       to its label. */
+    .waterfall-row.waterfall-row-even,
+    .waterfall-row:nth-child(even) {
+      background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+    }
+    .waterfall-row:hover { background: var(--panel-2); }
+    .snapshot-banner {
+      margin: 8px 0 0;
+      padding: 7px 12px;
+      border-radius: 7px;
+      border: 1px solid color-mix(in srgb, var(--summary) 45%, var(--border));
+      background: color-mix(in srgb, var(--summary) 10%, var(--panel));
+      color: var(--text);
+      font-size: 12px;
+    }
+    .session-timeline-link {
+      margin-left: auto;
+      padding: 1px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      text-decoration: none;
+      flex: none;
+    }
+    .session-item:hover .session-timeline-link,
+    .session-timeline-link:hover {
+      color: var(--accent);
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+      background: var(--panel);
+    }
+    .waterfall-row.critical { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+    .waterfall-row.critical .waterfall-bar { box-shadow: 0 0 0 1px var(--accent); }
+    .waterfall-row.job-focus {
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+
+    .waterfall-label {
+      display: flex; align-items: baseline; gap: 6px;
+      min-width: 0; font-size: 12.5px;
+    }
+    .waterfall-toggle {
+      width: 14px; height: 14px; flex: none; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: 0; border-radius: 3px;
+      color: var(--muted); font-size: 10px; line-height: 1; cursor: pointer;
+    }
+    .waterfall-toggle:hover { color: var(--text); background: var(--border); }
+    .waterfall-toggle.placeholder { cursor: default; background: none; }
+    .waterfall-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex: none;
+      background: var(--muted);
+    }
+    .waterfall-name {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-family: ui-monospace, monospace;
+    }
+    .waterfall-caption {
+      color: var(--muted); font-size: 11px; flex: none;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 45%;
+    }
+    .waterfall-track {
+      position: relative; height: 14px;
+      background: var(--panel-2); border-radius: 3px; overflow: hidden;
+    }
+    .waterfall-bar {
+      position: absolute; top: 3px; bottom: 3px; border-radius: 3px;
+      background: var(--muted);
+      /* A sub-pixel bar is a missing bar: keep every step on screen. */
+      min-width: 2px;
+    }
+    .waterfall-duration {
+      color: var(--muted); font-size: 11px; text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* A run and a turn are envelopes around the work, so their bars sit a
+       little taller than the steps nested in them. */
+    .kind-run .waterfall-bar, .kind-turn .waterfall-bar { top: 0; bottom: 0; }
+
+    /* Kind colours reuse the palette the log cards already use. */
+    .waterfall-swatch { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+    .kind-turn .waterfall-bar, .waterfall-swatch.kind-turn { background: var(--accent); }
+    .kind-turn .waterfall-dot { background: var(--accent); }
+    .kind-llm .waterfall-bar, .waterfall-swatch.kind-llm { background: var(--assistant); }
+    .kind-llm .waterfall-dot { background: var(--assistant); }
+    .kind-tool .waterfall-bar, .waterfall-swatch.kind-tool { background: var(--tool); }
+    .kind-tool .waterfall-dot { background: var(--tool); }
+    .kind-workflow .waterfall-bar, .waterfall-swatch.kind-workflow { background: var(--runtime); }
+    .kind-workflow .waterfall-dot { background: var(--runtime); }
+    .kind-ptc .waterfall-bar, .waterfall-swatch.kind-ptc { background: var(--terminal); }
+    .kind-ptc .waterfall-dot { background: var(--terminal); }
+    .kind-job .waterfall-bar, .waterfall-swatch.kind-job { background: var(--summary); }
+    .kind-job .waterfall-dot { background: var(--summary); }
+    .kind-wait .waterfall-bar, .waterfall-swatch.kind-wait { background: var(--warn); }
+    .kind-wait .waterfall-dot { background: var(--warn); }
+    .kind-milestone .waterfall-bar, .waterfall-swatch.kind-milestone { background: var(--muted); }
+    .kind-milestone .waterfall-bar { opacity: .75; }
+
+    /* Outcome beats kind: a failed or interrupted step must read as one at a
+       glance, so the bar keeps its place but takes the error colour. */
+    .status-failed .waterfall-bar { background: var(--error); }
+    .status-failed .waterfall-dot { background: var(--error); }
+    .status-interrupted .waterfall-bar { opacity: .45; }
+    .status-yielded .waterfall-bar { background: var(--summary); }
+    .waterfall-row.open .waterfall-bar {
+      border-top-right-radius: 0; border-bottom-right-radius: 0;
+      background-image: linear-gradient(90deg, transparent 0 55%, rgba(255,255,255,.55) 55% 100%);
+      background-size: 8px 100%;
+    }
+
+    .waterfall-legend {
+      display: flex; flex-wrap: wrap; gap: 4px 14px;
+      margin: 10px 0 0; color: var(--muted); font-size: 11.5px;
+    }
+    .waterfall-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .waterfall-legend-label { text-transform: lowercase; }
+
+    /* ---- a background job's log, opened under its row -------------------- */
+    /* A job's output is its own file, not part of the transcript; the button in
+       the row is the way in, and the block below is the file's tail. */
+    .job-log-button {
+      flex: none; margin-left: 2px; padding: 0 5px; height: 16px; border-radius: 3px;
+      border: 1px solid var(--border); background: var(--panel);
+      color: var(--muted); font-size: 10.5px; line-height: 1; cursor: pointer;
+      font-family: ui-monospace, monospace;
+    }
+    .job-log-button:hover { color: var(--text); border-color: var(--accent); }
+    /* Open, the button reads as pressed without becoming the loudest thing in
+       the lane: a tinted chip, not a filled one. */
+    .job-log-button[aria-expanded="true"] {
+      color: var(--accent); border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+    }
+    .job-log {
+      /* Above the axis grid, which is an absolute overlay across the rows:
+         a dotted timeline line must not be drawn through the log text. */
+      position: relative; z-index: 3;
+      margin: 2px 0 8px;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--panel-2); overflow: hidden;
+    }
+    .job-log-head {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 5px 10px; border-bottom: 1px solid var(--border);
+      color: var(--muted); font-size: 11.5px;
+    }
+    .job-log-title {
+      flex: 1 1 auto; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-family: ui-monospace, monospace;
+      /* The header is the only thing naming what was read; muted everywhere,
+         it disappears on a dark palette. */
+      color: var(--text);
+    }
+    .job-log-close {
+      flex: none; background: none; border: 0; padding: 0;
+      color: var(--muted); font-size: 11px; cursor: pointer;
+    }
+    .job-log-close:hover { color: var(--text); }
+    .job-log-text {
+      margin: 0; padding: 8px 10px; max-height: 320px; overflow: auto;
+      font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.55;
+      white-space: pre-wrap; word-break: break-word;
+      background: var(--panel); color: var(--text);
+    }
+    .job-log-note {
+      padding: 4px 10px; color: var(--muted); font-size: 11px;
+      border-top: 1px solid var(--border);
+    }
+    .job-log-status { padding: 8px 10px; color: var(--muted); font-size: 11.5px; }
+    /* A job that could not be read is an error, not an empty log: an empty box
+       and a missing record must not look alike. */
+    .job-log-error {
+      padding: 8px 10px; font-size: 11.5px; color: var(--error);
+      background: color-mix(in srgb, var(--error) 10%, transparent);
+      border-left: 3px solid var(--error);
+    }
+    /* ---- trajectory headline cards -------------------------------------- */
+    .trajectory-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+      gap: 10px;
+      margin: 0 0 14px;
+    }
+    .stat {
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--panel); padding: 9px 12px;
+      display: flex; flex-direction: column; gap: 2px; min-width: 0;
+    }
+    .stat-label {
+      color: var(--muted); font-size: 10.5px; letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .stat-value {
+      font-size: 20px; line-height: 1.15; font-variant-numeric: tabular-nums;
+    }
+    .stat-value.bad { color: var(--error); }
+    .stat-note {
+      color: var(--muted); font-size: 11px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .stat-jump {
+      align-self: flex-start; margin-top: 2px; padding: 1px 8px;
+      font-size: 11px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--panel-2);
+      color: var(--accent); cursor: pointer;
+    }
+    .stat-jump:hover { border-color: var(--accent); }
+
+    /* ---- trajectory ruler ------------------------------------------------
+       One block per stretch of work; each narrow hatched slot is a folded idle
+       stretch, labelled with how long it really was. Without it a reader
+       cannot tell a two-second pause from a night. */
+    .waterfall-ruler {
+      display: grid;
+      grid-template-columns: var(--wf-columns);
+      gap: 10px; align-items: stretch;
+      height: 26px;
+      margin: 0 0 8px; border-bottom: 1px solid var(--border);
+      font-size: 10px; color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    /* The blocks live in the same column and coordinate system as the bars, so
+       the ruler boundaries align pixel-for-pixel with the grid and bars. */
+    .ruler-blocks { position: relative; overflow: hidden; }
+    .ruler-corner {
+      align-self: center; text-align: right;
+      font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+      opacity: .7;
+    }
+    .ruler-seg {
+      position: absolute; top: 0; bottom: 0; box-sizing: border-box;
+      background: color-mix(in srgb, var(--panel-2) 70%, transparent);
+      border-right: 1px solid var(--border);
+    }
+    .ruler-tick { position: absolute; left: 4px; top: 6px; white-space: nowrap; }
+    .ruler-gap {
+      position: absolute; top: 0; bottom: 0; box-sizing: border-box;
+      background: repeating-linear-gradient(45deg,
+        var(--panel-2) 0 3px, transparent 3px 6px);
+      border-right: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; font-size: 9px;
+      writing-mode: vertical-rl; text-orientation: mixed;
+    }
+
+    /* ---- time scale ------------------------------------------------------
+       Dated boundaries along the axis, cast down the rows as a hairline grid.
+       "Nov 1" and "02:00" are how a reader finds the night inside a run that
+       spans one. The scale is a row of the same grid as the bars, so a label
+       sits exactly over the boundary its line marks. */
+    .waterfall-scale {
+      display: grid;
+      grid-template-columns: var(--wf-columns);
+      gap: 10px; align-items: end;
+      height: 15px; margin: 0 0 2px;
+      font-size: 10px; color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .scale-corner {
+      font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+      text-align: right; opacity: .7;
+    }
+    .scale-track { position: relative; height: 15px; overflow: hidden; }
+    .scale-label {
+      position: absolute; top: 1px; padding-left: 4px; white-space: nowrap;
+      border-left: 1px solid var(--border);
+    }
+    .scale-label.day {
+      color: var(--text); font-weight: 600;
+      border-left-color: var(--accent);
+    }
+    /* A mark at the right edge hangs its label to the left, or the track's
+       overflow would clip it. */
+    .scale-label.end {
+      transform: translateX(-100%);
+      padding-left: 0; padding-right: 4px;
+      border-left: 0; border-right: 1px solid var(--border);
+    }
+    .scale-label.day.end { border-right-color: var(--accent); }
+    .waterfall-body { position: relative; isolation: isolate; }
+    .waterfall-grid {
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
+      display: grid;
+      grid-template-columns: var(--wf-columns);
+      gap: 10px;
+    }
+    .waterfall-grid-track { position: relative; }
+    .waterfall-grid-line {
+      position: absolute; top: 0; bottom: 0; width: 0;
+      border-left: 1px dotted color-mix(in srgb, var(--border) 85%, transparent);
+    }
+    .waterfall-grid-line.day {
+      border-left-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    }
+    /* Lane role: the run's own session (accent) or an agent it spawned. */
+    .lane-role {
+      flex: none; font-size: 9px; line-height: 1; cursor: help;
+      color: var(--muted);
+    }
+    .lane-role-main { color: var(--accent); }
+
+    /* ---- envelope ticks and the hover card ------------------------------ */
+    .waterfall-tick {
+      position: absolute; top: 6px; bottom: 6px; border-radius: 1px;
+      min-width: 1px;
+    }
+    .waterfall-tick.kind-llm { background: var(--assistant); }
+    .waterfall-tick.kind-tool { background: var(--tool); }
+    .waterfall-tick.kind-workflow { background: var(--runtime); }
+    .waterfall-tick.kind-ptc { background: var(--terminal); }
+    .waterfall-tick.kind-job { background: var(--summary); }
+    .waterfall-tick.kind-wait { background: var(--warn); }
+    .waterfall-tick.kind-milestone { background: var(--muted); }
+    .waterfall-tick.status-failed { background: var(--error); }
+    /* An envelope's own bar is the frame; its ticks are the work inside. */
+    .kind-run .waterfall-bar, .kind-turn .waterfall-bar { opacity: .3; }
+
+    .waterfall-row { position: relative; }
+    .waterfall-tip {
+      display: none; position: absolute; z-index: 30;
+      left: 12px; top: calc(100% + 2px);
+      max-width: 540px; padding: 8px 10px;
+      background: var(--panel); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+      font-size: 11.5px; line-height: 1.5; white-space: pre-line;
+      pointer-events: none;
+    }
+    .waterfall-row:hover .waterfall-tip { display: block; }
+    /* ---- activity strip --------------------------------------------------
+       Calls per slice of the same axis the rows are drawn on, so a spike sits
+       above the steps that made it. A red mark sits over any slice holding a
+       failure. */
+    .activity-strip { margin: 0 0 6px; }
+    .activity-head {
+      display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap;
+      font-size: 10.5px; color: var(--muted); margin-bottom: 4px;
+    }
+    .activity-title {
+      letter-spacing: .08em; text-transform: uppercase; font-size: 10px;
+    }
+    .activity-key {
+      display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+    }
+    .activity-key-label { margin-right: 6px; }
+    .activity-row {
+      display: grid;
+      grid-template-columns: var(--wf-columns);
+      gap: 10px; align-items: end;
+    }
+    .activity-columns {
+      display: flex; align-items: flex-end; gap: 1px; height: 46px;
+      border-bottom: 1px solid var(--border);
+    }
+    .activity-col {
+      position: relative; flex: 1 1 0; height: 100%;
+      display: flex; align-items: flex-end; min-width: 1px;
+    }
+    .activity-bar {
+      width: 100%; display: flex; flex-direction: column-reverse;
+      border-radius: 1px 1px 0 0; overflow: hidden; min-height: 0;
+    }
+    .activity-seg.llm { background: var(--assistant); }
+    .activity-seg.tool { background: var(--tool); }
+    .activity-error {
+      position: absolute; top: -3px; left: 50%; width: 4px; height: 4px;
+      margin-left: -2px; background: var(--error); transform: rotate(45deg);
+    }
+    .activity-error.sample {
+      position: static; margin: 0; transform: rotate(45deg); flex: none;
+    }
+
+    /* The row's link into its own session log, at the event the span records. */
+    .waterfall-duration { display: flex; align-items: baseline; gap: 5px; justify-content: flex-end; }
+    .waterfall-open {
+      color: var(--muted); text-decoration: none; font-size: 11px;
+      opacity: .55; flex: none;
+    }
+    .waterfall-row:hover .waterfall-open { opacity: 1; color: var(--accent); }
+    .waterfall-open:hover { text-decoration: none; }
+
   </style>
 </head>
 <body>
