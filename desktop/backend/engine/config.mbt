@@ -121,7 +121,7 @@ fn apply_model_env(
 fn ApiProvider::default_model(self : ApiProvider) -> String {
   match self {
     Glm => "glm-5.3"
-    Deepseek | OpenRouter | Custom => DefaultModel
+    Deepseek | SeekMoon | OpenRouter | Custom => DefaultModel
   }
 }
 
@@ -149,7 +149,7 @@ fn key_env_for(
 ) -> String raise EngineError {
   let model_key = model_key_env(model)
   match provider {
-    Deepseek => {
+    Deepseek | SeekMoon => {
       guard model_key == "DEEPSEEK" else {
         raise EngineError(
           "model \{model} does not belong to the configured DeepSeek provider",
@@ -268,7 +268,10 @@ async fn serve_config(
 ) -> RunConfig {
   let engine = manager.engine
   let settings = manager.settings_snapshot()
-  let endpoint = resolved_endpoint(settings)
+  let endpoint = resolved_endpoint(
+    settings,
+    account_session=manager.account_session,
+  )
   // A workspace run happens in the project directory itself, with the
   // session's durable record in the in-project store. Only registered
   // workspaces qualify — the registry, not the payload, decides which

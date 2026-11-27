@@ -12,7 +12,7 @@ fn HostSettings::from_status(
 ) -> HostSettings {
   let provider = ApiProvider::parse(payload.provider)
   let mut providers = @sorted_map.SortedMap([])
-  for provider in [Deepseek, Glm, OpenRouter, Custom] {
+  for provider in [Deepseek, SeekMoon, Glm, OpenRouter, Custom] {
     if payload.providers.get(provider.wire()) is Some(config) {
       providers = providers.add(provider, ProviderConfig::{
         api_url: config.api_url,
@@ -253,6 +253,34 @@ fn api_key_settings_patch(
     custom_prompt: None,
     models: None,
   }
+}
+
+///|
+test "SeekMoon proxy provider parses and projects account readiness" {
+  assert_true(ApiProvider::parse("seekmoon") is SeekMoon)
+  assert_eq(SeekMoon.wire(), "seekmoon")
+  let status = HostSettings::from_status({
+    revision: 1,
+    provider: "seekmoon",
+    providers: {
+      "seekmoon": {
+        api_url: Some(
+          "https://seekmoon.moonbitlang.com/v1/deepseek/chat/completions",
+        ),
+        has_api_key: true,
+      },
+    },
+    models: [],
+    followup_behavior: "steer",
+    prompt_source: "builtin_moonbit_guide",
+    custom_prompt: "",
+  })
+  assert_true(status.endpoint.provider is SeekMoon)
+  assert_true(status.endpoint.key_saved())
+  assert_eq(
+    status.endpoint.config(SeekMoon).api_url,
+    Some("https://seekmoon.moonbitlang.com/v1/deepseek/chat/completions"),
+  )
 }
 
 ///|

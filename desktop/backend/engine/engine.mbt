@@ -729,6 +729,9 @@ struct EngineManager {
   moonbit : @moonbit.ToolchainSource
   runtime_dir : @pathx.Path?
   skills_dir : @pathx.Path?
+  // Active SeekMoon account `(server_url, bearer_token)` for the hosted
+  // DeepSeek proxy provider, supplied by the host's AuthStore.
+  account_session : () -> (String, String)?
   mcp : McpState
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
@@ -1068,11 +1071,13 @@ fn new_engine_manager(
   host_mcp? : @mcp.Server,
   skills_dir? : @pathx.Path,
   moonbit~ : @moonbit.ToolchainSource = DesktopBundle,
+  account_session~ : () -> (String, String)? = () => None,
 ) -> EngineManager {
   {
     engine,
     runtime_dir,
     skills_dir,
+    account_session,
     moonbit,
     mcp: { server: host_mcp, current_engine_id: None, errors: Map([]), },
     workspace_lifecycle_lock: Mutex(),
@@ -1094,6 +1099,7 @@ pub fn new_engine_actor(
   host_mcp? : @mcp.Server,
   skills_dir? : @pathx.Path,
   moonbit~ : @moonbit.ToolchainSource = DesktopBundle,
+  account_session~ : () -> (String, String)? = () => None,
 ) -> EngineActor {
   {
     manager: new_engine_manager(
@@ -1102,6 +1108,7 @@ pub fn new_engine_actor(
       host_mcp?,
       skills_dir?,
       moonbit~,
+      account_session~,
     ),
   }
 }

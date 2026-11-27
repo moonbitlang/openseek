@@ -135,7 +135,7 @@ fn openseek_model_group(
   locale : @i18n.Locale,
 ) -> @composer.ModelGroup {
   let listed : Array[@deepseek.Model] = match provider {
-    Deepseek | OpenRouter => [Deepseek(V4Pro), Deepseek(V4Flash)]
+    Deepseek | SeekMoon | OpenRouter => [Deepseek(V4Pro), Deepseek(V4Flash)]
     Glm => [Glm(G53), Glm(G53Flash)]
     Custom => []
   }

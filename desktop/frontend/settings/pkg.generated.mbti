@@ -78,10 +78,13 @@ pub(all) enum Message {
   CheckingUpdate
   UpToDate
   DeepseekHint
+  SeekMoonHint
   GlmHint
   OpenRouterHint
   CustomHint
   DeepseekStepOne
+  SeekMoonStepOne
+  SeekMoonStepTwo
   CreateKey
   DeepseekPasteKey
   GlmStepOne
@@ -96,6 +99,10 @@ pub(all) enum Message {
   GlmKeysLink
   ApiEndpoint
   DeepseekOfficial
+  SeekMoonProxy
+  SeekMoonAccountSignIn
+  SeekMoonAccountSignedIn
+  SeekMoonAccountDescription
   GlmOfficial
   CustomUrl
   EndpointUrl

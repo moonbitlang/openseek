@@ -12,7 +12,10 @@ async fn resolve_api_connection_probe(
     raise EngineError("Settings changed. Try the connection test again.")
   }
   let settings = load_engine_settings(manager.runtime_dir)
-  let endpoint = resolved_endpoint(settings)
+  let endpoint = resolved_endpoint(
+    settings,
+    account_session=manager.account_session,
+  )
   let model = match payload.model {
     None => @deepseek.Model::parse(settings.provider.default_model())
     Some(id) => {
