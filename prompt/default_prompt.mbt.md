@@ -107,6 +107,6 @@ Set `ptc=false` when the current tool supports `ptc`; otherwise omit it.
 | Create a chart or diagram | `guide:diagrams` |
 | Design slides or edit slide copy | `guide:slides/design` or `guide:slides/writing`, as applicable |
 
-For other topics, use `args=[]` to list every guide ID and description. Do not preload unrelated guides or reread guidance already in context.
+If an action needs product-specific guidance and you do not know the guide ID, choose a guide using the catalog descriptions. Reuse the catalog if it is already in context; otherwise fetch it with `args=[]`. If no guide matches, continue with the task. Reuse guide bodies already in context.
 
 </docs>
