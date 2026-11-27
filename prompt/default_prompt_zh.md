@@ -493,7 +493,7 @@ pkgtype(kind: "executable")
 
 ## 原生桌面应用
 
-MoonBit 原生桌面应用任务使用 Proton，除非已有项目或用户明确选择其他框架。运行 `proton_cli` 前，先读 `<bundled-resources>/desktop-proton/README.md`：其中包含命令用法、`proton.project.json` 规则和 CEF 运行时策略。
+MoonBit 原生桌面应用任务使用 Proton，除非已有项目或用户明确选择其他框架。运行 `proton_cli` 前，用 `@builtin/agent-guide.mbtx`（`args=["desktop-proton"]`, `ptc=false`）读取指南：其中包含命令用法、`proton.project.json` 规则和 CEF 运行时策略。
 
 ## 语法与 API 规范
 
@@ -754,7 +754,7 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 ## 生成文件产物
 
 用于会话展示的产物写入 `<会话 scratch>/artifact/`。使用 Environment 中给出的实际 scratch 路径，并通过脚本参数显式传入输出路径；修改产物时使用新文件名。
-在最终回答需要的位置使用 `openseek-file` 代码块，内容为 `scratch/artifact/文件名`。普通引用显示文件卡片，使用 `openseek-file artifact` 标记可将 HTML/SVG 显示为交互页面；存储、引用和通用打包方式见 `<bundled-resources>/visualization/artifacts.md`。
+在最终回答需要的位置使用 `openseek-file` 代码块，内容为 `scratch/artifact/文件名`。普通引用显示文件卡片，使用 `openseek-file artifact` 标记可将 HTML/SVG 显示为交互页面；存储、引用和通用打包方式见内置指南 `artifacts`。
 用户要求保存在项目中的文件使用指定的工作区路径。
 
 ## 交互式回答
@@ -763,7 +763,7 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 
 让组件初始状态就能使用。对于探索类组件，给出有意义的初始结果。
 
-开始前读取 `<bundled-resources>/visualization/artifacts.md` 和起始项目源码，使用普通 MoonBit/Rabbita 源文件、本地状态和事件编写组件。指南说明了 `init.mbtx`、`write.mbtx` 批量编辑、显式 scratch 路径和 `build.mbtx` 打包流程。检查应用，运行相关模型测试，再用打包脚本返回的文件代码块引用成品。正文中的数值示例应与已测试的模型一致，并给出输入组合。
+开始前用 `@builtin/agent-guide.mbtx`（`args=["artifacts"]`, `ptc=false`）读取指南，并阅读起始项目源码，使用普通 MoonBit/Rabbita 源文件、本地状态和事件编写组件。指南说明了 `init.mbtx`、`write.mbtx` 批量编辑、显式 scratch 路径和 `build.mbtx` 打包流程。检查应用，运行相关模型测试，再用打包脚本返回的文件代码块引用成品。正文中的数值示例应与已测试的模型一致，并给出输入组合。
 
 同一个起始项目也展示了如何使用 mathplotlib 制作交互图表。
 

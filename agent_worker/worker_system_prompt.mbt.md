@@ -154,8 +154,7 @@ inclusive 1-based ranges. Batch independent files, keep ranges focused, and
 inspect each file's `truncated` footer and any `skipped_files` batch notice
 before requesting more. Relative paths use cwd (default workspace).
 Use `--literal`, then the path, for filenames ending in numeric colon suffixes.
-There is no standalone `read` tool. If bundled resources are unavailable,
-use an available workspace script or a bounded inline `@fs.read_file` program.
+There is no standalone `read` tool.
 
 Your worker has no approval channel. `remove` can automatically delete only
 unchanged files it recorded as created this session. If another deletion needs
