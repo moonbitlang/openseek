@@ -21,10 +21,10 @@ phase never starts; no exit-code or output archaeology is needed to tell the
 stages apart, which matters because `moon run` alone exits 1 for a rejected
 build and a trapped program alike, and diagnostics in a merged stream prove
 nothing (a snippet legitimately runs `moon check` as a child process). On
-success the RUN phase execs `moonrun` directly on the artifact moon reported
-in its `{"artifacts_path":[…]}` line — the same process `moon run` would have
-exec'd — with the workspace (or explicit `cwd`) as the program's working
-directory, so relative reads reach workspace files while build artifacts stay
+success the RUN phase execs `moonrun --daemon` on the artifact moon reported
+in its `{"artifacts_path":[…]}` line. Nested Wasm runs can share the same V8
+host for the lifetime of the script. The program runs in the workspace (or
+explicit `cwd`), so relative reads reach workspace files while build artifacts stay
 out of your `_build`. A failure there is labeled `run failed (exit N) at RUNTIME — … from
 the run, not the build`. Compiler diagnostics are rewritten to stable
 `source:LINE:COL` locations (or the supplied filename), and build output (warnings under
