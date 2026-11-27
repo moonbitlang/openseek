@@ -346,9 +346,9 @@ async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
 fn join_carry(parts : Array[Bytes], tail : BytesView) -> Bytes {
   let line = @buffer.Buffer()
   for part in parts {
-    line.write_bytes(part)
+    line.write_bytesview(part)
   }
-  line.write_bytes(tail)
+  line.write_bytesview(tail)
   line.to_bytes()
 }
 

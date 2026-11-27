@@ -117,11 +117,13 @@ async fn desktop_toolchain(
     if @fsx.is_executable_file(toolchain.moonx().to_path()) {
       return toolchain
     }
-    @xlog.debug() <?
-      {
-        "event": "desktop_moonbit_external_without_moonx",
-        "bin_dir": toolchain.bin_dir.to_string(),
-      }
+    if @xlog.debug() is Some(event) {
+      event
+      ..write_object_begin()
+      ..write_object_field("event", "desktop_moonbit_external_without_moonx")
+      ..write_object_field("bin_dir", toolchain.bin_dir.to_string())
+      .write_object_end()
+    }
   }
   if bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) {
     return bundled_toolchain(seed_dir, runtime_dir?)
@@ -181,17 +183,24 @@ async fn find_external_toolchain(
       // working directory; children spawn elsewhere, so it must not be
       // selected or re-exported.
       guard bin_dir.to_absolute() is Some(bin_dir) else {
-        @xlog.debug() <?
-          { "event": "desktop_moonbit_path_entry_relative", "entry": entry }
+        if @xlog.debug() is Some(event) {
+          event
+          ..write_object_begin()
+          ..write_object_field("event", "desktop_moonbit_path_entry_relative")
+          ..write_object_field("entry", entry)
+          .write_object_end()
+        }
         continue
       }
       if toolchain_at(bin_dir) is Some(toolchain) {
-        @xlog.debug() <?
-          {
-            "event": "desktop_moonbit_external_toolchain",
-            "source": "path",
-            "bin_dir": bin_dir.to_string(),
-          }
+        if @xlog.debug() is Some(event) {
+          event
+          ..write_object_begin()
+          ..write_object_field("event", "desktop_moonbit_external_toolchain")
+          ..write_object_field("source", "path")
+          ..write_object_field("bin_dir", bin_dir.to_string())
+          .write_object_end()
+        }
         return Some(toolchain)
       }
     }
@@ -200,12 +209,14 @@ async fn find_external_toolchain(
     let bin_dir = home.join(".moon").join("bin")
     if bin_dir.to_absolute() is Some(bin_dir) &&
       toolchain_at(bin_dir) is Some(toolchain) {
-      @xlog.debug() <?
-        {
-          "event": "desktop_moonbit_external_toolchain",
-          "source": "home_default",
-          "bin_dir": bin_dir.to_string(),
-        }
+      if @xlog.debug() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_moonbit_external_toolchain")
+        ..write_object_field("source", "home_default")
+        ..write_object_field("bin_dir", bin_dir.to_string())
+        .write_object_end()
+      }
       return Some(toolchain)
     }
   }

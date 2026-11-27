@@ -7,7 +7,7 @@ async fn accept_request(
   server : @http.Server,
 ) -> (@http.ServerConnection, @http.RequestHeader) {
   for ;; {
-    let (conn, _) = server.accept()
+    let conn = server.accept()
     let request = conn.read_request() catch {
       @io.UnexpectedEof => {
         conn.close()
@@ -33,9 +33,9 @@ async test "accept_request skips connections closed before a request" {
         defer conn.close()
         assert_eq(request.path, "/ready")
       })
-      let abandoned = @socket.Tcp::connect(server.addr)
+      let abandoned = @socket.Tcp::connect(server.local_addr())
       abandoned.close()
-      let client = @socket.Tcp::connect(server.addr)
+      let client = @socket.Tcp::connect(server.local_addr())
       defer client.close()
       client.write(b"GET /ready HTTP/1.1\r\nHost: localhost\r\n\r\n")
       accepted.wait()

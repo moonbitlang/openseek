@@ -26,12 +26,17 @@ async fn main {
     [] => abort("current executable command is unavailable")
   }
   launch_logger(executable)
-  @xlog.info() <?
-    {
-      "event": "desktop_main_start",
-      "message": "start",
-      "log_path": @env.get_env_var("OPENSEEK_DESKTOP_LOG").unwrap_or(""),
-    }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_main_start")
+    ..write_object_field("message", "start")
+    ..write_object_field(
+      "log_path",
+      @env.get_env_var("OPENSEEK_DESKTOP_LOG").unwrap_or(""),
+    )
+    .write_object_end()
+  }
   // A Finder/Dock launch inherits only launchd's minimal environment; graft
   // the user's login-shell environment (PATH, custom variables) onto this
   // process before anything downstream — engine, LSP, mbtx snippets — spawns.
@@ -61,11 +66,40 @@ async fn main {
     ),
   )..config(@proton.load_config())
   let app_version = app.version() catch { _ => "development" }
-  @xlog.info() <? { "message": "host process start" }
-  @xlog.info() <? { "message": "frontend entry", "path": frontend_entry }
-  @xlog.info() <? { "message": "engine", "path": engine }
-  @xlog.info() <? { "message": "codex", "path": @codex.command() }
-  @xlog.info() <? { "message": "app version", "version": app_version }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("message", "host process start")
+    .write_object_end()
+  }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("message", "frontend entry")
+    ..write_object_field("path", frontend_entry)
+    .write_object_end()
+  }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("message", "engine")
+    ..write_object_field("path", engine)
+    .write_object_end()
+  }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("message", "codex")
+    ..write_object_field("path", @codex.command())
+    .write_object_end()
+  }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("message", "app version")
+    ..write_object_field("version", app_version)
+    .write_object_end()
+  }
   // The identity this process answers to. A development build never answers
   // to the shipped one: `package/build.mjs` generates a project config
   // carrying its own, and `proton dev` hands that config on to the host
@@ -82,13 +116,18 @@ async fn main {
     home=codex_home,
     require_home=true,
   )
-  @xlog.info() <?
-    {
-      "message": "codex home",
-      "path": codex_home
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("message", "codex home")
+    ..write_object_field(
+      "path",
+      codex_home
       .map(p => p.to_string())
       .unwrap_or("(unavailable: no isolated home)"),
-    }
+    )
+    .write_object_end()
+  }
   // Account state and optional remote permission. Dev deliberately starts
   // signed out on each launch: its runtime directory is shared with the
   // shipped application, so it must not restore or overwrite that auth.json.
@@ -137,7 +176,13 @@ async fn main {
   let bridge = @extension.DesktopBridgeActor(state, askpass=Some(executable))
   views.page_attached(payload => bridge.notify_browser_event(payload))
   let relay = @remote.RelayActor(state, announce=device => {
-    @xlog.info() <? { "message": "relay registered", "device": device }
+    if @xlog.info() is Some(event) {
+      event
+      ..write_object_begin()
+      ..write_object_field("message", "relay registered")
+      ..write_object_field("device", device)
+      .write_object_end()
+    }
   })
   // Proton exposes the `__MoonBit__` bridge — both the ops and the event
   // channel the frontend listens on — only to the local origin its asset
@@ -266,12 +311,14 @@ async fn main {
     if console is Some(console) {
       // The same directory and document the window loads.
       let entry = @pathx.Path(frontend_entry)
-      @xlog.info() <?
-        {
-          "event": "desktop_console_serving",
-          "origin": console.origin(),
-          "root": entry.dirname().to_string(),
-        }
+      if @xlog.info() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_console_serving")
+        ..write_object_field("origin", console.origin())
+        ..write_object_field("root", entry.dirname().to_string())
+        .write_object_end()
+      }
       group.spawn_bg(allow_failure=true, () => {
         console.run(
           state,
@@ -281,8 +328,13 @@ async fn main {
       })
     }
   })
-  @xlog.info() <?
-    { "event": "desktop_app_run_start", "single_instance": single_instance }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_app_run_start")
+    ..write_object_field("single_instance", single_instance)
+    .write_object_end()
+  }
   try {
     app.run()
     if !is_primary {
@@ -293,22 +345,26 @@ async fn main {
         "SeekMoon is already running; its window was brought to the front. Quit it first, or start this one with --no-single-instance to use a temporary browser profile.",
       )
     }
-    @xlog.info() <?
-      {
-        "event": "desktop_app_run_return",
-        "result": "ok",
-        "primary": is_primary,
-        "message": "host process exit ok",
-      }
+    if @xlog.info() is Some(event) {
+      event
+      ..write_object_begin()
+      ..write_object_field("event", "desktop_app_run_return")
+      ..write_object_field("result", "ok")
+      ..write_object_field("primary", is_primary)
+      ..write_object_field("message", "host process exit ok")
+      .write_object_end()
+    }
   } catch {
     error =>
-      @xlog.error() <?
-        {
-          "event": "desktop_app_run_return",
-          "result": "error",
-          "message": "host process error",
-          "error": @debug.render(Repr(error)),
-        }
+      if @xlog.error() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "desktop_app_run_return")
+        ..write_object_field("result", "error")
+        ..write_object_field("message", "host process error")
+        ..write_object_field("error", @debug.render(Repr(error)))
+        .write_object_end()
+      }
   }
   // A successful `update.apply` swapped the bundle on disk and left a
   // relaunch marker: reopen the new version now that the run loop is done.
@@ -334,21 +390,44 @@ async fn main {
           work_dir=dir.to_string(),
           bundle_path=bundle,
         ) {
-        @xlog.info() <? { "message": "relaunch after update", "path": bundle }
+        if @xlog.info() is Some(event) {
+          event
+          ..write_object_begin()
+          ..write_object_field("message", "relaunch after update")
+          ..write_object_field("path", bundle)
+          .write_object_end()
+        }
         let code = @process.run("open", ["-n", bundle]) catch {
           error => {
-            @xlog.error() <?
-              { "message": "relaunch failed", "error": "\{error}" }
+            if @xlog.error() is Some(event) {
+              event
+              ..write_object_begin()
+              ..write_object_field("message", "relaunch failed")
+              ..write_object_field("error", "\{error}")
+              .write_object_end()
+            }
             return
           }
         }
         if code != 0 {
-          @xlog.error() <? { "message": "relaunch failed", "code": code }
+          if @xlog.error() is Some(event) {
+            event
+            ..write_object_begin()
+            ..write_object_field("message", "relaunch failed")
+            ..write_object_field("code", code)
+            .write_object_end()
+          }
         }
       }
     }
   }
-  @xlog.info() <? { "event": "desktop_main_return", "primary": is_primary }
+  if @xlog.info() is Some(event) {
+    event
+    ..write_object_begin()
+    ..write_object_field("event", "desktop_main_return")
+    ..write_object_field("primary", is_primary)
+    .write_object_end()
+  }
 }
 
 ///|

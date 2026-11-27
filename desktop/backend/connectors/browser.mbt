@@ -15,7 +15,7 @@ async fn begin_browser(
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   errdefer server.close()
   // The registered loopback path is stable. RFC 8252 permits an ephemeral port.
-  let redirect_uri = "http://127.0.0.1:\{server.addr.port}\{CallbackPath}"
+  let redirect_uri = "http://127.0.0.1:\{server.local_addr().port}\{CallbackPath}"
   let client = @oauth.discover_authorization_code(
     config,
     resource~,
@@ -94,7 +94,7 @@ async fn respond(
       "Referrer-Policy": "no-referrer",
       "Connection": "close",
     })
-    conn.write_string(message)
+    conn.text.write(message)
     conn.end_response()
   } catch {
     _ => ()
@@ -109,9 +109,9 @@ async fn wait_for_callback(
   state~ : String,
   verifier~ : String,
 ) -> Unit {
-  let host = "127.0.0.1:\{server.addr.port}"
+  let host = "127.0.0.1:\{server.local_addr().port}"
   for ;; {
-    let (conn, _) = server.accept()
+    let conn = server.accept()
     defer conn.close()
     let request = @async.with_timeout(2000, () => conn.read_request()) catch {
       _ => continue

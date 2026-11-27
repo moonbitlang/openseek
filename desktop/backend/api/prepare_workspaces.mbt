@@ -12,36 +12,49 @@ async fn prepare_workspaces() -> Unit {
     error => {
       // An unwritable Documents folder must not stop the app — the user can
       // still attach a project by hand.
-      @xlog.error() <?
-        {
-          "message": "default workspace setup failed",
-          "error": @debug.render(Repr(error)),
-        }
+      if @xlog.error() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("message", "default workspace setup failed")
+        ..write_object_field("error", @debug.render(Repr(error)))
+        .write_object_end()
+      }
       None
     }
   }
   if default_workspace is Some(dir) {
-    @xlog.info() <?
-      { "message": "default workspace attached", "path": dir.to_string() }
+    if @xlog.info() is Some(event) {
+      event
+      ..write_object_begin()
+      ..write_object_field("message", "default workspace attached")
+      ..write_object_field("path", dir.to_string())
+      .write_object_end()
+    }
   }
   // Conversations the desktop used to keep in the global store predate
   // workspaces owning every record. Move them into the default workspace so
   // they stay listed; a failure leaves them where they are for a later launch.
   let migrated = @engine.migrate_global_store() catch {
     error => {
-      @xlog.error() <?
-        {
-          "message": "global store migration failed",
-          "error": @debug.render(Repr(error)),
-        }
+      if @xlog.error() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("message", "global store migration failed")
+        ..write_object_field("error", @debug.render(Repr(error)))
+        .write_object_end()
+      }
       0
     }
   }
   if migrated > 0 {
-    @xlog.info() <?
-      {
-        "message": "migrated conversations from the global store",
-        "count": migrated,
-      }
+    if @xlog.info() is Some(event) {
+      event
+      ..write_object_begin()
+      ..write_object_field(
+        "message", "migrated conversations from the global store",
+      )
+      ..write_object_field("count", migrated)
+      .write_object_end()
+    }
   }
 }

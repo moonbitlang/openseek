@@ -74,27 +74,41 @@ pub fn CodexError::is_unmaterialized_thread_turns(self : CodexError) -> Bool {
 fn CodexError::log(self : CodexError) -> Unit {
   match self {
     JsonRpc(method_~, code~, message~, data~) =>
-      @xlog.error(category="codex") <?
-        {
-          "event": "codex_app_server_jsonrpc_error",
-          "method": method_,
-          "code": code,
-          "error_message": message,
-          "data": data.unwrap_or(null),
-        }
+      if @xlog.error(category="codex") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "codex_app_server_jsonrpc_error")
+        ..write_object_field("method", method_)
+        ..write_object_field("code", code)
+        ..write_object_field("error_message", message)
+        ..write_object_field("data", data.unwrap_or(null))
+        .write_object_end()
+      }
     TransportClosed(method_~) =>
-      @xlog.error(category="codex") <?
-        { "event": "codex_app_server_transport_closed", "method": method_ }
+      if @xlog.error(category="codex") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "codex_app_server_transport_closed")
+        ..write_object_field("method", method_)
+        .write_object_end()
+      }
     RequestFailed(method_~, detail~) =>
-      @xlog.error(category="codex") <?
-        {
-          "event": "codex_app_server_request_failed",
-          "method": method_,
-          "error": detail,
-        }
+      if @xlog.error(category="codex") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "codex_app_server_request_failed")
+        ..write_object_field("method", method_)
+        ..write_object_field("error", detail)
+        .write_object_end()
+      }
     Unavailable(message) =>
-      @xlog.warn(category="codex") <?
-        { "event": "codex_app_server_unavailable", "error": message }
+      if @xlog.warn(category="codex") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "codex_app_server_unavailable")
+        ..write_object_field("error", message)
+        .write_object_end()
+      }
   }
 }
 

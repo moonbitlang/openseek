@@ -103,8 +103,13 @@ fn Proxy::install(self : Proxy, ctx : @moonback.ModuleContext) -> Unit raise {
 async fn Proxy::send_document(self : Proxy, res : @moonback.Responder) -> Unit {
   let html = @fs.read_file("\{self.bundle}/index.html").text() catch {
     error => {
-      @xlog.error(category="console_proxy") <?
-        { "event": "bundle_document_unreadable", "error": "\{error}" }
+      if @xlog.error(category="console_proxy") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "bundle_document_unreadable")
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       res.send_void(status=404, headers={ "Cache-Control": "no-store" })
       return
     }

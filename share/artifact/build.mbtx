@@ -4,7 +4,7 @@
 import {
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/core/async/shell",
+  "moonbitlang/core/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
 }
@@ -116,32 +116,41 @@ async fn main {
   let snapshot = temporary + "/source"
   copy_sources(project, snapshot)
   let build_directory = temporary + "/build"
-  let checked = @shell.Cmd(
+  let checked = @process.run(
     "moon",
     [
       "check", "--target", "js", "--deny-warn", "--output-json", "--target-dir",
       build_directory,
     ],
     cwd=snapshot,
-  ).output(max_output_bytes=256 * 1024)
-  guard checked.exit_code() == 0 else {
+    stdin=Empty,
+    stdout=Collect,
+    stderr=Collect,
+  )
+  guard checked.exit_code == 0 else {
     fail(
-      (checked.stdout() + checked.stderr()).replace_all(
+      (checked.stdout_text() + checked.stderr_text()).replace_all(
         old=snapshot,
         new=project,
       ),
     )
   }
-  let build = @shell.Cmd(
+  let build = @process.run(
     "moon",
     [
       "build", "--target", "js", "--release", "--output-json", "--target-dir", build_directory,
     ],
     cwd=snapshot,
-  ).output(max_output_bytes=256 * 1024)
-  guard build.exit_code() == 0 else {
+    stdin=Empty,
+    stdout=Collect,
+    stderr=Collect,
+  )
+  guard build.exit_code == 0 else {
     fail(
-      (build.stdout() + build.stderr()).replace_all(old=snapshot, new=project),
+      (build.stdout_text() + build.stderr_text()).replace_all(
+        old=snapshot,
+        new=project,
+      ),
     )
   }
   let artifacts : Array[String] = []

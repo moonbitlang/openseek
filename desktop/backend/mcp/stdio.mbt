@@ -70,7 +70,7 @@ async fn read_stdio_line(input : &@io.BinaryReader) -> Bytes? {
     guard line.length() + length <= MaxRequestBytes else {
       raise ServerError("MCP message exceeds \{MaxRequestBytes} bytes")
     }
-    line.write_bytes(chunk[:length])
+    line.write_bytesview(chunk[:length])
     let complete = length < chunk.length()
     input.drop_exactly(length + (if complete { 1 } else { 0 }))
     if complete {

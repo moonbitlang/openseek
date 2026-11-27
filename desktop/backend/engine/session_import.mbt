@@ -43,12 +43,14 @@ pub async fn import_session(
         store.create(record.session)
         store.set_title(record.session.id(), record.title) catch {
           error =>
-            @xlog.warn() <?
-              {
-                "event": "desktop_import_title_save_failed",
-                "session": record.session.id().value(),
-                "error": error.to_string(),
-              }
+            if @xlog.warn() is Some(event) {
+              event
+              ..write_object_begin()
+              ..write_object_field("event", "desktop_import_title_save_failed")
+              ..write_object_field("session", record.session.id().value())
+              ..write_object_field("error", error.to_string())
+              .write_object_end()
+            }
         }
       }
     },

@@ -263,8 +263,13 @@ pub async fn AuthStore::sign_out(self : AuthStore) -> Unit {
   if retired.val is Some(session) {
     revoke_session(session) catch {
       error =>
-        @xlog.warn(category="auth") <?
-          { "message": "session revoke failed", "error": "\{error}" }
+        if @xlog.warn(category="auth") is Some(event) {
+          event
+          ..write_object_begin()
+          ..write_object_field("message", "session revoke failed")
+          ..write_object_field("error", "\{error}")
+          .write_object_end()
+        }
     }
   }
   if clear_error is Some(message) {

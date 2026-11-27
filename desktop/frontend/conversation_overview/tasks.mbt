@@ -58,7 +58,7 @@ pub fn BackgroundTasks::from_listing(
     let job = view.job
     let terminal = job.state.is_terminal()
     if job.subagent is Some(info) {
-      seen.add(info.session)
+      seen.insert(info.session)
       if !terminal {
         subagents.push("\{info.kind}: \{info.label}")
       }
@@ -76,7 +76,7 @@ pub fn BackgroundTasks::from_listing(
   for run in workflows {
     for row in run.ordered_rows() {
       guard !seen.contains(row.child) else { continue }
-      seen.add(row.child)
+      seen.insert(row.child)
       // A row a closed run never finished will not finish; it is not running.
       if row.status is None && !run.closed {
         subagents.push("\{row.kind}: \{row.label}")

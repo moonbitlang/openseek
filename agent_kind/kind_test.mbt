@@ -38,21 +38,21 @@ async fn child_test_server(
             conn.send_response(200, "OK", extra_headers={
               "Content-Type": "text/event-stream",
             })
-            conn.write_string("data: \{payload}\n\n")
-            conn.write_string("data: [DONE]\n\n")
+            conn.text.write("data: \{payload}\n\n")
+            conn.text.write("data: [DONE]\n\n")
           }
           Body(json) => {
             conn.send_response(200, "OK", extra_headers={
               "Content-Type": "application/json",
             })
-            conn.write_string(json.stringify())
+            conn.text.write(json.stringify())
           }
         }
       },
       max_connections=8,
     )
   }
-  Some("http://127.0.0.1:\{server.addr.port}/chat/completions")
+  Some("http://127.0.0.1:\{server.local_addr().port}/chat/completions")
 }
 
 ///|

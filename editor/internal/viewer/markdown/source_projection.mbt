@@ -195,7 +195,7 @@ fn markdown_root_element_ids(
   let result : Set[Int32] = Set([])
   let add = fn(block : @cmark.Block) {
     if markdown_block_renders_one_root_element(block, source_mapping~) {
-      result.add(block.meta().id)
+      result.insert(block.meta().id)
     }
   }
   match doc.block {

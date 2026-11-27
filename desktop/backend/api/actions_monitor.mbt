@@ -11,14 +11,16 @@ async fn ApiState::deliver_actions_notice(
   let message = "SeekMoon PR monitor: \{state} \{url} at commit \{head}. Continue the PR work in this conversation using this result."
   self.deliver_session_input(session, message, @uuid.mint(), retry_dropped=true) catch {
     error => {
-      @xlog.warn() <?
-        {
-          "event": "actions_monitor_delivery_failed",
-          "session": session,
-          "pr": url,
-          "head": head,
-          "error": "\{error}",
-        }
+      if @xlog.warn() is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "actions_monitor_delivery_failed")
+        ..write_object_field("session", session)
+        ..write_object_field("pr", url)
+        ..write_object_field("head", head)
+        ..write_object_field("error", "\{error}")
+        .write_object_end()
+      }
       self.publish(
         AgentEvent({
           run_id: None,

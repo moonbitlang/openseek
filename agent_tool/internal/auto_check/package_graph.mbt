@@ -255,7 +255,7 @@ pub fn PackageGraph::depends_on(
       if targets.contains(target) {
         return true
       }
-      seen.add(target)
+      seen.insert(target)
       queue.push(target)
     }
   }

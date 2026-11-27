@@ -17,10 +17,10 @@ async fn steer_test_server(group : @async.TaskGroup) -> String? {
       conn.send_response(200, "OK", extra_headers={
         "Content-Type": "text/event-stream",
       })
-      conn.write_string(
+      conn.text.write(
         "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n",
       )
-      conn.write_string("data: [DONE]\n\n")
+      conn.text.write("data: [DONE]\n\n")
     },
   )
 }
@@ -116,7 +116,7 @@ async fn override_test_server(
     if requests == 1 {
       // The steer arrives while this "final" call is in flight.
       runtime.queue_steer(steer)
-      conn.write_string(
+      conn.text.write(
         "data: {\"choices\":[{\"delta\":{\"content\":\"draft answer\"}}]}\n\n",
       )
     } else {
@@ -124,11 +124,11 @@ async fn override_test_server(
         assert_true(request_body.contains(fragment), msg=fragment)
       }
       assert_true(request_body.contains("draft answer"))
-      conn.write_string(
+      conn.text.write(
         "data: {\"choices\":[{\"delta\":{\"content\":\"\{final_answer}\"}}]}\n\n",
       )
     }
-    conn.write_string("data: [DONE]\n\n")
+    conn.text.write("data: [DONE]\n\n")
   })
 }
 
@@ -319,21 +319,21 @@ async fn reasoning_log_test_server(
       if hits.val == 1 {
         // The first attempt dies after visible output; the agent's retry
         // boundary must keep that fragment transient.
-        conn.write_string(
+        conn.text.write(
           "data: {\"choices\":[{\"delta\":{\"content\":\"discarded\"}}]}\n\n",
         )
         return
       }
-      conn.write_string(
+      conn.text.write(
         "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"stream-retry:\"}}]}\n\n",
       )
-      conn.write_string(
+      conn.text.write(
         "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"reasoning-proof\"}}]}\n\n",
       )
-      conn.write_string(
+      conn.text.write(
         "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8,\"prompt_cache_hit_tokens\":1,\"prompt_cache_miss_tokens\":2}}\n\n",
       )
-      conn.write_string("data: [DONE]\n\n")
+      conn.text.write("data: [DONE]\n\n")
     },
   )
   url.map(url => (url, hits))
@@ -444,22 +444,22 @@ async fn notice_test_server(
         // A background job finishes mid-turn and pushes a notice.
         runtime.queue_steer(Notice(notice))
         if finish_first {
-          conn.write_string(
+          conn.text.write(
             "data: \{sse_tool_call("call_finish", "finish_test", 100_000)}\n\n",
           )
         } else {
-          conn.write_string(
+          conn.text.write(
             "data: {\"choices\":[{\"delta\":{\"content\":\"draft\"}}]}\n\n",
           )
         }
       } else {
         // The notice was delivered to the model as user-role content.
         assert_true(request_body.contains(notice))
-        conn.write_string(
+        conn.text.write(
           "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n",
         )
       }
-      conn.write_string("data: [DONE]\n\n")
+      conn.text.write("data: [DONE]\n\n")
     },
   )
 }

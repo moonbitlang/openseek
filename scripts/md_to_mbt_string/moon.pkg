@@ -5,6 +5,10 @@ import {
   "moonbitlang/openseek-scripts/internal/markdown_comments",
 }
 
+import {
+  "moonbitlang/core/async",
+} for "wbtest"
+
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+native"
@@ -13,6 +17,7 @@ pkgtype(kind: "executable")
 
 options(
   "allow-experimental-packages": [
+    "moonbitlang/core/async",
     "moonbitlang/core/async/fs",
   ],
 )

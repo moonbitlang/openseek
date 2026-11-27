@@ -194,7 +194,7 @@ pub async fn Reader::take(self : Reader) -> Array[Message] {
   for message in inbox.messages {
     let key = message.receipt()
     guard !self.taken.contains(key) else { continue }
-    self.taken.add(key)
+    self.taken.insert(key)
     fresh.push(message)
   }
   fresh

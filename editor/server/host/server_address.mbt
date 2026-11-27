@@ -14,7 +14,7 @@ async fn default_route_ipv4_address() -> String? {
     _ => None
   }
   guard probe is Some(probe) else { return None }
-  let address = probe.addr
+  let address = probe.local_addr()
   probe.close()
   guard address.ip is Ipv4(ip) && ip != 0 && ip != 0x7f000001 else {
     return None
