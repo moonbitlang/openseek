@@ -2053,7 +2053,12 @@ fn update(
     (
       model.active_session != previous.active_session ||
       model.focused != previous.focused ||
-      !(model.active_conversation() is Some(conv) && conv.shows_git_chip())
+      previous.cloud_identity() != model.cloud_identity() ||
+      !(if model.cloud_identity() is Some(_) {
+        model.cloud_git is Some(_)
+      } else {
+        model.active_conversation() is Some(conv) && conv.shows_git_chip()
+      })
     ) {
     { ..model, git_details_open: false, }
   } else {
@@ -2161,7 +2166,12 @@ fn update(
     review_busy=model.file_panel.github_review.busy &&
       model.file_panel.github_review.checkout == checkout,
   )
-  let model = { ..model, github, }
+  let (cloud_git_cmd, model) = refresh_cloud_git(
+    dispatch,
+    { ..model, github, },
+    previous,
+    checkout,
+  )
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
   let model = {
     ..model,
@@ -2265,6 +2275,7 @@ fn update(
       terminal_cmd,
       jobs_cmd,
       overview_cmd,
+      cloud_git_cmd,
       github_cmd,
       browser_cmd,
       preview_cmd,
@@ -2792,6 +2803,8 @@ fn update_msg(
         let selected = model.cloud_identity() == Some(action.identity().owner) ||
           model.cloud_draft_identity() == Some(action.identity().owner)
         match action {
+          @composer.GitDetailsToggled(..) if selected =>
+            return update_msg(dispatch, ToggleGitDetails, model)
           @composer.ContextContinueRequested(identity~) => {
             guard selected &&
               model.cloud_display_status() is Some(Finished(ContextYield)) &&
@@ -6758,10 +6771,18 @@ fn update_msg(
     }
     OpenPathResolved(context, reply) =>
       finish_open_path(dispatch, model, context, reply)
+    CloudGitLoaded(generation, value) =>
+      if generation == model.cloud_git_generation {
+        (@cmd.none, { ..model, cloud_git: value, })
+      } else {
+        (@cmd.none, model)
+      }
     ToggleGitDetails => {
       let opening = !model.git_details_open
       let model = { ..model, git_details_open: opening, }
-      guard opening else { return (@cmd.none, model) }
+      guard opening && model.cloud_identity() is None else {
+        return (@cmd.none, model)
+      }
       // Opening it is a request for current information, and everything it
       // shows goes stale on its own: CI finishes minutes after the run that
       // started it, and the working tree keeps moving. Nothing else looks

@@ -1506,6 +1506,8 @@ priv struct Model {
   // counter living on it restarts at zero and hands the old checkout's
   // outstanding replies a number the new one accepts. Kept whole while the
   // frontend runs, it can only ever be spent.
+  cloud_git : @composer.GitPresentation?
+  cloud_git_generation : Int32
   git_request_generation : Int32
   // Whether the composer's git chip has its details popover open. Global UI
   // for the focused conversation like `quick_open`, not conversation state:
@@ -2114,6 +2116,7 @@ priv enum Msg {
   // The host chooses the viewer; the frontend retains the navigation context.
   OpenPathResolved(FileOpenContext, @protocol.OpenPathReply)
   // Open or close the composer git chip's details popover.
+  CloudGitLoaded(Int32, @composer.GitPresentation?)
   ToggleGitDetails
   // Show or hide the conversation overview, and the stored choice read back
   // at startup.
@@ -2891,6 +2894,8 @@ fn initial_model(
     project_menu_query: "",
     composer_entry_changes: [],
     quick_open: @quick_open.State::empty(),
+    cloud_git: None,
+    cloud_git_generation: 0,
     git_request_generation: 0,
     git_details_open: false,
     docks: Map([]),

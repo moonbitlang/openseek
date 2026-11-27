@@ -622,7 +622,13 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         }
         context
       },
-      status: [],
+      status: if !pending &&
+        self.cloud_git is Some(presentation) &&
+        self.cloud_identity() == Some(owner) {
+        [@composer.GitStatus({ presentation, open: self.git_details_open, })]
+      } else {
+        []
+      },
       placeholder: shell_text(self.locale, AskPlaceholder),
       disabled: pending || !self.cloud.can_compose(owner.session()),
       primary_action: if conversation.generating ||

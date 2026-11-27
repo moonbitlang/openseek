@@ -577,3 +577,94 @@ fn fetch_pull_request(
     |> ignore
   })
 }
+
+///|
+fn refresh_cloud_git(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  previous : Model,
+  scope : @github.CheckoutScope?,
+) -> (@cmd.Cmd, Model) {
+  let switched = model.cloud_identity() != previous.cloud_identity() ||
+    previous.cloud.epoch != model.cloud.epoch ||
+    previous.github.scope.map(s => s.host) != scope.map(s => s.host)
+  guard model.screen is Chat &&
+    scope is Some(checkout) &&
+    checkout.host is Cloud(session~, ..) &&
+    model.cloud_identity() is Some(@interop.Cloud(session=id, ..)) &&
+    session == id else {
+    return (
+      @cmd.none,
+      if model.cloud_git is Some(_) || switched {
+        {
+          ..model,
+          cloud_git: None,
+          cloud_git_generation: model.cloud_git_generation + 1,
+        }
+      } else {
+        model
+      },
+    )
+  }
+  let changed = previous.github.scope != scope ||
+    previous.screen != model.screen ||
+    previous.cloud_conversation().map(c => (c.task, c.generating)) !=
+    model.cloud_conversation().map(c => (c.task, c.generating))
+  guard switched ||
+    changed ||
+    (model.git_details_open && !previous.git_details_open) else {
+    return (@cmd.none, model)
+  }
+  let generation = model.cloud_git_generation + 1
+  let cmd = @cmd.perform(
+    result => dispatch(CloudGitLoaded(generation, result)),
+    () => {
+      try {
+        let pr = checkout.request(@commands.git_pull_request, {
+          session,
+          cwd: None,
+          branch_hint: checkout.branch,
+        })
+        let details = checkout.request(@commands.git_branch, {
+          session,
+          cwd: None,
+          base_hint: pr.pull_request.map(p => p.base),
+        })
+        guard details.branch is Some(branch) && !branch.is_empty() else {
+          return None
+        }
+        let same = Some(branch) == pr.branch
+        Some(
+          @composer.GitPresentation(
+            branch~,
+            changes?=details.diffstat.map(d => {
+              DiffStat::from_reply(d).composer_changes()
+            }),
+            pull_request?=if same {
+              pr.pull_request
+              .bind(PullRequest::from_reply)
+              .map(p => p.composer_pull_request())
+            } else {
+              None
+            },
+            compare_url?=if same { pr.compare_url } else { None },
+          ),
+        )
+      } catch {
+        _ => None
+      }
+    },
+  )
+  (
+    cmd,
+    {
+      ..model,
+      cloud_git_generation: generation,
+      cloud_git: if switched {
+        None
+      } else {
+        model.cloud_git
+      },
+    },
+  )
+}

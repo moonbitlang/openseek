@@ -154,6 +154,7 @@ pub impl @json.FromJson for ControlState
 pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
+  ArtifactsChanged(session~ : String, seq~ : Int32)
   NativeEvent(EngineFrame)
   EngineFailed(session~ : String, seq~ : Int32, error~ : String)
 }
