@@ -29,9 +29,10 @@ fn CompletionState::reset(self : CompletionState) -> Unit {
 
 ///|
 /// The composer's text when it holds a single-line entry in input mode — the
-/// precondition shared by completion, slash-command parsing, and slash-entry
-/// detection. None in shell mode or for multi-line input, neither of which is a
-/// slash context.
+/// precondition for completion, and for slash-command parsing and slash-entry
+/// detection apart from commands that take multi-line arguments (see
+/// `registered_multiline_invocation`). None in shell mode or for multi-line
+/// input.
 fn single_line_input_text(composer : @composer.Model) -> String? {
   guard composer.mode().is_input() else { return None }
   let text = composer.text()
@@ -75,10 +76,11 @@ fn completion_menu_for_composer(
 ///
 /// Returns None when no slash commands are configured, so a consumer that has
 /// not opted into the feature keeps submitting `/`-prefixed lines as ordinary
-/// input. When the feature is enabled, parsing is independent of whether the
-/// specific name is registered — an unknown command still dispatches so the
+/// input. When the feature is enabled, a single-line entry parses whether or
+/// not the name is registered — an unknown command still dispatches so the
 /// handler reports it rather than the agent receiving it as a prompt or it
-/// being swallowed as a no-completion notice.
+/// being swallowed as a no-completion notice. A multi-line entry parses only
+/// for a registered command that takes multi-line arguments.
 fn slash_command_invocation_for_composer(
   commands : @slash.SlashCommands,
   composer : @composer.Model,
