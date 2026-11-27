@@ -388,7 +388,8 @@
 }
 .empty-project-trigger {
   anchor-name: --empty-project-trigger;
-  display: inline-block;
+  display: inline-flex;
+  align-items: baseline;
   max-inline-size: min(100%, 42vw, 28rem);
   margin: 0;
   padding: 0;
@@ -397,6 +398,7 @@
   background: transparent;
   color: inherit;
   font: inherit;
+  letter-spacing: inherit;
   text-decoration-line: underline;
   text-decoration-style: dotted;
   text-decoration-color: var(--color-text-muted);
