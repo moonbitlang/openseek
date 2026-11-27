@@ -9,6 +9,7 @@ import {
   "moonbit-community/rabbita/dom",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/commands",
+  "openseek_desktop/frontend/cloud",
   "openseek_desktop/protocol",
   "moonbitlang/openseek_protocol" @wire,
 }

@@ -75,7 +75,11 @@ fn panel_view(
     search: @cmd.batch([actions.search, actions.close_menu]),
     files: @cmd.batch([actions.files, actions.close_menu]),
     review: @cmd.batch([actions.review, actions.close_menu]),
-    jobs: @cmd.batch([actions.jobs, actions.close_menu]),
+    jobs: if host_tools || input.jobs.owner is Some(Cloud(_, _)) {
+      Some(@cmd.batch([actions.jobs, actions.close_menu]))
+    } else {
+      None
+    },
     github: @cmd.batch([actions.github, actions.close_menu]),
     workflows: @cmd.batch([actions.workflows, actions.close_menu]),
   }

@@ -60,7 +60,7 @@ pub(all) struct LauncherActions {
   review : @cmd.Cmd
   github : @cmd.Cmd
   workflows : @cmd.Cmd
-  jobs : @cmd.Cmd
+  jobs : @cmd.Cmd?
 }
 
 ///|
@@ -118,13 +118,10 @@ fn LauncherActions::rows(
         self.workflows,
       ),
     )
+  }
+  if self.jobs is Some(jobs) {
     entries.push(
-      (
-        ui(locale, JobsLabel),
-        ui(locale, JobsHint),
-        @icons.icon_tasklist,
-        self.jobs,
-      ),
+      (ui(locale, JobsLabel), ui(locale, JobsHint), @icons.icon_tasklist, jobs),
     )
   }
   let rows : Array[@html.Html] = []

@@ -102,7 +102,7 @@ pub(all) struct LauncherActions {
   review : @cmd.Cmd
   github : @cmd.Cmd
   workflows : @cmd.Cmd
-  jobs : @cmd.Cmd
+  jobs : @cmd.Cmd?
 }
 
 pub(all) enum Msg {

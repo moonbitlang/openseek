@@ -21,6 +21,17 @@ fn State::engine_event(
     // Local also ignores unrecognized native events.
     return (next, @cmd.none, None)
   }
+  match event {
+    @wire.JobsSnapshot(request_id~, ..)
+    | @wire.JobStopResult(request_id~, ..) => {
+      if conversation.stream is Some(stream) &&
+        stream.job_replies.get(request_id) is Some(reply) {
+        ignore(reply.try_put(event) catch { _ => false })
+      }
+      return (next, @cmd.none, None)
+    }
+    _ => ()
+  }
   if event is @wire.PredictionResult(source_sequence~, outcome~) {
     // Prediction ownership is the native log frontier, including results that
     // arrive after their task ends or ahead of a pending history response.
