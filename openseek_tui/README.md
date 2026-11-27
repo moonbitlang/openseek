@@ -22,23 +22,26 @@ provides `moon`, `moonrun`, and `moonx`. The engine is not installed separately:
 the UI runs the `moonbitlang/openseek` release it was built against through
 `moonx`.
 
+Once a release with the root executable is published, launch it with
+`moonx moonbitlang/openseek_tui`.
+
 Run the wasm target locally through `moonrun` from the repository root:
 
 ```bash
 git clone https://github.com/moonbitlang/openseek && cd openseek
 export DEEPSEEK=sk-...
-moon run --target wasm openseek_tui/cmd/openseek_tui
+moon run --target wasm openseek_tui
 
 # Pass TUI options after --.
-moon run --target wasm openseek_tui/cmd/openseek_tui -- --continue
+moon run --target wasm openseek_tui -- --continue
 ```
 
 The native target is also supported and remains the default when `--target`
 is omitted. To install a native executable from the repository root:
 
 ```bash
-moon build --target native --release openseek_tui/cmd/openseek_tui
-cp _build/native/release/build/moonbitlang/openseek_tui/cmd/openseek_tui/openseek_tui.exe ~/.moon/bin/openseek_tui
+moon build --target native --release openseek_tui
+cp _build/native/release/build/moonbitlang/openseek_tui/openseek_tui.exe ~/.moon/bin/openseek_tui
 openseek_tui
 ```
 
@@ -97,7 +100,7 @@ openseek_tui --session <new-id> --session-root <root>
 
 | Package | Purpose | README |
 | --- | --- | --- |
-| `moonbitlang/openseek_tui/cmd/openseek_tui` | The executable: parses argv and hands the parsed matches to `cmd/tui`. | — |
+| `moonbitlang/openseek_tui` | The executable: parses argv and hands the parsed matches to `cmd/tui`. | — |
 | `moonbitlang/openseek_tui/cmd/tui` | The OpenSeek terminal UI: engine spawn and protocol handling, transcript model, slash commands, session resume. | [`cmd/tui/README.md`](cmd/tui/README.md) |
 | `moonbitlang/openseek_tui/tui` (+ `core`, `doc`, `style`, `slash`, `completion`) | Reusable terminal-UI framework (transcript, composer, rendering) the OpenSeek UI is built on. Agent-agnostic. | [`tui/README.md`](tui/README.md) |
 
@@ -110,7 +113,7 @@ UI alone:
 ```bash
 moon check --target wasm --deny-warn $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 moon test --target wasm $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
-moon build --target wasm openseek_tui/cmd/openseek_tui
+moon build --target wasm openseek_tui
 moon check --target native --deny-warn $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 moon test --target native $(git ls-files -- 'openseek_tui/*moon.pkg' | xargs -n1 dirname)
 moon cram test openseek_tui/tests/cram   # verified CLI docs: tests/cram/tui.md
@@ -136,7 +139,7 @@ version is published, build the native engine and pass its absolute path:
 
 ```bash
 moon build . --target native
-moon run --target wasm openseek_tui/cmd/openseek_tui -- --engine "$PWD/_build/native/debug/build/moonbitlang/openseek/openseek.exe"
+moon run --target wasm openseek_tui -- --engine "$PWD/_build/native/debug/build/moonbitlang/openseek/openseek.exe"
 ```
 
 ## Publishing

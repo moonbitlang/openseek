@@ -52,7 +52,7 @@ pub fn tui_ui_flags() -> Array[@argparse.FlagArg] {
 
 ///|
 /// The `openseek_tui` command: the shared agent options declared directly
-/// (non-global) alongside the UI-only ones. `cmd/openseek_tui` parses argv with
+/// (non-global) alongside the UI-only ones. The module-root executable parses argv with
 /// it; unit tests parse the same command in isolation.
 pub fn cli_command() -> @argparse.Command {
   Command(
@@ -483,7 +483,7 @@ fn engine_probe_error(config : AppConfig, probe : EngineProbe) -> String {
 
 ///|
 /// Run the interactive UI from already-parsed argparse `matches` — the
-/// `openseek_tui` command (in `cmd/openseek_tui`) owns parsing and calls here.
+/// `openseek_tui` command at the module root owns parsing and calls here.
 pub async fn run(matches : @argparse.Matches) -> Unit {
   let mut config = parse_config(matches)
   if matches is { values: { "change-directory": [dir, ..], .. }, .. } {

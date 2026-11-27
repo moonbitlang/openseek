@@ -1,7 +1,7 @@
 # Verified OpenSeek TUI CLI Documentation
 
 These examples are executed by `moon cram test tests/cram`. The Moon wrapper
-builds the native package at `cmd/openseek_tui` and exposes its executable on
+builds the native executable at the module root and exposes its executable on
 `PATH` as `openseek_tui.exe`. `openseek_tui` is the dedicated interactive
 terminal UI binary; an initial prompt is passed with `--prompt` (there is no
 free-form positional). The engine it spawns is, by default, the pinned
