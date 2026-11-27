@@ -810,6 +810,7 @@ async fn execute(
   // description of what was approved and the only one the runtime can
   // express.
   let run_argv : Array[String] = [
+    "--daemon",
     ..if policy_active {
       ["--policy", policy_path]
     },
