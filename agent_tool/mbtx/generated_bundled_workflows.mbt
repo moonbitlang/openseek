@@ -198,12 +198,26 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async/process",
           #|}
           #|---
           #|
           #|async fn main {
-          #|  let code = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => println(line))
+          #|  let mut code = 0
+          #|  @async.with_task_group(group => {
+          #|    let proc = @process.spawn(
+          #|      group,
+          #|      "moon",
+          #|      ["check", "--output-json"],
+          #|      stdin=Empty,
+          #|      stdout=Collect,
+          #|      stderr=Inherit,
+          #|    )
+          #|    while proc.stdout.text.read_line() is Some(line) {
+          #|      println(line)
+          #|    }
+          #|    code = proc.wait()
+          #|  })
           #|  if code != 0 { fail("moon check failed (exit=\{code})") }
           #|}
           #|
@@ -215,13 +229,27 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async/process",
           #|}
           #|---
           #|
           #|async fn main {
           #|  for command in ["check", "test"] {
-          #|    let code = @shell.Cmd("moon", [command]).each_line(line => println(line))
+          #|    let mut code = 0
+          #|    @async.with_task_group(group => {
+          #|      let proc = @process.spawn(
+          #|        group,
+          #|        "moon",
+          #|        [command],
+          #|        stdin=Empty,
+          #|        stdout=Collect,
+          #|        stderr=Inherit,
+          #|      )
+          #|      while proc.stdout.text.read_line() is Some(line) {
+          #|        println(line)
+          #|      }
+          #|      code = proc.wait()
+          #|    })
           #|    if code != 0 { fail("moon \{command} failed (exit=\{code})") }
           #|  }
           #|}
@@ -233,13 +261,28 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async",
+          #|  "moonbitlang/core/async/process",
           #|  "moonbitlang/core/env",
           #|}
           #|---
           #|
           #|fn main {
-          #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
+          #|  let mut code = 0
+          #|  @async.with_task_group(group => {
+          #|    let proc = @process.spawn(
+          #|      group,
+          #|      "moon",
+          #|      ["check", ..@env.args()[1:]],
+          #|      stdin=Empty,
+          #|      stdout=Collect,
+          #|      stderr=Inherit,
+          #|    )
+          #|    while proc.stdout.text.read_line() is Some(line) {
+          #|      println(line)
+          #|    }
+          #|    code = proc.wait()
+          #|  })
           #|  if code != 0 { fail("moon check failed (exit=\{code})") }
           #|}
           #|
@@ -251,7 +294,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async/process",
           #|  "moonbitlang/core/argparse",
           #|  "moonbitlang/core/json",
           #|}
@@ -369,16 +412,15 @@ fn bundled_workflow(name : StringView) -> String? {
           #|        command.append(["--repo", value])
           #|      }
           #|      command.append(["--json", "number,url,headRefOid,statusCheckRollup"])
-          #|      let output = @shell.Cmd("gh", command).output(
-          #|        timeout_ms=30000,
-          #|        max_output_bytes=1048576,
-          #|      )
-          #|      guard output.exit_code() == 0 else {
+          #|      let output = @async.with_timeout(30000, () => {
+          #|        @process.run("gh", command, stdin=Empty, stdout=Collect, stderr=Collect)
+          #|      })
+          #|      guard output.exit_code == 0 else {
           #|        fail(
-          #|          "CI query failed (gh exit \{output.exit_code()}): \{output.stderr()}",
+          #|          "CI query failed (gh exit \{output.exit_code}): \{output.stderr_text()}",
           #|        )
           #|      }
-          #|      let snapshot = @json.parse(output.stdout())
+          #|      let snapshot = @json.parse(output.stdout_text())
           #|      guard snapshot
           #|        is {
           #|          "url": String(url),
@@ -2225,7 +2267,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/openseek_tools@0.4.2" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async/process",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
           #|}
@@ -2397,8 +2439,20 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
           #|  // 1. The diagnostics, from the script's own check.
           #|  let lines : Array[String] = []
-          #|  let code = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => {
-          #|    lines.push(line)
+          #|  let mut code = 0
+          #|  @async.with_task_group(group => {
+          #|    let proc = @process.spawn(
+          #|      group,
+          #|      "moon",
+          #|      ["check", "--output-json"],
+          #|      stdin=Empty,
+          #|      stdout=Collect,
+          #|      stderr=Inherit,
+          #|    )
+          #|    while proc.stdout.text.read_line() is Some(line) {
+          #|      lines.push(line)
+          #|    }
+          #|    code = proc.wait()
           #|  })
           #|  let sites : Array[Site] = []
           #|  let skipped : Array[Skipped] = []
@@ -2587,12 +2641,24 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  if !dry_run && fixed > 0 {
           #|    let mut errors_after = 0
           #|    let mut warnings_after = 0
-          #|    let code_after = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => {
-          #|      if line.contains("\"level\":\"error\"") {
-          #|        errors_after += 1
-          #|      } else if line.contains("\"level\":\"warning\"") {
-          #|        warnings_after += 1
+          #|    let mut code_after = 0
+          #|    @async.with_task_group(group => {
+          #|      let proc = @process.spawn(
+          #|        group,
+          #|        "moon",
+          #|        ["check", "--output-json"],
+          #|        stdin=Empty,
+          #|        stdout=Collect,
+          #|        stderr=Inherit,
+          #|      )
+          #|      while proc.stdout.text.read_line() is Some(line) {
+          #|        if line.contains("\"level\":\"error\"") {
+          #|          errors_after += 1
+          #|        } else if line.contains("\"level\":\"warning\"") {
+          #|          warnings_after += 1
+          #|        }
           #|      }
+          #|      code_after = proc.wait()
           #|    })
           #|    if code_after != 0 && errors_after == 0 {
           #|      // The same rule as the first check: a failed run with no diagnostic is
@@ -2615,13 +2681,28 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async",
+          #|  "moonbitlang/core/async/process",
           #|  "moonbitlang/core/env",
           #|}
           #|---
           #|
           #|fn main {
-          #|  let code = @shell.Cmd("moon", ["fmt", ..@env.args()[1:]]).each_line(line => println(line))
+          #|  let mut code = 0
+          #|  @async.with_task_group(group => {
+          #|    let proc = @process.spawn(
+          #|      group,
+          #|      "moon",
+          #|      ["fmt", ..@env.args()[1:]],
+          #|      stdin=Empty,
+          #|      stdout=Collect,
+          #|      stderr=Inherit,
+          #|    )
+          #|    while proc.stdout.text.read_line() is Some(line) {
+          #|      println(line)
+          #|    }
+          #|    code = proc.wait()
+          #|  })
           #|  if code != 0 { fail("moon fmt failed (exit=\{code})") }
           #|}
           #|
@@ -2632,7 +2713,8 @@ fn bundled_workflow(name : StringView) -> String? {
         (
           #|---
           #|import {
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async",
+          #|  "moonbitlang/core/async/process",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/encoding/utf8",
           #|}
@@ -2666,15 +2748,26 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  let mut remaining = OutputBytes - 256
           #|  let mut shown = 0
           #|  let mut total = 0
-          #|  let cmd = @shell.Cmd("moon", ["ide", ..args], stderr=Inherit)
-          #|  let exit_code = cmd.each_line(line => {
-          #|    total += 1
-          #|    let bytes = @utf8.encode(line).length() + 1
-          #|    if shown == total - 1 && bytes <= remaining {
-          #|      println(line)
-          #|      shown += 1
-          #|      remaining -= bytes
+          #|  let mut exit_code = 0
+          #|  @async.with_task_group(group => {
+          #|    let proc = @process.spawn(
+          #|      group,
+          #|      "moon",
+          #|      ["ide", ..args],
+          #|      stdin=Empty,
+          #|      stdout=Collect,
+          #|      stderr=Inherit,
+          #|    )
+          #|    while proc.stdout.text.read_line() is Some(line) {
+          #|      total += 1
+          #|      let bytes = @utf8.encode(line).length() + 1
+          #|      if shown == total - 1 && bytes <= remaining {
+          #|        println(line)
+          #|        shown += 1
+          #|        remaining -= bytes
+          #|      }
           #|    }
+          #|    exit_code = proc.wait()
           #|  }) catch {
           #|    error => {
           #|      println(
@@ -2702,7 +2795,6 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import {
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
-          #|  "moonbitlang/core/async/shell",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/encoding/utf8",
           #|  "moonbitlang/core/json",
@@ -3036,12 +3128,140 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
+          #|async fn glob_walk(
+          #|  dir : String,
+          #|  prefix : String,
+          #|  segments : ArrayView[String],
+          #|  only_dirs : Bool,
+          #|  seen : Set[String],
+          #|  results : Array[String],
+          #|) -> Unit {
+          #|  match segments {
+          #|    [] => {
+          #|      if prefix.is_empty() {
+          #|        return
+          #|      }
+          #|      if only_dirs {
+          #|        let is_dir = (@fs.kind(dir, follow_symlink=true) catch { _ => Unknown })
+          #|          is Directory
+          #|        if !is_dir {
+          #|          return
+          #|        }
+          #|      }
+          #|      if !seen.contains(prefix) {
+          #|        seen.insert(prefix)
+          #|        results.push(prefix)
+          #|      }
+          #|    }
+          #|    ["**", .. rest] => {
+          #|      glob_walk(dir, prefix, rest, only_dirs, seen, results)
+          #|      let names = @fs.readdir(dir, include_hidden=true) catch { _ => return }
+          #|      names.sort_by(compare_code_units)
+          #|      for name in names {
+          #|        if name.has_prefix(".") {
+          #|          continue
+          #|        }
+          #|        let next_dir = if dir == "." {
+          #|          name
+          #|        } else if dir.has_suffix("/") {
+          #|          dir + name
+          #|        } else {
+          #|          dir + "/" + name
+          #|        }
+          #|        let kind = @fs.kind(next_dir, follow_symlink=false) catch {
+          #|          _ => continue
+          #|        }
+          #|        if kind is Directory {
+          #|          let next_prefix = if prefix.is_empty() {
+          #|            name
+          #|          } else if prefix.has_suffix("/") {
+          #|            prefix + name
+          #|          } else {
+          #|            prefix + "/" + name
+          #|          }
+          #|          glob_walk(next_dir, next_prefix, segments, only_dirs, seen, results)
+          #|        }
+          #|      }
+          #|    }
+          #|    [head, .. rest] =>
+          #|      if !has_glob(head) {
+          #|        let next_dir = if dir == "." {
+          #|          head
+          #|        } else if dir.has_suffix("/") {
+          #|          dir + head
+          #|        } else {
+          #|          dir + "/" + head
+          #|        }
+          #|        let exists = @fs.exists(next_dir) catch { _ => false }
+          #|        if exists {
+          #|          let next_prefix = if prefix.is_empty() {
+          #|            head
+          #|          } else if prefix.has_suffix("/") {
+          #|            prefix + head
+          #|          } else {
+          #|            prefix + "/" + head
+          #|          }
+          #|          glob_walk(next_dir, next_prefix, rest, only_dirs, seen, results)
+          #|        }
+          #|      } else {
+          #|        let names = @fs.readdir(dir, include_hidden=true) catch { _ => return }
+          #|        names.sort_by(compare_code_units)
+          #|        for name in names {
+          #|          if name.has_prefix(".") && !head.has_prefix(".") {
+          #|            continue
+          #|          }
+          #|          if segment_matches(head, name) {
+          #|            let next_dir = if dir == "." {
+          #|              name
+          #|            } else if dir.has_suffix("/") {
+          #|              dir + name
+          #|            } else {
+          #|              dir + "/" + name
+          #|            }
+          #|            let next_prefix = if prefix.is_empty() {
+          #|              name
+          #|            } else if prefix.has_suffix("/") {
+          #|              prefix + name
+          #|            } else {
+          #|              prefix + "/" + name
+          #|            }
+          #|            glob_walk(next_dir, next_prefix, rest, only_dirs, seen, results)
+          #|          }
+          #|        }
+          #|      }
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|async fn glob_paths(pattern : String) -> Array[String] {
+          #|  if pattern.is_empty() {
+          #|    return []
+          #|  }
+          #|  let only_dirs = pattern.has_suffix("/")
+          #|  let rooted = pattern.has_prefix("/")
+          #|  let trimmed = pattern.trim_start(chars="/").trim_end(chars="/")
+          #|  let segments : Array[String] = []
+          #|  for part in trimmed.split("/") {
+          #|    if !part.is_empty() {
+          #|      segments.push(part.to_owned())
+          #|    }
+          #|  }
+          #|  let dir = if rooted { "/" } else { "." }
+          #|  let prefix = if rooted { "/" } else { "" }
+          #|  let seen : Set[String] = Set([])
+          #|  let results : Array[String] = []
+          #|  glob_walk(dir, prefix, segments, only_dirs, seen, results)
+          #|  results.sort_by(compare_code_units)
+          #|  results
+          #|}
+          #|
+          #|///|
           #|async fn list_glob(
           #|  listing : Listing,
           #|  options : Options,
           #|  pattern : String,
           #|) -> Unit {
-          #|  let matches = @shell.glob(pattern)
+          #|  let matches = glob_paths(pattern)
           #|  if matches.is_empty() {
           #|    listing.items.push(Note("no matches for \{quoted(pattern)}"))
           #|    return
@@ -4833,7 +5053,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async/process",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/encoding/utf8",
           #|}
@@ -4883,19 +5103,26 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  let mut shown = 0
           #|  let mut total = 0
           #|  // `--` keeps moonx from reading rg's leading flags as its own options.
-          #|  let rg = @shell.Cmd(
-          #|    "moonx",
-          #|    [RgPackage, "--", ..defaults, ..args],
-          #|    stderr=Inherit,
-          #|  )
-          #|  let exit_code = rg.each_line(line => {
-          #|    total += 1
-          #|    let bytes = @utf8.encode(line).length() + 1
-          #|    if shown == total - 1 && bytes <= remaining {
-          #|      println(line)
-          #|      shown += 1
-          #|      remaining -= bytes
+          #|  let mut exit_code = 0
+          #|  @async.with_task_group(group => {
+          #|    let proc = @process.spawn(
+          #|      group,
+          #|      "moonx",
+          #|      [RgPackage, "--", ..defaults, ..args],
+          #|      stdin=Empty,
+          #|      stdout=Collect,
+          #|      stderr=Inherit,
+          #|    )
+          #|    while proc.stdout.text.read_line() is Some(line) {
+          #|      total += 1
+          #|      let bytes = @utf8.encode(line).length() + 1
+          #|      if shown == total - 1 && bytes <= remaining {
+          #|        println(line)
+          #|        shown += 1
+          #|        remaining -= bytes
+          #|      }
           #|    }
+          #|    exit_code = proc.wait()
           #|  }) catch {
           #|    error => {
           #|      println(
@@ -4927,7 +5154,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  "moonbitlang/openseek_tools@0.4.2" @tools,
           #|  "moonbitlang/core/async",
           #|  "moonbitlang/core/async/fs",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async/process",
           #|  "moonbitlang/core/env",
           #|  "moonbitlang/core/json",
           #|}
@@ -5256,9 +5483,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|            // The change lives on origin now; the worker's local branch is
           #|            // only clutter in the repository.
           #|            ignore(
-          #|              @shell.Cmd("git", ["branch", "-D", change.branch]).output(
-          #|                timeout_ms=30000,
-          #|              ),
+          #|              run_output("git", ["branch", "-D", change.branch], timeout_ms=30000),
           #|            ) catch {
           #|              _ => ()
           #|            }
@@ -5273,26 +5498,34 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  }
           #|  // Reviewers may build a change in a worktree inside their scratch lab;
           #|  // the lab is gone once they end, and this drops the records left behind.
-          #|  ignore(@shell.Cmd("git", ["worktree", "prune"]).output(timeout_ms=30000)) catch {
+          #|  ignore(run_output("git", ["worktree", "prune"], timeout_ms=30000)) catch {
           #|    _ => ()
           #|  }
           #|  report(packages, works, failures, tokens)
           #|}
           #|
           #|///|
+          #|async fn run_output(
+          #|  program : String,
+          #|  args : Array[String],
+          #|  timeout_ms~ : Int32 = 30000,
+          #|) -> @process.ProcessResult {
+          #|  @async.with_timeout(timeout_ms, () => {
+          #|    @process.run(program, args, stdin=Empty, stdout=Collect, stderr=Collect)
+          #|  })
+          #|}
+          #|
+          #|///|
           #|/// Run `program` and return its standard output, failing with its standard
           #|/// error when it exits nonzero.
           #|async fn run(program : String, args : Array[String]) -> String {
-          #|  let output = @shell.Cmd(program, args).output(
-          #|    timeout_ms=300000,
-          #|    max_output_bytes=16777216,
-          #|  )
-          #|  guard output.exit_code() == 0 else {
+          #|  let output = run_output(program, args, timeout_ms=300000)
+          #|  guard output.exit_code == 0 else {
           #|    fail(
-          #|      "\{program} \{args.join(" ")} failed (exit \{output.exit_code()}): \{output.stderr().trim()}",
+          #|      "\{program} \{args.join(" ")} failed (exit \{output.exit_code}): \{output.stderr_text().trim()}",
           #|    )
           #|  }
-          #|  output.stdout()
+          #|  output.stdout_text()
           #|}
           #|
           #|///|
@@ -5305,21 +5538,25 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
           #|///|
           #|async fn pr_target() -> Target {
-          #|  let resolved = @shell.Cmd("git", ["rev-parse", "--abbrev-ref", "origin/HEAD"]).output(
+          #|  let resolved = run_output(
+          #|    "git",
+          #|    ["rev-parse", "--abbrev-ref", "origin/HEAD"],
           #|    timeout_ms=30000,
           #|  )
-          #|  let default_ref = resolved.stdout().trim().to_owned()
-          #|  guard resolved.exit_code() == 0 &&
+          #|  let default_ref = resolved.stdout_text().trim().to_owned()
+          #|  guard resolved.exit_code == 0 &&
           #|    default_ref.strip_prefix("origin/") is Some(base) &&
           #|    !base.is_empty() else {
           #|    fail(
           #|      "origin/HEAD does not name the default branch: run `git remote set-head origin --auto`, or pass --no-pr",
           #|    )
           #|  }
-          #|  let ancestor = @shell.Cmd("git", [
-          #|    "merge-base", "--is-ancestor", "HEAD", default_ref,
-          #|  ]).output(timeout_ms=30000)
-          #|  guard ancestor.exit_code() == 0 else {
+          #|  let ancestor = run_output(
+          #|    "git",
+          #|    ["merge-base", "--is-ancestor", "HEAD", default_ref],
+          #|    timeout_ms=30000,
+          #|  )
+          #|  guard ancestor.exit_code == 0 else {
           #|    fail(
           #|      "HEAD is not on \{default_ref}, so each pull request would carry local commits too: update HEAD to \{default_ref}, or pass --no-pr",
           #|    )
@@ -5772,15 +6009,15 @@ fn bundled_workflow(name : StringView) -> String? {
           #|) -> Result[String, String] {
           #|  // The commit keeps a later sweep of the same package off this branch.
           #|  let branch = "simplify/\{work.name}-\{change.commit[:8]}"
-          #|  let pushed = @shell.Cmd("git", [
-          #|    "push",
-          #|    "origin",
-          #|    "\{change.commit}:refs/heads/\{branch}",
-          #|  ]).output(timeout_ms=300000) catch {
+          #|  let pushed = run_output(
+          #|    "git",
+          #|    ["push", "origin", "\{change.commit}:refs/heads/\{branch}"],
+          #|    timeout_ms=300000,
+          #|  ) catch {
           #|    error => return Err("push failed: \{error}")
           #|  }
-          #|  guard pushed.exit_code() == 0 else {
-          #|    return Err("push failed: \{first_line(pushed.stderr())}")
+          #|  guard pushed.exit_code == 0 else {
+          #|    return Err("push failed: \{first_line(pushed.stderr_text())}")
           #|  }
           #|  let dir = shown(work.pkg.dir)
           #|  let title = if work.pkg.dir.is_empty() {
@@ -5813,29 +6050,33 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    $|\{hints}
           #|    $|
           #|    $|Generated by `@builtin/simplify.mbtx`: one worker per package, reviewed by a separate agent. Not merged automatically.
-          #|  let created = @shell.Cmd("gh", [
-          #|    "pr",
-          #|    "create",
-          #|    "--repo",
-          #|    target.repo,
-          #|    "--base",
-          #|    target.base,
-          #|    "--head",
-          #|    branch,
-          #|    "--title",
-          #|    title,
-          #|    "--body",
-          #|    body,
-          #|  ]).output(timeout_ms=120000) catch {
+          #|  let created = run_output(
+          #|    "gh",
+          #|    [
+          #|      "pr",
+          #|      "create",
+          #|      "--repo",
+          #|      target.repo,
+          #|      "--base",
+          #|      target.base,
+          #|      "--head",
+          #|      branch,
+          #|      "--title",
+          #|      title,
+          #|      "--body",
+          #|      body,
+          #|    ],
+          #|    timeout_ms=120000,
+          #|  ) catch {
           #|    error =>
           #|      return Err("pushed to \{branch}, but gh pr create failed: \{error}")
           #|  }
-          #|  guard created.exit_code() == 0 else {
+          #|  guard created.exit_code == 0 else {
           #|    return Err(
-          #|      "pushed to \{branch}, but gh pr create failed: \{first_line(created.stderr())}",
+          #|      "pushed to \{branch}, but gh pr create failed: \{first_line(created.stderr_text())}",
           #|    )
           #|  }
-          #|  let lines = created.stdout().trim().split("\n").to_array()
+          #|  let lines = created.stdout_text().trim().split("\n").to_array()
           #|  match lines {
           #|    [.., last] => Ok(last.trim().to_owned())
           #|    [] => Ok(branch)
@@ -6074,12 +6315,26 @@ fn bundled_workflow(name : StringView) -> String? {
           #|---
           #|import {
           #|  "moonbitlang/core/async",
-          #|  "moonbitlang/core/async/shell",
+          #|  "moonbitlang/core/async/process",
           #|}
           #|---
           #|
           #|async fn main {
-          #|  let code = @shell.Cmd("moon", ["test"]).each_line(line => println(line))
+          #|  let mut code = 0
+          #|  @async.with_task_group(group => {
+          #|    let proc = @process.spawn(
+          #|      group,
+          #|      "moon",
+          #|      ["test"],
+          #|      stdin=Empty,
+          #|      stdout=Collect,
+          #|      stderr=Inherit,
+          #|    )
+          #|    while proc.stdout.text.read_line() is Some(line) {
+          #|      println(line)
+          #|    }
+          #|    code = proc.wait()
+          #|  })
           #|  if code != 0 { fail("moon test failed (exit=\{code})") }
           #|}
           #|

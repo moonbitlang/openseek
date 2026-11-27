@@ -150,7 +150,7 @@ test "a root that arrives after opening restarts both providers once" {
   // A reply minted against the previous root cannot settle the restarted run.
   let stale = symbol_first.step(
     SymbolsLoaded(
-      owner=test_owner(),
+      owner=Host(test_owner()),
       query=symbol_pending.query(),
       generation=symbol_pending.generation,
       items=[test_symbol("stale", "src/old.mbt")],
@@ -360,9 +360,12 @@ test "leading hash switches providers and fences stale symbol replies" {
   guard changed.open is Some(pending) else { fail("palette expected") }
   let item = test_symbol("parse_hover", "src/main.mbt")
   let stale = changed.step(
-    SymbolsLoaded(owner=test_owner(), query="", generation=initial.generation, items=[
-      item,
-    ]),
+    SymbolsLoaded(
+      owner=Host(test_owner()),
+      query="",
+      generation=initial.generation,
+      items=[item],
+    ),
     input,
   )
   guard stale.open is Some(still_pending) else {
@@ -375,7 +378,7 @@ test "leading hash switches providers and fences stale symbol replies" {
   assert_true(files_open.provider() is Files)
   let still_files = files.step(
     SymbolsLoaded(
-      owner=test_owner(),
+      owner=Host(test_owner()),
       query=pending.query(),
       generation=pending.generation,
       items=[item],
@@ -395,7 +398,7 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   guard changed.open is Some(pending) else { fail("palette expected") }
   let loading = changed.step(
     SymbolsDue(
-      owner=test_owner(),
+      owner=Host(test_owner()),
       query=pending.query(),
       generation=pending.generation,
     ),
@@ -405,7 +408,7 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   assert_true(in_flight.phase is Loading)
   let failed = loading.step(
     SymbolsRequestFailed(
-      owner=test_owner(),
+      owner=Host(test_owner()),
       query=pending.query(),
       generation=pending.generation,
     ),
@@ -416,7 +419,7 @@ test "symbol Quick Open distinguishes failure from an empty result" {
   assert_eq(failure.items.length(), 0)
   let loaded = loading.step(
     SymbolsLoaded(
-      owner=test_owner(),
+      owner=Host(test_owner()),
       query=pending.query(),
       generation=pending.generation,
       items=[],
@@ -435,7 +438,7 @@ test "symbols without a source path are dropped from the rows" {
   guard opened.open is Some(search) else { fail("palette expected") }
   let ready = opened.step(
     SymbolsLoaded(
-      owner=test_owner(),
+      owner=Host(test_owner()),
       query=search.query(),
       generation=search.generation,
       items=[test_symbol("placed", "src/main.mbt"), test_symbol("unplaced", "")],

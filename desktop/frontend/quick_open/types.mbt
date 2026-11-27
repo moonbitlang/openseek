@@ -150,10 +150,9 @@ pub fn Input::cloud(
 }
 
 ///|
-/// Cloud browses files but has no symbol provider; workspace symbols require
-/// an engine host.
+/// Cloud symbol queries require access to the selected Cloud workspace.
 pub fn Input::supports(self : Input, provider : Provider) -> Bool {
-  !(provider is Symbols && self.owner is @interop.Cloud(..))
+  provider is Files || self.owner is Host(_) || self.cloud_access is Some(_)
 }
 
 ///|
@@ -206,18 +205,18 @@ pub(all) enum Msg {
     generation~ : Int32,
   )
   SymbolsDue(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     query~ : String,
     generation~ : Int32,
   )
   SymbolsLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     query~ : String,
     generation~ : Int32,
     items~ : Array[@symbols.Symbol],
   )
   SymbolsRequestFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     query~ : String,
     generation~ : Int32,
   )
@@ -230,7 +229,7 @@ pub(all) enum Msg {
 ///|
 /// Which provider the visible input currently selects.
 fn Open::provider(self : Open) -> Provider {
-  if self.owner is Host(_) && self.value.has_prefix("#") {
+  if self.value.has_prefix("#") {
     Symbols
   } else {
     Files

@@ -4559,7 +4559,7 @@ fn update_msg(
         ),
         model.edit_host_endpoint({
           ..endpoint,
-          providers: endpoint.providers.add(Custom, {
+          providers: endpoint.providers.insert(Custom, {
             ..endpoint.config(Custom),
             api_url: Some(value),
           }),
@@ -5230,7 +5230,7 @@ fn update_msg(
             let next = {
               ..model.edit_host_endpoint({
                 ..endpoint,
-                providers: endpoint.providers.add(provider, {
+                providers: endpoint.providers.insert(provider, {
                   ..endpoint.config(provider),
                   has_api_key: true,
                 }),
@@ -6740,7 +6740,7 @@ fn update_msg(
         @cmd.none,
         {
           ..model,
-          transcript_scroll: model.transcript_scroll.add(slot, scroll),
+          transcript_scroll: model.transcript_scroll.insert(slot, scroll),
         },
       )
     ToggleRightPanel => {
@@ -11201,14 +11201,14 @@ fn Model::with_host_endpoint(
         let config = providers
           .get(name)
           .unwrap_or({ api_url: None, has_api_key: false, })
-        providers = providers.add(name, { ..config, has_api_key, })
+        providers = providers.insert(name, { ..config, has_api_key, })
       }
     }
     if custom_api_url is Some(url) {
       let config = providers
         .get(Custom)
         .unwrap_or({ api_url: None, has_api_key: false, })
-      providers = providers.add(Custom, { ..config, api_url: Some(url), })
+      providers = providers.insert(Custom, { ..config, api_url: Some(url), })
     }
     let endpoint = {
       provider: provider.unwrap_or(endpoint.provider),

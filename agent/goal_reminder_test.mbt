@@ -19,15 +19,15 @@ async fn goal_test_server(
         "Content-Type": "text/event-stream",
       })
       if bodies.length() <= probe_calls {
-        conn.write_string(
+        conn.text.write(
           "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_\{bodies.length()}\",\"function\":{\"name\":\"probe\",\"arguments\":\"{}\"}}]}}]}\n\n",
         )
       } else {
-        conn.write_string(
+        conn.text.write(
           "data: {\"choices\":[{\"delta\":{\"content\":\"done\"}}]}\n\n",
         )
       }
-      conn.write_string("data: [DONE]\n\n")
+      conn.text.write("data: [DONE]\n\n")
     },
   )
 }

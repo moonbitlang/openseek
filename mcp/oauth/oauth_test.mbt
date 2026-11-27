@@ -95,10 +95,10 @@ async test "device flow waits persists scoped credentials expires and disconnect
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "application/json",
         })
-        conn.write_string(json.stringify())
+        conn.text.write(json.stringify())
       })
     }
-    let c = config("http://127.0.0.1:\{server.addr.port}/oauth")
+    let c = config("http://127.0.0.1:\{server.local_addr().port}/oauth")
     let resource = "https://example.com/mcp"
     let device = @oauth.device_auth(c)
     assert_eq(device.user_code(), "ABCD")
@@ -187,10 +187,10 @@ async test "a timed out token request preserves authorization and retries after 
         conn.send_response(200, "OK", extra_headers={
           "Content-Type": "application/json",
         })
-        conn.write_string(reply.stringify())
+        conn.text.write(reply.stringify())
       })
     }
-    let c = config("http://127.0.0.1:\{server.addr.port}/oauth")
+    let c = config("http://127.0.0.1:\{server.local_addr().port}/oauth")
     let device = @oauth.device_auth(c)
     let token = @oauth.device_access_token(c, device)
     assert_eq(token.access_token(), "recovered")

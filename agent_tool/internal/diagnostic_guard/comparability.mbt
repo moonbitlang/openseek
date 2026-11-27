@@ -229,7 +229,7 @@ fn comparability(
   let seen : Set[String] = Set([])
   if before is Some(before) {
     for site in before.errors {
-      seen.add(site.identity())
+      seen.insert(site.identity())
     }
   }
   let module_manifest_edited = edited.any(target => {

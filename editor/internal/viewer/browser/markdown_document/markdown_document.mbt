@@ -641,7 +641,7 @@ pub fn MarkdownDocumentView::set_hidden_root_elements(
   let children = self.article.get_children()
   let hidden : Set[(Int32, Int32)] = Set([])
   for range in hidden_source_ranges {
-    hidden.add((range.start, range.end_exclusive))
+    hidden.insert((range.start, range.end_exclusive))
   }
   // Visibility rides on a dedicated attribute the stylesheet maps to
   // `display:none`, so the view never owns or clobbers an element's `style`

@@ -16,7 +16,7 @@ async test "manual installation clears its startup failure before notifying clie
   let digest = @crypto.bytes_to_hex_string(@crypto.sha256(bytes))
   let registry = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer registry.close()
-  let base = "http://127.0.0.1:\{registry.addr.port}"
+  let base = "http://127.0.0.1:\{registry.local_addr().port}"
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, () => {
       registry.run_forever((request, conn) => {
@@ -25,7 +25,7 @@ async test "manual installation clears its startup failure before notifying clie
           "/api/v0/skills" => conn.send_response(503, "Service Unavailable")
           "/api/v0/skills/moonbitlang/office-cli%401.0.0" => {
             conn.send_response(200, "OK")
-            conn.write_string(
+            conn.text.write(
               (
                 {
                   "owner": "moonbitlang",

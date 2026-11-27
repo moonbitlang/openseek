@@ -610,9 +610,9 @@ fn git_task_changes_with_untracked(
   let seen : Set[String] = Set([])
   let deleted : Set[String] = Set([])
   for change in changes {
-    seen.add(change.path)
+    seen.insert(change.path)
     if change.kind == "deleted" {
-      deleted.add(change.path)
+      deleted.insert(change.path)
     }
   }
   for change in status_changes {
@@ -684,7 +684,7 @@ fn parse_git_mode_paths(
     }
     let path = path.to_owned()
     if git_path_relative_to_workspace(path, workspace_prefix) is Some(relative) {
-      paths.add(relative)
+      paths.insert(relative)
     }
   }
   paths
@@ -743,7 +743,7 @@ fn deleted_change_paths(changes : Array[@protocol.GitChange]) -> Array[String] {
   let seen : Set[String] = Set([])
   for change in changes {
     if change.kind == "deleted" && !seen.contains(change.path) {
-      seen.add(change.path)
+      seen.insert(change.path)
       paths.push(change.path)
     }
   }
@@ -953,13 +953,13 @@ async fn git_change_snapshot(
         comparison_metadata, workspace_prefix, "160000",
       )
       for path in comparison_gitlinks {
-        deleted_gitlinks.add(path)
+        deleted_gitlinks.insert(path)
       }
       let comparison_symlinks = parse_git_mode_paths(
         comparison_metadata, workspace_prefix, "120000",
       )
       for path in comparison_symlinks {
-        deleted_symlinks.add(path)
+        deleted_symlinks.insert(path)
       }
     }
   }

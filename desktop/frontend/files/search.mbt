@@ -33,7 +33,7 @@ pub fn Search::Search(
   let seen : Set[@pathx.Relative] = Set([])
   let add = path => {
     if !seen.contains(path) {
-      seen.add(path)
+      seen.insert(path)
       candidates.push(path)
     }
   }

@@ -68,9 +68,10 @@ const SearchingDebounceMs : Int32 = 150
 /// reloading the request.
 priv suberror SearchingSub {
   Searching(
-    @interop.ConversationKey,
+    @interop.ConversationIdentity,
     String,
     @common.Uri,
+    @cloud_client.Access?,
     (Array[Symbol]) -> @cmd.Cmd,
     @cmd.Cmd,
   )
@@ -83,16 +84,17 @@ priv suberror SearchingSub {
 /// mutes an in-flight reply. A reply therefore only ever reaches `loaded`
 /// while its exact request identity is still declared.
 pub fn searching(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   query : String,
   root~ : @common.Uri,
+  cloud? : @cloud_client.Access,
   loaded~ : (Array[Symbol]) -> @cmd.Cmd,
   failed~ : @cmd.Cmd,
 ) -> @sub.Sub {
   @sub.custom_sub(
-    "workspace-symbols\u{0}\{owner.channel.uri_authority()}\u{0}\{owner.session}\u{0}\{root.to_string()}\u{0}\{query}",
+    "workspace-symbols\u{0}\{owner.key()}\u{0}\{cloud.map_or(0, access => access.epoch)}\u{0}\{root.to_string()}\u{0}\{query}",
     Local,
-    SearchingSub::Searching(owner, query, root, loaded, failed),
+    SearchingSub::Searching(owner, query, root, cloud, loaded, failed),
     @sub.SubLoader(searching_loader),
   )
 }
@@ -102,7 +104,8 @@ fn searching_loader(
   payload : Error,
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
-  guard payload is SearchingSub::Searching(owner, query, root, loaded, failed) else {
+  guard payload
+    is SearchingSub::Searching(owner, query, root, cloud, loaded, failed) else {
     return None
   }
   let mut loaded = loaded
@@ -110,15 +113,9 @@ fn searching_loader(
   let mut active = true
   let timer = @dom.window().set_timeout(
     () => {
-      // An unauthorized root stays silently pending, matching `search`
-      // returning no command: the caller's next declaration change resolves it.
-      guard active && @resource.belongs_to(root, owner.channel) else { return }
+      guard active else { return }
       @js.Promise::from_async(() => {
-        let reply : @protocol.WorkspaceSymbolsReply = @interop.bridge_request(
-          owner.channel,
-          @commands.lsp_workspace_symbols,
-          { session: owner.session, root: root.path, query, },
-        ) catch {
+        let reply = request_symbols(owner, root, cloud, query) catch {
           _ => {
             if active {
               scheduler.add(failed)
@@ -140,7 +137,8 @@ fn searching_loader(
       @dom.window().clear_timeout(timer)
     },
     update_tagger: payload => {
-      guard payload is SearchingSub::Searching(_, _, _, new_loaded, new_failed) else {
+      guard payload
+        is SearchingSub::Searching(_, _, _, _, new_loaded, new_failed) else {
         return
       }
       loaded = new_loaded
@@ -154,20 +152,16 @@ fn searching_loader(
 /// are source-owned commands, so each caller retains its own stale-reply fence
 /// without duplicating transport or wire projection.
 pub fn search(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   query : String,
   root~ : @common.Uri,
+  cloud? : @cloud_client.Access,
   loaded~ : (Array[Symbol]) -> @cmd.Cmd,
   failed~ : @cmd.Cmd,
 ) -> @cmd.Cmd {
-  guard @resource.belongs_to(root, owner.channel) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply : @protocol.WorkspaceSymbolsReply = @interop.bridge_request(
-        owner.channel,
-        @commands.lsp_workspace_symbols,
-        { session: owner.session, root: root.path, query, },
-      ) catch {
+      let reply = request_symbols(owner, root, cloud, query) catch {
         _ => {
           scheduler.add(failed)
           return
@@ -184,3 +178,39 @@ pub extend Symbol with Debug::{to_repr}
 
 ///|
 pub extend Symbol with Eq::{equal, not_equal}
+
+///|
+async fn request_symbols(
+  owner : @interop.ConversationIdentity,
+  root : @common.Uri,
+  cloud : @cloud_client.Access?,
+  query : String,
+) -> @protocol.WorkspaceSymbolsReply {
+  match owner {
+    Host(host) => {
+      guard @resource.belongs_to(root, host.channel) else {
+        fail("workspace owner changed")
+      }
+      @interop.bridge_request(host.channel, @commands.lsp_workspace_symbols, {
+        session: host.session,
+        root: root.path,
+        query,
+      })
+    }
+    Cloud(account~, session~) => {
+      guard cloud is Some(access) &&
+        @resource.cloud_root(@cloud_client.CloudOrigin, account, session) ==
+        Some(root) else {
+        fail("workspace owner changed")
+      }
+      let json = @cloud_client.request(
+        @cloud_client.CloudOrigin,
+        "/v1/sessions/\{@uri.encode_component(session)}/moonide/workspace-symbols",
+        Post,
+        token=access.token,
+        body={ "query": Json(query) },
+      )
+      @json.from_json(json)
+    }
+  }
+}

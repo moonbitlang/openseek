@@ -516,7 +516,7 @@ pub async fn discover(
       @emit.emit(McpToolDuplicate(server~, tool=tool.name))
       continue
     }
-    seen.add(tool.name)
+    seen.insert(tool.name)
     tools.push(tool)
   }
   tools

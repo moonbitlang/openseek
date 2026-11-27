@@ -227,7 +227,7 @@ async test "incomplete HTTP headers cannot exhaust listener slots indefinitely" 
         client.close()
       })
       for _ in 0..<16 {
-        let client = @socket.Tcp::connect(service.server.addr)
+        let client = @socket.Tcp::connect(service.server.local_addr())
         clients.push(client)
         client.write(b"POST /call HTTP/1.1\r\nAuthorization:")
       }
@@ -271,7 +271,7 @@ async test "HTTP admission rejects oversized headers and ambiguous framing witho
         "Content-Length: 0\r\ncontent-length: 0\r\n",
         "Content-Length: 65537\r\n",
       ] {
-      let client = @socket.Tcp::connect(service.server.addr)
+      let client = @socket.Tcp::connect(service.server.local_addr())
       defer client.close()
       client.write(
         @utf8.encode(
@@ -360,7 +360,7 @@ async test "HTTP admission reports size limits and malformed input distinctly" {
           (chunked + "1\r\nx!", "Invalid chunk terminator"),
           (head + "Content-Length: 1\r\n\r\n{", "Unexpected end of file"),
         ] {
-        let client = @socket.Tcp::connect(service.server.addr)
+        let client = @socket.Tcp::connect(service.server.local_addr())
         defer client.close()
         client.write(@utf8.encode(input))
         let response = @utf8.decode(client.read_all())
@@ -401,7 +401,7 @@ async test "client disconnect leaves an accepted call owned by its live program"
       )
       let program = service.register()
       let (_, token) = capability(program.env())
-      let client = @socket.Tcp::connect(service.server.addr)
+      let client = @socket.Tcp::connect(service.server.local_addr())
       defer client.close()
       let body = ({ "version": 1, "name": "edit", "arguments": {} } : Json).stringify()
       client.write(
@@ -621,7 +621,7 @@ async test "HTTP accepts fragmented headers and UTF-8 across single-byte chunks"
       )
       let program = service.register()
       let (_, token) = capability(program.env())
-      let client = @socket.Tcp::connect(service.server.addr)
+      let client = @socket.Tcp::connect(service.server.local_addr())
       defer client.close()
       client.write(b"POST /ca")
       client.write(b"ll HTTP/1.1\r")
@@ -672,7 +672,7 @@ async test "HTTP rejects malformed chunks and excessive framing before reservati
           "-1\r\n", "10001\r\n", "1;extension\r\n", "1\r\nx!\n", "0\r\nTrailer: x\r\n\r\n",
           framed,
         ] {
-        let client = @socket.Tcp::connect(service.server.addr)
+        let client = @socket.Tcp::connect(service.server.local_addr())
         defer client.close()
         try {
           client.write(

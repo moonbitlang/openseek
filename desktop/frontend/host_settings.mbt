@@ -14,7 +14,7 @@ fn HostSettings::from_status(
   let mut providers = @sorted_map.SortedMap([])
   for provider in [Deepseek, Glm, OpenRouter, Custom] {
     if payload.providers.get(provider.wire()) is Some(config) {
-      providers = providers.add(provider, ProviderConfig::{
+      providers = providers.insert(provider, ProviderConfig::{
         api_url: config.api_url,
         has_api_key: config.has_api_key,
       })

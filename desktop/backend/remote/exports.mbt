@@ -21,13 +21,17 @@ pub async fn LocalConsole::bind(
     reuse_addr=true,
   ) catch {
     error => {
-      @xlog.warn(category="transport") <?
-        {
-          "event": "console_port_unavailable",
-          "port": port,
-          "error": "\{error}",
-          "message": "the development console port is taken; this launch serves the console on an ephemeral port",
-        }
+      if @xlog.warn(category="transport") is Some(event) {
+        event
+        ..write_object_begin()
+        ..write_object_field("event", "console_port_unavailable")
+        ..write_object_field("port", port)
+        ..write_object_field("error", "\{error}")
+        ..write_object_field(
+          "message", "the development console port is taken; this launch serves the console on an ephemeral port",
+        )
+        .write_object_end()
+      }
       Server(@socket.Addr::parse("127.0.0.1:0"), reuse_addr=true)
     }
   }
@@ -38,7 +42,7 @@ pub async fn LocalConsole::bind(
   {
     server,
     account_origin,
-    sign_in: Flow(relay=account_origin, port=server.addr.port.to_int()),
+    sign_in: Flow(relay=account_origin, port=server.local_addr().port.to_int()),
     name,
   }
 }
@@ -77,7 +81,7 @@ pub async fn LocalConsole::run(
   defer self.server.close()
   @async.with_task_group(group => {
     for ;; {
-      let (conn, _) = self.server.accept()
+      let conn = self.server.accept()
       group.spawn_bg(allow_failure=true, () => {
         self.handle(state, conn, root~, entry~)
       })
@@ -120,18 +124,27 @@ pub async fn RelayActor::run(self : RelayActor) -> Unit {
           // (tearing its control socket down); re-read and start over.
           Poked => ()
           Refused(message) => {
-            @xlog.warn(category="remote") <?
-              { "message": "relay refused registration", "error": message }
+            if @xlog.warn(category="remote") is Some(event) {
+              event
+              ..write_object_begin()
+              ..write_object_field("message", "relay refused registration")
+              ..write_object_field("error", message)
+              .write_object_end()
+            }
             store.handle_refusal(expected=config) catch {
               error =>
                 // The relay already rejected this token. Keep the actor
                 // alive and parked on the cleared in-memory state even if
                 // persisting its signed-out marker failed.
-                @xlog.warn(category="remote") <?
-                  {
-                    "message": "could not persist refused sign-out",
-                    "error": "\{error}",
-                  }
+                if @xlog.warn(category="remote") is Some(event) {
+                  event
+                  ..write_object_begin()
+                  ..write_object_field(
+                    "message", "could not persist refused sign-out",
+                  )
+                  ..write_object_field("error", "\{error}")
+                  .write_object_end()
+                }
             }
             self.state.publish(AuthChanged(auth_changed_params(self.state)))
           }
