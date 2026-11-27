@@ -10,8 +10,6 @@ import {
 // Values
 pub const CloseFocusedMenuCommand : String = "app.close_focused"
 
-pub const ExtensionId : String = "openseek-desktop"
-
 pub let account_session : Command[@protocol.EmptyPayload, @protocol.AccountSessionReply]
 
 pub let agent_approval : Command[@protocol.ApprovalPayload, @protocol.ApprovalReply]

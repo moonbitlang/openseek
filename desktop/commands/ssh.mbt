@@ -29,11 +29,6 @@ pub let ssh_remove : Command[@protocol.SshProfileTarget, @protocol.SshReply] = C
 )
 
 ///|
-pub let ssh_request : Command[@protocol.SshRequest, @protocol.SshReply] = Command(
-  "ssh.request",
-)
-
-///|
 pub let ssh_auth_respond : Command[
   @protocol.SshAuthResponse,
   @protocol.SshReply,
