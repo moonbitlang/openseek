@@ -4,7 +4,7 @@
 // here beside the page that manages it.
 
 ///|
-pub(all) suberror SkillReplyError {
+pub suberror SkillReplyError {
   SkillReplyError(String)
 }
 
@@ -58,7 +58,7 @@ pub extend InstalledItem with Debug::{to_repr}
 ///|
 /// The source label a catalog entry would carry once installed — the link
 /// between a catalog row and the installed list.
-pub fn source_label(item : MarketItem) -> String {
+fn source_label(item : MarketItem) -> String {
   if item.package_path.is_empty() {
     "\{item.module_name}@\{item.version}"
   } else {
@@ -69,7 +69,7 @@ pub fn source_label(item : MarketItem) -> String {
 ///|
 /// Project a `skills_catalog` reply. The native catalog adapter has already
 /// removed malformed registry rows before constructing this value.
-pub fn catalog_from_reply(
+fn catalog_from_reply(
   reply : @protocol.SkillsCatalogReply,
 ) -> Array[MarketItem] raise SkillReplyError {
   let entries = match reply {

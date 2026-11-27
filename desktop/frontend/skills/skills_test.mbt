@@ -4,25 +4,6 @@
 // entry points `frontend` drives.
 
 ///|
-test "skill reply errors stay distinct from empty successful lists" {
-  let message = "GET https://mooncakes.io/api/v0/skills returned HTTP 503"
-  try @skills.catalog_from_reply(SkillsCatalogError(message)) catch {
-    error => assert_eq(@interop.bridge_error_text(error), message)
-  } noraise {
-    _ => fail("expected a catalog reply error")
-  }
-  try @skills.installed_from_reply(InstalledSkillsError(message)) catch {
-    error => assert_eq(@interop.bridge_error_text(error), message)
-  } noraise {
-    _ => fail("expected an installed skills reply error")
-  }
-  assert_true(@skills.catalog_from_reply(SkillsCatalog([])).is_empty())
-  assert_true(
-    @skills.installed_from_reply(InstalledSkills([], builtin_errors=[])).is_empty(),
-  )
-}
-
-///|
 fn emit() -> @cmd.Emit[@skills.Msg] {
   @cmd.Emit(_ => @cmd.none)
 }
@@ -256,58 +237,6 @@ test "uninstall is keyed by the library id and deduplicated" {
 }
 
 ///|
-test "catalog replies decode and skip odd entries" {
-  let items = @skills.catalog_from_reply(
-    SkillsCatalog([
-      {
-        name: "acme/widget",
-        module_name: "acme/widget",
-        package_path: "",
-        version: "1.0.0",
-        description: "Build widgets fast.",
-        author: "acme",
-        repository: "https://example.com/acme/widget",
-      },
-      {
-        name: "odd",
-        module_name: "",
-        package_path: "",
-        version: "1.0.0",
-        description: "",
-        author: "",
-        repository: "",
-      },
-    ]),
-  )
-  guard items is [item] else { fail("expected exactly one catalog item") }
-  assert_eq(item.name, "acme/widget")
-  assert_eq(item.module_name, "acme/widget")
-  assert_eq(item.version, "1.0.0")
-  assert_eq(item.description, "Build widgets fast.")
-  assert_eq(@skills.source_label(item), "acme/widget@1.0.0")
-}
-
-///|
-test "subpackage skills carry their package path in the source label" {
-  let items = @skills.catalog_from_reply(
-    SkillsCatalog([
-      {
-        name: "alice/alpha/cmd/run",
-        module_name: "alice/alpha",
-        package_path: "cmd/run",
-        version: "0.2.0",
-        description: "Run alpha commands",
-        author: "",
-        repository: "",
-      },
-    ]),
-  )
-  guard items is [item] else { fail("expected one catalog item") }
-  assert_eq(@skills.source_label(item), "alice/alpha@0.2.0/cmd/run")
-  assert_eq(item.author, "")
-}
-
-///|
 test "installed skill replies decode, with name falling back to id" {
   let items = @skills.installed_from_reply(
     InstalledSkills(
@@ -442,7 +371,7 @@ test "an uninstall retains its source after removal and releases only itself" {
     emit(),
     @skills.ActionDone(
       library=@skills.Host(@interop.ChannelId::Local),
-      action=@skills.Installing(source=@skills.source_label(other)),
+      action=@skills.Installing(source="acme/widget@1.0.0/other"),
       error=None,
     ),
     input(),

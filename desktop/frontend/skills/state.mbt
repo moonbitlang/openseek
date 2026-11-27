@@ -16,14 +16,14 @@ priv enum Catalog {
 
 ///|
 #derive(Eq)
-pub(all) enum BrowseSection {
+pub enum BrowseSection {
   Discover
   InstalledSkills
 }
 
 ///|
 #derive(Eq)
-pub(all) enum StatusFilter {
+pub enum StatusFilter {
   AllSkills
   EnabledSkills
   DisabledSkills
@@ -401,22 +401,6 @@ pub fn State::sync_library(
     fetch_content(emit, input.library, input.locale, request, current),
     { ..self, preview: Loading(target=current, request~), },
   )
-}
-
-///|
-/// `None` means the page is already at the list and the shell owns the next return.
-pub fn State::back(
-  self : State,
-  emit : @cmd.Emit[Msg],
-  input : Input,
-) -> (@cmd.Cmd, State)? {
-  match self.preview {
-    Closed => None
-    _ => {
-      let (cmd, state, _) = self.handle(emit, BackToList, input)
-      Some((cmd, state))
-    }
-  }
 }
 
 ///|

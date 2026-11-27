@@ -13,8 +13,6 @@ import {
 }
 
 // Values
-pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketItem] raise SkillReplyError
-
 pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @rabbita.Val[Bool], @cmd.Emit[Msg]) -> @rabbita.Val[(@html.Html, @html.Html)]
 
 pub fn detail_title(@i18n.Locale) -> String
@@ -23,16 +21,14 @@ pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Array[InstalledIt
 
 pub async fn installed_reply(Library) -> @protocol.InstalledSkillsReply
 
-pub fn source_label(MarketItem) -> String
-
 // Errors
-pub(all) suberror SkillReplyError {
+pub suberror SkillReplyError {
   SkillReplyError(String)
 }
 
 // Types and methods
 #derive(Eq)
-pub(all) enum BrowseSection {
+pub enum BrowseSection {
   Discover
   InstalledSkills
 }
@@ -153,7 +149,6 @@ pub fn PreviewTarget::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 type State
-pub fn State::back(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)?
 pub fn State::detail_open(Self, Library) -> Bool
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
@@ -167,7 +162,7 @@ pub fn State::with_installed(Self, Library, Array[InstalledItem]) -> Self
 pub fn State::with_library_error(Self, String) -> Self
 
 #derive(Eq)
-pub(all) enum StatusFilter {
+pub enum StatusFilter {
   AllSkills
   EnabledSkills
   DisabledSkills
