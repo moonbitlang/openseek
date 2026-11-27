@@ -514,6 +514,8 @@ fn handle_slash_command(
     "compact" => handle_compact_command(state, arguments, cmds)
     "loop" => handle_loop_command(state, arguments, cmds)
     "goal" => handle_goal_command(state, arguments, cmds)
+    "ultrareview" as command =>
+      handle_prompt_command(state, command, UltrareviewPrompt, arguments, cmds)
     "inspect" =>
       if arguments.is_blank() {
         cmds.push(AppendItem(Input(Notice("starting the session viewer…"))))

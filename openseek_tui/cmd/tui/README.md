@@ -89,6 +89,12 @@ process never changes directory: the workspace (`--dir`), a relative
 `--session-root` and a relative `--engine` path are resolved against `<dir>`
 at launch, and the engine and `!` shell commands are spawned there.
 
+`/ultrareview [focus]` starts a turn that asks the agent to review the branch
+with the bundled review swarm (`@builtin/review.mbtx --swarm`) from its merge
+base with the default branch; the focus text, if any, becomes the review
+criteria. It sends the same prompt as Desktop's `/ultrareview`, which the
+transcript shows as the turn's prompt, and runs only while no task is running.
+
 `/inspect` shows the session live in the browser. It starts (or reuses) the
 session viewer for `--session-root`, `moonx moonbitlang/inspect@0.1.0 --ensure
 --watch`, in the background, and adds its link to the transcript on a line of
