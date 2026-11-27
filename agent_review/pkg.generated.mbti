@@ -26,10 +26,7 @@ type Finding
 #derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
 type ReviewReport
 pub fn ReviewReport::digest(Self) -> String
-pub fn ReviewReport::finding_count(Self) -> Int32
-pub fn ReviewReport::has_blockers(Self) -> Bool
 pub fn ReviewReport::parse(@json.Json) -> Result[Self, String]
-pub fn ReviewReport::to_json_string(Self) -> String
 pub fn ReviewReport::validate(Self) -> Array[String]
 
 #derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)

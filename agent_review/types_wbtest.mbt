@@ -75,7 +75,7 @@ test "submit rejects an invalid report without capturing" {
 
 ///|
 test "json string carries the flat string-typed contract" {
-  let s = sample_report().to_json_string()
+  let s = ToJson::to_json(sample_report()).stringify()
   assert_true(s.contains("\"schema_version\""))
   assert_true(s.contains("\"findings\""))
   // severity renders as a plain string, not a tagged enum
@@ -88,7 +88,10 @@ test "review report round-trips through json" {
   let report = sample_report()
   let json = ToJson::to_json(report)
   guard ReviewReport::parse(json) is Ok(parsed) else { fail("parse failed") }
-  assert_eq(parsed.to_json_string(), report.to_json_string())
+  assert_eq(
+    ToJson::to_json(parsed).stringify(),
+    ToJson::to_json(report).stringify(),
+  )
 }
 
 ///|
