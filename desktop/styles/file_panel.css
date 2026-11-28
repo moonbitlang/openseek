@@ -2064,8 +2064,10 @@ button.git-history-file.selected {
 }
 .tree-entry-icon svg { width: 100%; height: 100%; }
 
+/* 64px rendition of MoonBit's website favicon: https://www.moonbitlang.com/img/favicon.ico
+   Upstream asset: https://github.com/moonbitlang/moonbit-docs/blob/d97695ba86fd53ea8ceaf0508d4b587ce96a0375/next/_static/favicon.ico */
 .tree-entry-icon.moonbit-file {
-  color: var(--color-moonbit-file);
+  background: url("./moonbit-file.png") center / contain no-repeat;
 }
 
 .tree-name {
