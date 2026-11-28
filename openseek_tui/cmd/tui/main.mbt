@@ -333,6 +333,10 @@ fn tui_slash_commands() -> Array[@ui.SlashCommandSpec] {
       name="inspect",
       description="watch this session live in the browser (starts the session viewer)",
     ),
+    SlashCommandSpec(
+      name="skills",
+      description="list or manage skills: /skills | /skills enable <id> | /skills disable <id>",
+    ),
   ]
 }
 
@@ -348,6 +352,10 @@ async fn run_tui(config : AppConfig, initial : String?) -> Unit {
 async fn run_app(config : AppConfig, initial : String?, ui : @ui.Ui) -> Unit {
   let state = State::State(config)
   let messages = @async.Queue(kind=Unbounded)
+  let builtins = @skill_library.BuiltinSkills()
+  let library_dir = @skill_library.global_library_dir().map(dir => {
+    resolve_in(config.cwd, dir)
+  })
   append_session_history(state, ui)
   // Name the session so the conversation is resumable later with
   // `--session <id>` — for generated ids this line is the only place the user
@@ -359,11 +367,18 @@ async fn run_app(config : AppConfig, initial : String?, ui : @ui.Ui) -> Unit {
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true) <| () => { read_ui_events(ui, messages) }
     group.spawn_bg(no_wait=true) <| () => { tick_ui(messages) }
+    builtins.start_sync(group, library_dir?, on_finished=_ => {
+      ignore(
+        messages.try_put(SkillsSynced(builtins.errors())) catch {
+          _ => false
+        },
+      )
+    })
     match initial {
       Some(task) => messages.put(UiInput(Steer(Prompt(task))))
       None => ()
     }
-    run_message_loop(state, ui, group, messages)
+    run_message_loop(state, ui, group, messages, builtins, library_dir)
   })
 }
 

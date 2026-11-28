@@ -58,6 +58,8 @@ fn EngineProcess::output_answered(
 priv struct EngineClient {
   config : AppConfig
   messages : @async.Queue[Msg]
+  builtins : @skill_library.BuiltinSkills?
+  library_dir : String?
   mut live : EngineProcess?
 }
 
@@ -65,8 +67,15 @@ priv struct EngineClient {
 fn EngineClient::EngineClient(
   config : AppConfig,
   messages : @async.Queue[Msg],
+  builtins? : @skill_library.BuiltinSkills,
+  library_dir? : String,
 ) -> EngineClient {
-  { config, messages, live: None, }
+  { config, messages, builtins, library_dir, live: None, }
+}
+
+///|
+fn EngineClient::is_live(self : EngineClient) -> Bool {
+  self.live is Some(_)
 }
 
 ///|
@@ -81,7 +90,16 @@ async fn EngineClient::start(
   self : EngineClient,
   group : @async.TaskGroup,
 ) -> Unit {
+  if self.builtins is Some(builtins) {
+    let existing = session_is_stored(self.config) catch { _ => false }
+    if !existing {
+      builtins.wait_if_cold(library_dir?=self.library_dir)
+    }
+  }
   let child_env = engine_env(self.config, @env.get_env_vars())
+  if self.library_dir is Some(dir) {
+    child_env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir
+  }
   let proc = @process.spawn(
     group,
     self.config.engine,
