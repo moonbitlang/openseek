@@ -3712,8 +3712,8 @@ fn tree_row(
 fn tree_entry_icon(entry : FileEntry) -> @html.Html {
   let (class_name, icon) = if entry.is_dir {
     ("tree-twistie", @icons.icon_chevron_down())
-  } else if entry.name.has_suffix(".mbt") {
-    ("tree-entry-icon moonbit-file", @html.nothing)
+  } else if entry.name.to_lower().has_suffix(".mbt") {
+    ("tree-entry-icon moonbit-file", tree_moonbit_icon())
   } else {
     let kind = @workspace_file_ref.file_kind(entry.name)
     (
@@ -3723,6 +3723,26 @@ fn tree_entry_icon(entry : FileEntry) -> @html.Html {
   }
   @html.span(class=class_name, attrs=@html.Attrs::build().aria_hidden("true"), [
     icon,
+  ])
+}
+
+///|
+/// OpenSeek's rabbit glyph for MoonBit source files.
+fn tree_moonbit_icon() -> @html.Html {
+  @svg.svg(view_box="0 0 16 16", [
+    @svg.path(
+      fill="currentColor",
+      attrs=@svg.Attrs::build().fill_rule("evenodd"),
+      d=(
+        #|M4.5 7.2C3.2 5.6 2 1.9 3.2 1.1C4.8 0 6.6 4.2 7 6.5
+        #|Q8 6.3 9 6.5C9.4 3.8 11.2.1 12.6 1C14 1.8 12.7 5.7 11.6 7.3
+        #|C13.1 8.1 14 9.4 14 11C14 13.7 11.5 15 8 15S2 13.7 2 11
+        #|C2 9.4 3 8 4.5 7.2Z
+        #|M5 10a1 1 0 1 0 2 0a1 1 0 1 0-2 0Z
+        #|M9 10a1 1 0 1 0 2 0a1 1 0 1 0-2 0Z
+        #|M7 12h2l-1 1Z
+      ),
+    ),
   ])
 }
 
