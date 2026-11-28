@@ -1462,8 +1462,8 @@ async fn engine_process_env(
   // The desktop host owns the Skills panel's library writes, so every serve
   // engine gets the same resolved global library instead of falling back to
   // whatever HOME means inside that engine host.
-  if @skills.global_library_dir() is Some(dir) {
-    env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir.to_string()
+  if @skill_library.global_library_dir() is Some(dir) {
+    env["OPENSEEK_GLOBAL_SKILLS_DIR"] = dir
   }
   // The official endpoint leaves `api_url` unset; an `OPENSEEK_API_URL`
   // exported in the parent shell must not leak through and redirect the

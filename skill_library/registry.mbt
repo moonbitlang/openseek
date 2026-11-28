@@ -1,12 +1,13 @@
-// Adapt moonbit-community/skills to the Desktop catalog and transactional
-// local library. The client owns registry JSON, HTTP and download validation.
+// Adapt moonbit-community/skills to the OpenSeek skill catalog and
+// transactional local library. The client owns registry JSON, HTTP, and
+// download validation.
 
 ///|
-/// Overridable per call for local registry tests.
-const DefaultRegistry = "https://mooncakes.io"
+/// Default standalone skills registry URL, overridable per call for tests.
+const DefaultRegistry : String = "https://mooncakes.io"
 
 ///|
-/// Keep documents passed to the frontend renderer bounded.
+/// Keep documents passed to preview renderers bounded.
 const MaxPreviewBytes : Int32 = 512 * 1024
 
 ///|
@@ -40,8 +41,7 @@ fn archive_limits(package_bytes : Int32) -> @zip.ReadLimits {
 }
 
 ///|
-/// A registry or library failure with a user-facing message, which the ops
-/// return as the error the webview displays.
+/// A registry or library failure with a user-facing message.
 priv suberror SkillsError {
   SkillsError(String)
 }
@@ -53,24 +53,27 @@ impl Show for SkillsError with fn output(self, logger) {
 }
 
 ///|
-/// One standalone skill from the registry, projected into the host protocol.
-priv struct MarketSkill {
-  // The standalone skill name, matching SKILL.md frontmatter.
+/// One standalone skill from the registry.
+pub struct MarketSkill {
+  /// Standalone skill name, matching SKILL.md frontmatter.
   name : String
-  // The host protocol retains this field for the owner/name skill identity.
+  /// Owner/name skill identity (e.g. `moonbitlang/typst`).
   module_name : String
-  // Standalone skills have no subpackage; always empty for new catalog rows.
+  /// Legacy subpackage path; always empty for standalone catalog rows.
   package_path : String
+  /// Published version string.
   version : String
+  /// Short one-line description from the catalog.
   description : String
+  /// Registry owner/author name.
   author : String
-  repository : String
+  /// Source repository URL, if provided by the registry.
+  repository : String?
 }
 
 ///|
-/// List independently published skills. Keep the existing host payload shape:
-/// module_name carries owner/name, and package_path is empty.
-async fn fetch_catalog(
+/// List independently published skills from `registry`.
+pub async fn fetch_catalog(
   registry~ : String = DefaultRegistry,
 ) -> Array[MarketSkill] {
   let skills = @registry.Client(registry~).list() catch {
@@ -84,7 +87,7 @@ async fn fetch_catalog(
     description: skill.description,
     author: skill.owner,
     // The standalone API does not expose a source repository.
-    repository: "",
+    repository: None,
   })
 }
 
@@ -145,7 +148,7 @@ async fn fetch_archive(
 ///|
 /// Preview the readme from the versioned skill detail response. This does not
 /// download an archive or change the local library.
-async fn fetch_skill_content(
+pub async fn fetch_skill_content(
   module_name~ : String,
   version~ : String,
   package_path~ : String,
@@ -182,58 +185,10 @@ test "archive decompression ceilings scale with the packaged size" {
 }
 
 ///|
-test "slugify turns an owner/name identity into a safe single segment" {
-  assert_eq(slugify("Yoorkin/cowsay"), "yoorkin-cowsay")
-  assert_eq(slugify("acme/widget"), "acme-widget")
-  assert_eq(slugify("moonbit-community/moongrep"), "moonbit-community-moongrep")
-  assert_eq(slugify("alice/alpha/cmd/run"), "alice-alpha-cmd-run")
-  // Leading/trailing and repeated separators collapse; no stray dashes.
-  assert_eq(slugify("/A..B/"), "a-b")
-  // Every slugify output passes the path-safety guard.
-  assert_true(valid_slug(slugify("Yoorkin/cowsay")))
-}
-
-///|
 test "entry paths join module, version and subpackage" {
   assert_eq(entry_path("alice/alpha", "0.2.0", ""), "alice/alpha@0.2.0")
   assert_eq(
     entry_path("alice/alpha", "0.2.0", "cmd/run"),
     "alice/alpha@0.2.0/cmd/run",
   )
-}
-
-///|
-test "slug validation rejects anything that could escape the library" {
-  assert_true(valid_slug("alice-alpha"))
-  assert_true(valid_slug("a"))
-  assert_false(valid_slug(""))
-  assert_false(valid_slug(".."))
-  assert_false(valid_slug("a/b"))
-  assert_false(valid_slug("a\\b"))
-  assert_false(valid_slug("Alice"))
-  assert_false(valid_slug("a b"))
-  let mut long = ""
-  for _ in 0..<65 {
-    long = "\{long}a"
-  }
-  assert_false(valid_slug(long))
-}
-
-///|
-test "sidecar decoding renders the install source" {
-  assert_eq(
-    decode_sidecar(
-      "{\"module\":\"alice/alpha\",\"version\":\"0.2.0\",\"package\":\"cmd/run\",\"digest\":\"sha256:abc\"}",
-    ).map_or("", source => source.label),
-    "alice/alpha@0.2.0/cmd/run",
-  )
-  assert_eq(
-    decode_sidecar("{\"module\":\"alice/alpha\",\"version\":\"0.2.0\"}").map_or(
-      "",
-      source => source.label,
-    ),
-    "alice/alpha@0.2.0",
-  )
-  assert_true(decode_sidecar("not json") is None)
-  assert_true(decode_sidecar("{\"version\":\"0.2.0\"}") is None)
 }

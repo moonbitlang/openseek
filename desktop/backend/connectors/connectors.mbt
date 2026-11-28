@@ -76,10 +76,10 @@ async fn Service::entries(self : Service) -> Array[Entry] {
   } else {
     []
   }
-  if @skills.global_library_dir() is Some(path) {
+  if @skill_library.global_library_dir() is Some(path) {
     library = @agent_skill.merge_skills(
       library,
-      overrides=@agent_skill.discover_skills(path.to_string()),
+      overrides=@agent_skill.discover_skills(path),
     )
   }
   let result = []

@@ -2,7 +2,7 @@ import {
   "moonbitlang/openseek/agent_skill",
   "moonbitlang/openseek/mcp/config",
   "moonbitlang/openseek/mcp/oauth",
-  "openseek_desktop/backend/internal/skills",
+  "moonbitlang/openseek/skill_library",
   "openseek_desktop/backend/internal/browser_signin",
   "openseek_desktop/uri",
   "openseek_desktop/backend/pathx",

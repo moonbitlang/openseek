@@ -14,6 +14,8 @@ import {
   "moonbitlang/workflow@0.11.1",
   "Yoorkin/multipart@0.2.2",
   "moonbit-community/yaml@0.0.10",
+  "moonbit-community/flate@0.10.0",
+  "moonbit-community/skills@0.2.0",
   "kokic/katex-parser@0.7.4",
 }
 

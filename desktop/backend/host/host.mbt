@@ -46,7 +46,7 @@ struct HostState {
   moon : @language.MoonCliState
   updates : SelfUpdate
   resources : HostResources
-  skills : @skills.BuiltinSkills
+  skills : @skill_library.BuiltinSkills
 }
 
 ///|
@@ -103,7 +103,7 @@ pub async fn HostState::sync_builtin_skills(
   self : HostState,
   on_changed : () -> Unit,
 ) -> Unit {
-  self.skills.sync(on_changed)
+  ignore(self.skills.sync(on_changed~))
 }
 
 ///|
@@ -318,9 +318,9 @@ pub fn endpoints(
     Endpoint(@commands.skills_installed_content, payload => {
       @skills.installed_content(payload)
     }),
-    Endpoint(@commands.skills_installed, _ => state.skills.installed()),
+    Endpoint(@commands.skills_installed, _ => @skills.installed(state.skills)),
     Endpoint(@commands.skills_install, payload => {
-      state.skills.install(payload, on_skills_changed)
+      @skills.install(state.skills, payload, on_skills_changed)
     }),
     Endpoint(@commands.skills_uninstall, payload => {
       @skills.uninstall(payload, on_skills_changed)
