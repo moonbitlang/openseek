@@ -42,6 +42,11 @@ async fn owner_gone(directory : String) -> Bool {
 }
 
 ///|
+/// The largest job record read back: above the PTC trace budget
+/// (`MaxTraceBytes` in agent_tool/ptc), which a record carries whole.
+const MaxRecordBytes : Int64 = 8388608L
+
+///|
 /// The record in `path`, bounded and checked against the generation and file
 /// name it was stored under, as the desktop reads it.
 async fn earlier_record(
@@ -54,7 +59,7 @@ async fn earlier_record(
   let record : @protocol.JobRecord = try {
     guard file.kind() is Regular else { return None }
     let size = file.size()
-    guard size <= 1048576L else { return None }
+    guard size <= MaxRecordBytes else { return None }
     let bytes = file.at(0L).read_exactly(size.to_int())
     @json.from_json(@json.parse(@utf8.decode(bytes)))
   } catch {

@@ -251,11 +251,21 @@ to. Run it in a checkout of its own: a worktree at the default branch.
 
 ### 4. Budget and continuation
 
-- A script may start at most 64 children: a round of k packages costs at most
-  2k starts. A round starts only if a package fits, so a run does at least
-  four rounds of 8.
+- A script may start at most 128 children (`ScriptQuota`): a round of k
+  packages costs at most 2k starts. A round starts only if a package fits,
+  so a run does at least eight rounds of 8.
+- The host retains every tool call's arguments and result, up to 4 MiB per
+  script (`MaxTraceBytes`); a call past it is refused, which would end the
+  run without its continuation. The second live run retained 37.5 KB per
+  package (two briefs of about 9 KB, two reports of about 8 KB, and the
+  waits), so the 512 KiB budget it had would have run out in a default run's
+  second round. The script meters its calls and sizes each round to what
+  fits, at least 48 KB per package or a quarter over the measured average;
+  a run that cannot fit one more package stops with
+  `stopped: the trace budget is spent` and its continuation.
 - Live: at most 8 workers plus their reviewers (16 children).
-- A run that stops short (`--rounds`, the quota) or gives packages up prints
+- A run that stops short (`--rounds`, the start quota, the trace budget) or
+  gives packages up prints
   `continue from <branch>: <arguments>`: check out that branch and run again
   with them. The arguments keep `--path`, `--max-packages`,
   `--check-target`, `--check-in`, `--rounds`, `--no-pr` or `--stack-on <branch>`,
@@ -413,3 +423,14 @@ Third pass (Codex, xhigh, whole branch): the earlier fixes confirmed.
 | Codex finding | Resolution |
 |---|---|
 | MEDIUM: a re-exported value is listed as a plain `pub const`, so excluding `pub using` rows misses the live run's own case | Rows declaring a name the package's `pub using` blocks re-export (or a method of one) are left out; the fixture re-exports a value, a type and a renamed function |
+
+Fifth pass (Codex, xhigh, whole branch after the second live run): four
+P1 findings, each confirmed before it was fixed. Its P2 findings are left
+for follow-ups.
+
+| Codex finding | Resolution |
+|---|---|
+| P1: `--exclude --no-pr` takes `--no-pr` as the directory, so a local run publishes; unknown options become focus text | A flag's value may not start with `-`, and an unknown option before `--` is refused; the option-value and unknown-option modes |
+| P1: a merge whose result is HEAD leaves `git status --porcelain` empty, and the final checkout discards it | Preflight refuses a pending merge, cherry-pick, revert, rebase or bisect; the merging mode checks `MERGE_HEAD` survives |
+| P1: `name = "x" // comment` is not parsed, so the module's packages drop out and the run reports a fixed point | The value is the first quoted string; a package with candidates in no known module fails the run. The fixture's root manifest has a trailing comment (the old script reports `fixed point except sub/src/delta`) and the unmapped mode |
+| P1: the host retains every call against a 512 KiB budget, and a refused call ends the run without its continuation | Measured on the second live run: 450,674 bytes for 12 packages. The host budget is 4 MiB (job records 8 MiB) and a script may start 128 children; the script meters its calls and sizes rounds to fit, stopping with its continuation. The 40-character fake host cannot reach 4 MiB, so the stop was checked by hand with the budget set to 120,000 bytes |

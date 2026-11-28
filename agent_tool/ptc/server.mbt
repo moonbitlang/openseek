@@ -26,8 +26,10 @@ const SendTimeoutMs : Int32 = 5000
 const MaxReplyChars : Int32 = 65536
 
 ///|
-/// Retained trace budget, below the durable job reader's 1 MiB cap.
-const MaxTraceBytes : Int32 = 524288
+/// Retained trace budget, below the durable job readers' 8 MiB cap
+/// (`agent_tool/bgjobs` history and the desktop engine). Long workflow
+/// scripts such as `@builtin/shrink.mbtx` retain about 37 KB per package.
+const MaxTraceBytes : Int32 = 4194304
 
 ///|
 /// Per-entry headroom reserved for a terminal status and an omitted-result
@@ -670,7 +672,7 @@ async fn Program::execute(
     self.calls[index] = entry
   } else {
     // The client still receives the full bounded response. Retained job
-    // metadata must fit the existing 1 MiB durable-record reader.
+    // metadata must fit the 8 MiB durable-record readers.
     self.calls[index] = call_entry(name, arguments, "done", result={
       "version": 1,
       "content": "Result omitted from retained trace: trace size limit reached",

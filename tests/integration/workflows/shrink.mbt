@@ -200,6 +200,14 @@ async fn moon_child(dir : String) -> Unit {
 }
 
 ///|
+/// A package of a module no manifest in the repository names.
+const UnmappedAnalysis : String =
+  #|package "fx/elsewhere/z"
+  #|
+  #|// Values
+  #|pub fn z() -> Int                                // usage: 0 (0 in test)
+
+///|
 /// What `moon ide analyze` prints in the fixture's rounds: padded rows, a
 /// `//` inside a value, a blessed export, a member row, a trait
 /// implementation, a nested module, and a package with no directory.
@@ -341,7 +349,12 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     @fs.mkdir(repo + "/" + dir, recursive=true)
   }
   write(repo + "/README.md", "fixture\n")
-  write(repo + "/moon.mod", "name = \"fx/app\"\n\nversion = \"0.1.0\"\n")
+  // A trailing comment must not hide the module's name: a module the
+  // script cannot map would drop its packages and read as a fixed point.
+  write(
+    repo + "/moon.mod",
+    "name = \"fx/app\" // the fixture app\n\nversion = \"0.1.0\"\n",
+  )
   // A module whose packages live under its `source` directory.
   write(
     repo + "/sub/moon.mod.json",
@@ -478,7 +491,8 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     mode in [
       "shrink-publish", "shrink-check-fails", "shrink-conflict", "shrink-rounds",
       "shrink-continue", "shrink-none", "shrink-skip", "shrink-fixed", "shrink-bad-number",
-      "shrink-subdir", "shrink-dirty", "shrink-ahead", "shrink-stack-on",
+      "shrink-subdir", "shrink-dirty", "shrink-ahead", "shrink-stack-on", "shrink-option-value",
+      "shrink-unknown-option", "shrink-merging", "shrink-unmapped",
     ] {
     let host = fake_host("shrink", mode)
     host.fixture["base#1"] = head
@@ -511,6 +525,9 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     match mode {
       "shrink-dirty" => append(repo + "/alpha/a.mbt", "// local edit")
       "shrink-check-fails" => write(calls + "/fail-check", "")
+      // A merge whose result is HEAD: `git status --porcelain` is empty.
+      "shrink-merging" => write(repo + "/.git/MERGE_HEAD", head + "\n")
+      "shrink-unmapped" => write(calls + "/analyze-1.txt", UnmappedAnalysis)
       "shrink-ahead" => {
         append(repo + "/README.md", "local")
         ignore(git(repo, ["commit", "-q", "-am", "local commit"]))
@@ -536,6 +553,9 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-stack-on" => ["--stack-on", "other"]
       "shrink-fixed" => ["--no-pr", "--path", "nowhere"]
       "shrink-bad-number" => ["--max-packages", "17"]
+      "shrink-option-value" => ["--exclude", "--no-pr"]
+      "shrink-unknown-option" => ["--no-pr", "--bogus"]
+      "shrink-merging" | "shrink-unmapped" => ["--no-pr"]
       _ => []
     }
     let cwd = if mode == "shrink-subdir" { repo + "/alpha" } else { repo }
@@ -550,6 +570,12 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-dirty" => ignore(git(repo, ["checkout", "--", "alpha/a.mbt"]))
       "shrink-check-fails" => @fs.remove(calls + "/fail-check")
       "shrink-ahead" => ignore(git(repo, ["reset", "-q", "--hard", head]))
+      "shrink-merging" => {
+        // Refused before anything ran: the merge is still there.
+        assert_true(@fs.exists(repo + "/.git/MERGE_HEAD"), msg=output)
+        @fs.remove(repo + "/.git/MERGE_HEAD")
+      }
+      "shrink-unmapped" => write(calls + "/analyze-1.txt", FirstAnalysis)
       _ => ()
     }
     // Whatever happened, the checkout is back where it was, with no pick
@@ -795,6 +821,28 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         (false, ["commit or stash the changes to tracked files first"])
       "shrink-stack-on" =>
         (false, ["HEAD is not origin/other: check out the last round's branch"])
+      "shrink-option-value" => (false, ["--exclude needs a value, not --no-pr"])
+      "shrink-unknown-option" =>
+        (
+          false,
+          [
+            "unknown option --bogus; focus text that starts with - goes after --",
+          ],
+        )
+      "shrink-merging" =>
+        (
+          false,
+          ["a merge is in progress (MERGE_HEAD): finish or abort it first"],
+        )
+      "shrink-unmapped" => {
+        assert_true(!output.contains("fixed point"), msg=output)
+        (
+          false,
+          [
+            "no tracked moon.mod or moon.mod.json names the module of fx/elsewhere/z",
+          ],
+        )
+      }
       _ => (false, ["HEAD is not on origin/main"])
     }
     if mode
@@ -802,7 +850,11 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       | "shrink-subdir"
       | "shrink-dirty"
       | "shrink-ahead"
-      | "shrink-stack-on") {
+      | "shrink-stack-on"
+      | "shrink-option-value"
+      | "shrink-unknown-option"
+      | "shrink-merging"
+      | "shrink-unmapped") {
       // Preflight stops the run before any child starts.
       assert_eq(labels, [], msg=output)
     }

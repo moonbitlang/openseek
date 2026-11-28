@@ -4,6 +4,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/shell",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
@@ -38,13 +39,15 @@ const Usage : String =
   #|--path DIR (repeatable) shrinks only packages under DIR. --exclude DIR
   #|(repeatable) leaves packages under DIR alone. --skip DIR (repeatable)
   #|leaves the one package in DIR alone. --max-packages N changes at
-  #|most N packages per round (default 8, at most 16). --rounds N stops after
+  #|most N packages per round (default 8, at most 16; fewer when the start
+  #|quota or the host's trace budget is short). --rounds N stops after
   #|N rounds. --check-target T (repeatable) checks each combined round with
   #|`moon check --deny-warn --no-mbti --target T` (default: once, with no
   #|--target). --check-in DIR (repeatable) also runs that check in DIR, a
   #|separate workspace that imports this one. --stack-on BRANCH opens the first round's pull request against
   #|BRANCH, to continue an earlier run's stack. --no-pr keeps each round on a
-  #|local branch. FOCUS, joined with spaces, is an emphasis for workers.
+  #|local branch. FOCUS, joined with spaces, is an emphasis for workers; a
+  #|word of it that starts with `-` must follow `--`.
   #|
   #|A run that stops short, or gives packages up, prints the arguments that
   #|continue it from its last round's branch.
@@ -60,8 +63,70 @@ const MaxPackages : Int = 16
 const LiveWorkers : Int = 8
 
 ///|
-/// Children one script may start; a round of k packages takes at most 2k.
-const StartQuota : Int = 64
+/// Children one script may start (the engine's `ScriptQuota`); a round of k
+/// packages takes at most 2k.
+const StartQuota : Int = 128
+
+///|
+/// Bytes of tool calls the host retains for one script (`MaxTraceBytes` in
+/// agent_tool/ptc): a call past it is refused, which would end the run
+/// without its continuation, so rounds are sized to stay under it.
+const TraceBudget : Int = 4194304
+
+///|
+/// What one package was assumed to add to the trace before any is measured:
+/// run 2 on this repository averaged 37.5 KB (two briefs of about 9 KB, two
+/// reports of about 8 KB, and the waits).
+const PackageTraceBytes : Int = 48000
+
+///|
+/// Trace kept free for the end of a round and for calls whose size the
+/// estimate missed.
+const TraceReserve : Int = 65536
+
+///|
+/// The host's per-call framing around a call's arguments and result.
+const TraceEntryBytes : Int = 256
+
+///|
+/// What this script's tool calls have added to the host's retained trace.
+let traced : Ref[Int] = Ref(0)
+
+///|
+/// How many more packages fit in the host's trace, after `worked` packages:
+/// each is assumed to cost what they averaged so far, a quarter more for
+/// the spread between packages, and never less than `PackageTraceBytes`.
+fn trace_room(worked : Int) -> Int {
+  let measured = if worked > 0 { traced.val * 5 / (worked * 4) } else { 0 }
+  let each = if measured > PackageTraceBytes {
+    measured
+  } else {
+    PackageTraceBytes
+  }
+  let left = TraceBudget - TraceReserve - traced.val
+  if left > 0 {
+    left / each
+  } else {
+    0
+  }
+}
+
+///|
+/// Call a host tool and count what the host retains of the call: its name,
+/// arguments and result, in UTF-8 bytes as the host measures them.
+async fn tool(name : String, arguments : Json) -> @tools.CallResult {
+  let result = @tools.call(name, arguments)
+  let data = match result.data {
+    Some(data) => data.stringify()
+    None => ""
+  }
+  traced.val += TraceEntryBytes +
+    @utf8.encode(name).length() +
+    @utf8.encode(arguments.stringify()).length() +
+    @utf8.encode(result.content).length() +
+    @utf8.encode(data).length()
+  result
+}
 
 ///|
 const ReviewSteps : Int = 60
@@ -184,6 +249,21 @@ async fn main {
         println(Usage)
         return
       }
+      // A flag's value is never another option: `--exclude --no-pr` would
+      // otherwise exclude a directory named `--no-pr` and still publish.
+      [
+        "--path"
+        | "--exclude"
+        | "--skip"
+        | "--max-packages"
+        | "--rounds"
+        | "--check-target"
+        | "--check-in"
+        | "--stack-on" as flag,
+        value,
+        ..,
+      ] if value.has_prefix("-") =>
+        fail("\{flag} needs a value, not \{value}\n\{Usage}")
       ["--path", dir, .. rest] => {
         options.paths.push(directory(dir))
         continue rest
@@ -234,6 +314,9 @@ async fn main {
         words.append(rest.to_owned())
         break
       }
+      // A mistyped option is an error, not focus text.
+      [word, ..] if word.has_prefix("-") =>
+        fail("unknown option \{word}; focus text that starts with - goes after --\n\{Usage}")
       [word, .. rest] => {
         words.push(word)
         continue rest
@@ -252,6 +335,7 @@ async fn main {
   clean(
     "commit or stash the changes to tracked files first: each round checks out its own commit",
   )
+  idle()
   let head = run("git", ["rev-parse", "HEAD"]).trim().to_owned()
   // What to check out again at the end: the branch, or the commit when
   // HEAD is detached.
@@ -316,6 +400,37 @@ async fn clean(why : String) -> Unit {
 }
 
 ///|
+/// Fail when a git operation is in progress. A merge whose result matches
+/// HEAD leaves `git status --porcelain` empty, and the checkout that ends
+/// every run would silently discard it.
+async fn idle() -> Unit {
+  for operation in [
+      ("MERGE_HEAD", "merge"),
+      ("CHERRY_PICK_HEAD", "cherry-pick"),
+      ("REVERT_HEAD", "revert"),
+    ] {
+    let (pseudo, name) = operation
+    let found = @shell.Cmd("git", ["rev-parse", "-q", "--verify", pseudo]).output(
+      timeout_ms=30000,
+    )
+    guard found.exit_code() != 0 else {
+      fail("a \{name} is in progress (\{pseudo}): finish or abort it first")
+    }
+  }
+  for operation in [
+      ("rebase-merge", "rebase"),
+      ("rebase-apply", "rebase"),
+      ("BISECT_LOG", "bisect"),
+    ] {
+    let (entry, name) = operation
+    let path = run("git", ["rev-parse", "--git-path", entry]).trim().to_owned()
+    guard !@fs.exists(path) else {
+      fail("a \{name} is in progress (\{path}): finish or abort it first")
+    }
+  }
+}
+
+///|
 /// The rounds: analyze, work, review, combine, check and publish, until the
 /// analyzer reports no candidate the run may still work on.
 async fn sweep(
@@ -341,6 +456,8 @@ async fn sweep(
     None => ""
   }
   let mut started = 0
+  // Packages given to workers so far, to measure what one costs the trace.
+  let mut worked = 0
   let mut tokens = 0
   let mut round = 0
   let mut ending = ""
@@ -384,13 +501,21 @@ async fn sweep(
       ending = "stopped: the start quota is spent"
       break
     }
+    let fits = trace_room(worked)
+    guard fits > 0 else {
+      ending = "stopped: the trace budget is spent"
+      break
+    }
     round += 1
-    let limit = if options.max_packages < room {
-      options.max_packages
-    } else {
-      room
+    let mut limit = options.max_packages
+    if room < limit {
+      limit = room
+    }
+    if fits < limit {
+      limit = fits
     }
     let works = select(open, limit)
+    worked += works.length()
     println(
       "round \{round}: packages=\{open.length()} chosen=\{works.length()}",
     )
@@ -744,7 +869,8 @@ async fn module_dirs() -> Array[(String, String)] {
 
 ///|
 /// A string field a module manifest declares, in either format: `key = "x"`
-/// or `"key": "x"`.
+/// or `"key": "x"`. The value is the first quoted string, so a trailing
+/// `// comment` or `,` does not hide it.
 fn manifest_field(text : String, key : String) -> String? {
   for line in text.split("\n") {
     let line = line.trim()
@@ -757,9 +883,9 @@ fn manifest_field(text : String, key : String) -> String? {
         }
     }
     guard rest.trim_start() is ['=' | ':', .. value] else { continue }
-    let value = value.trim().trim_end(chars=",")
-    if value is ['"', .. text, '"'] {
-      return Some(text.to_owned())
+    guard value.trim_start() is ['"', .. quoted] else { continue }
+    if quoted.find("\"") is Some(end) {
+      return Some(quoted[:end].to_owned())
     }
   }
   None
@@ -855,8 +981,14 @@ async fn analyze(
     }
   ]
   let packages : Array[Package] = []
+  // A package with candidates that maps to no module would be dropped and
+  // read as a fixed point: say which instead.
+  let unmapped : Array[String] = []
   for name, rows in candidates(output) {
-    guard package_dir(name, modules) is Some(dir) else { continue }
+    guard package_dir(name, modules) is Some(dir) else {
+      unmapped.push(name)
+      continue
+    }
     let rows = if kits.contains(name) {
       rows.filter(row => !row.test_only)
     } else {
@@ -884,6 +1016,11 @@ async fn analyze(
     if files is [_, ..] && rows is [_, ..] {
       packages.push({ dir, files, candidates: rows, })
     }
+  }
+  guard unmapped is [] else {
+    fail(
+      "no tracked moon.mod or moon.mod.json names the module of \{unmapped.join(", ")}: the analyzer lists candidates there, so the run cannot treat them as done",
+    )
   }
   packages.sort_by((a, b) => a.dir.lexical_compare(b.dir))
   packages
@@ -1360,7 +1497,7 @@ async fn start_worker(work : Work, focus : String) -> Launch {
     $|- Before any visibility change, `git grep -n -w <name>` the whole repository for uses the analyzer cannot see.
     $|- At least run `moon check --deny-warn --no-mbti` from the repository root (the whole workspace) for every target the repository builds, and `moon test` for the package. Then run `moon check` (without `--no-mbti`, so it regenerates pkg.generated.mbti) and `moon fmt` with the package path only, never over the whole module (a newer toolchain can rewrite other packages' files, which makes the change unmergeable). Confirm pkg.generated.mbti only lost lines.
     $|- Report status done only when every required check passed. In summary, list every candidate and what you did with it (dropped pub, deleted, narrowed, or moved to exports.mbt with its reason). Name each command and its result in verification.
-  let started = @tools.call("subagent", {
+  let started = tool("subagent", {
     "kind": "worker",
     "input": { "task": task, "context": Guidance },
     "label": "shrink:\{dir}",
@@ -1653,7 +1790,7 @@ async fn start(
   label : String,
   max_steps : Int,
 ) -> Launch {
-  let started = @tools.call("subagent", {
+  let started = tool("subagent", {
     "kind": kind,
     "input": input,
     "label": label,
@@ -1669,7 +1806,7 @@ async fn start(
 /// Wait until at least one of `ids` has ended, or a minute has passed, and
 /// return the ones that ended.
 async fn wait_any(ids : Array[String]) -> Array[String] {
-  let waited = @tools.call("job_wait", {
+  let waited = tool("job_wait", {
     "job_ids": Json::array(ids.map(Json::string)),
   })
   guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
@@ -1696,7 +1833,7 @@ priv struct End {
 async fn finish(id : String) -> End {
   let text = StringBuilder()
   for ;; {
-    let read = @tools.call("job_output", {
+    let read = tool("job_output", {
       "job_id": id,
       "offset": text.to_string().char_length(),
     })
