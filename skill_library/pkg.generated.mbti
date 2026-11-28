@@ -1,0 +1,71 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/skill_library"
+
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub async fn fetch_catalog(registry? : String) -> Array[MarketSkill]
+
+pub async fn fetch_skill_content(module_name~ : String, version~ : String, package_path~ : String, registry? : String) -> String
+
+pub fn global_library_dir() -> String?
+
+pub async fn installed_skills(library_dir? : String) -> Array[InstalledSkill]
+
+pub fn is_builtin(RegistrySkillIdentity) -> Bool
+
+pub async fn read_skill_content(String, library_dir? : String) -> String
+
+pub async fn set_skill_enabled(String, enabled~ : Bool, library_dir? : String, on_committed? : () -> Unit) -> Unit
+
+pub async fn uninstall_skill(String, library_dir? : String, on_committed? : () -> Unit) -> Unit
+
+// Errors
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) struct BuiltinSkillError {
+  registry : RegistrySkillIdentity
+  message : String
+}
+
+type BuiltinSkills
+pub fn BuiltinSkills::BuiltinSkills() -> Self
+pub fn BuiltinSkills::errors(Self) -> Array[BuiltinSkillError]
+pub async fn BuiltinSkills::install(Self, module_name~ : String, version~ : String, package_path~ : String, registry? : String, library_dir? : String, on_committed? : () -> Unit) -> InstalledSkill
+pub fn BuiltinSkills::is_syncing(Self) -> Bool
+pub fn BuiltinSkills::start_sync(Self, @async.TaskGroup, registry? : String, library_dir? : String, on_changed? : () -> Unit, on_finished? : (Int32) -> Unit) -> Unit
+pub async fn BuiltinSkills::sync(Self, registry? : String, library_dir? : String, on_changed? : () -> Unit) -> Int32
+pub async fn BuiltinSkills::wait_if_cold(Self, library_dir? : String, wait_ms? : Int32) -> Unit
+
+pub struct InstalledSkill {
+  id : String
+  name : String
+  description : String
+  source : String?
+  registry : RegistrySkillIdentity?
+  enabled : Bool
+}
+
+pub struct MarketSkill {
+  name : String
+  module_name : String
+  package_path : String
+  version : String
+  description : String
+  author : String
+  repository : String?
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) struct RegistrySkillIdentity {
+  module_name : String
+  package_path : String
+}
+
+// Type aliases
+
+// Traits

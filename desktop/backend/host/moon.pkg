@@ -13,6 +13,7 @@ import {
   "openseek_desktop/backend/internal/pattern_repair",
   "openseek_desktop/backend/internal/language",
   "openseek_desktop/backend/internal/search",
+  "moonbitlang/openseek/skill_library",
   "openseek_desktop/protocol",
   "openseek_desktop/backend/internal/skills",
   "openseek_desktop/backend/internal/files",

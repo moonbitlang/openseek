@@ -295,10 +295,29 @@ async fn fake_registry(
 }
 
 ///|
+async fn install_skill(
+  module_name~ : String,
+  version~ : String,
+  package_path~ : String,
+  registry~ : String,
+  library_dir~ : String,
+  on_committed~ : () -> Unit = () => (),
+) -> InstalledSkill {
+  install_skill_impl(
+    module_name~,
+    version~,
+    package_path~,
+    registry~,
+    library_dir~,
+    on_committed~,
+  ).unwrap()
+}
+
+///|
 /// Run an install that must fail and return its user-facing message.
 async fn install_failure(
   base : String,
-  lib : @pathx.Path,
+  lib : String,
   module_name : String,
 ) -> String {
   try {
@@ -318,7 +337,7 @@ async fn install_failure(
 
 ///|
 /// Run an uninstall that must fail and return its user-facing message.
-async fn uninstall_failure(lib : @pathx.Path, id : String) -> String {
+async fn uninstall_failure(lib : String, id : String) -> String {
   try {
     uninstall_skill(id, library_dir=lib)
     fail("uninstall of \{id} should have failed")
@@ -337,7 +356,7 @@ async test "the catalog projects standalone skill records into the host payload"
     assert_eq(skill.module_name, "acme/widget")
     assert_eq(skill.package_path, "")
     assert_eq(skill.author, "acme")
-    assert_eq(skill.repository, "")
+    assert_eq(skill.repository, None)
     assert_eq(skill.name, "widget")
     assert_eq(skill.version, "1.0.0")
     assert_eq(skill.description, "Build widgets fast.")
@@ -359,7 +378,7 @@ async test "install verifies the archive and writes every file it holds" {
     assert_eq(installed.id, "acme-widget")
     assert_eq(installed.name, "widget")
     assert_eq(installed.description, "Build widgets fast.")
-    assert_eq(installed.source, "acme/widget@1.0.0")
+    assert_eq(installed.source, Some("acme/widget@1.0.0"))
     // The exact archive bytes landed on disk where the engine discovers them,
     // supporting files included.
     assert_eq(@fs.read_binary("\{lib}/acme-widget/SKILL.md"), skill_body)
@@ -371,7 +390,7 @@ async test "install verifies the archive and writes every file it holds" {
       fail("expected one installed skill")
     }
     assert_eq(listed.id, "acme-widget")
-    assert_eq(listed.source, "acme/widget@1.0.0")
+    assert_eq(listed.source, Some("acme/widget@1.0.0"))
     // Reinstalling over our own entry is an upgrade, not a conflict.
     let again = install_skill(
       module_name="acme/widget",
@@ -660,7 +679,7 @@ async test "listing recovers interrupted local skill changes" {
   }
   assert_eq(recovered.id, "acme-widget")
   assert_eq(recovered.description, "recovered")
-  assert_eq(recovered.source, "acme/widget@1.0.0")
+  assert_eq(recovered.source, Some("acme/widget@1.0.0"))
   assert_true(@fs.exists("\{lib}/acme-widget/SKILL.md"))
   assert_false(@fs.exists("\{lib}/.backup/acme-widget"))
   assert_false(@fs.exists("\{lib}/.staging/acme-widget"))
@@ -788,10 +807,10 @@ async test "listing mirrors the engine's discovery for hand-written skills" {
   assert_eq(flat_skill.id, "notes")
   assert_eq(flat_skill.name, "notes")
   assert_eq(flat_skill.description, "My notes.")
-  assert_eq(flat_skill.source, "")
+  assert_eq(flat_skill.source, None)
   assert_eq(dir_skill.id, "local")
   assert_eq(dir_skill.name, "local")
-  assert_eq(dir_skill.source, "")
+  assert_eq(dir_skill.source, None)
   // A missing library is an empty one.
   assert_eq(installed_skills(library_dir="\{lib}/does-not-exist").length(), 0)
 }
@@ -982,4 +1001,93 @@ async test "an update commits to the current location after an in-flight enablem
       assert_eq(installed_skills(library_dir=lib).length(), 1)
     }
   }
+}
+
+///|
+test "slugify turns an owner/name identity into a safe single segment" {
+  assert_eq(slugify("Yoorkin/cowsay"), "yoorkin-cowsay")
+  assert_eq(slugify("acme/widget"), "acme-widget")
+  assert_eq(slugify("moonbit-community/moongrep"), "moonbit-community-moongrep")
+  assert_eq(slugify("alice/alpha/cmd/run"), "alice-alpha-cmd-run")
+  // Leading/trailing and repeated separators collapse; no stray dashes.
+  assert_eq(slugify("/A..B/"), "a-b")
+  // Every slugify output passes the path-safety guard.
+  assert_true(valid_slug(slugify("Yoorkin/cowsay")))
+}
+
+///|
+test "slug validation rejects anything that could escape the library" {
+  assert_true(valid_slug("alice-alpha"))
+  assert_true(valid_slug("a"))
+  assert_false(valid_slug(""))
+  assert_false(valid_slug(".."))
+  assert_false(valid_slug("a/b"))
+  assert_false(valid_slug("a\\b"))
+  assert_false(valid_slug("Alice"))
+  assert_false(valid_slug("a b"))
+  let mut long = ""
+  for _ in 0..<65 {
+    long = "\{long}a"
+  }
+  assert_false(valid_slug(long))
+}
+
+///|
+test "sidecar decoding renders the install source" {
+  assert_eq(
+    decode_sidecar(
+      "{\"module\":\"alice/alpha\",\"version\":\"0.2.0\",\"package\":\"cmd/run\",\"digest\":\"sha256:abc\"}",
+    ).map_or("", source => source.label),
+    "alice/alpha@0.2.0/cmd/run",
+  )
+  assert_eq(
+    decode_sidecar("{\"module\":\"alice/alpha\",\"version\":\"0.2.0\"}").map_or(
+      "",
+      source => source.label,
+    ),
+    "alice/alpha@0.2.0",
+  )
+  assert_true(decode_sidecar("not json") is None)
+  assert_true(decode_sidecar("{\"version\":\"0.2.0\"}") is None)
+}
+
+///|
+async test "set_skill_enabled only moves discoverable skill entries" {
+  let lib = @fs.tmpdir(prefix="skillmarket-toggle-filter-")
+  defer @fs.remove(lib, recursive=true)
+  // Flat skill lint.md plus a companion directory lint/ without SKILL.md.
+  @fs.write_text(
+    "\{lib}/lint.md",
+    "---\nname: lint\ndescription: Run lint\n---\nbody",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.mkdir("\{lib}/lint", recursive=true)
+  @fs.write_text(
+    "\{lib}/lint/helper.sh",
+    "#!/bin/sh\n",
+    create_mode=CreateOrTruncate,
+  )
+  // Unrelated directory with no SKILL.md.
+  @fs.mkdir("\{lib}/scripts", recursive=true)
+  @fs.write_text(
+    "\{lib}/scripts/run.sh",
+    "#!/bin/sh\n",
+    create_mode=CreateOrTruncate,
+  )
+  // Disabling `lint` must move `lint.md`, not the companion `lint/` directory.
+  set_skill_enabled("lint", enabled=false, library_dir=lib)
+  assert_true(@fs.exists("\{lib}/lint/helper.sh"))
+  assert_false(@fs.exists("\{lib}/lint.md"))
+  assert_true(@fs.exists("\{lib}/.disabled/lint.md"))
+  // Unrelated directories and reserved control directories are rejected.
+  for bad in ["scripts", ".staging", ".lock"] {
+    let failed = try {
+      set_skill_enabled(bad, enabled=false, library_dir=lib)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(failed)
+  }
+  assert_true(@fs.exists("\{lib}/scripts/run.sh"))
 }

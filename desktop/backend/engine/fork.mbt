@@ -161,8 +161,8 @@ async fn fork_session_in(
       if notice is Some(text) {
         args.push("--notice=\{text}")
       }
-      if @skills.global_library_dir() is Some(skills) {
-        args.append(["--global-skills-dir", skills.to_string()])
+      if @skill_library.global_library_dir() is Some(skills) {
+        args.append(["--global-skills-dir", skills])
       }
       args.append(
         engine_mcp_args(
