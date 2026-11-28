@@ -179,6 +179,13 @@ priv struct State {
   // steered into ended first). Each starts a turn once the conversation is
   // idle, ahead of queued input.
   held_outputs : Array[HeldOutput]
+  // Whether this session already has a persisted system prompt (resumed at
+  // startup, or created when the engine first started). Skill changes apply to
+  // newly created sessions, so notices only add that caveat once created.
+  mut session_created : Bool
+  // Most recent built-in skill sync failures reported by `BuiltinSync`,
+  // surfaced in `/skills` without spamming offline startup transcripts.
+  mut builtin_skill_errors : Array[@skill_library.BuiltinSkillError]
 }
 
 ///|
@@ -199,6 +206,8 @@ fn State::State(config : AppConfig) -> State {
     next_command_id: 0,
     steered_outputs: [],
     held_outputs: [],
+    session_created: false,
+    builtin_skill_errors: [],
   }
 }
 
@@ -294,6 +303,12 @@ priv enum Msg {
   ViewerOpened(Result[String, String])
   // What `/inspect` then did about opening that link in a browser.
   BrowserOpened(@open_in_browser.Outcome)
+  // The startup built-in skills sync finished against the global library.
+  SkillsSynced(Array[@skill_library.BuiltinSkillError])
+  // `/skills` finished collecting the global and workspace libraries.
+  SkillsListed(Result[String, String])
+  // `/skills enable|disable <id>` finished moving the entry.
+  SkillToggled(id~ : String, enabled~ : Bool, Result[Unit, String])
   Tick
 }
 
@@ -317,6 +332,9 @@ fn Msg::run_id(self : Msg) -> Int32? {
     | EngineExited
     | ViewerOpened(_)
     | BrowserOpened(_)
+    | SkillsSynced(_)
+    | SkillsListed(_)
+    | SkillToggled(_, ..)
     | Tick => None
   }
 }
@@ -350,6 +368,10 @@ priv enum Cmd {
   // `/inspect`: start or reuse the session viewer in the background and report
   // the link as a `ViewerOpened` message.
   OpenViewer
+  // `/skills`: inspect global and workspace skills asynchronously.
+  ListSkills
+  // `/skills enable|disable <id>`: toggle a global skill's enabled state.
+  SetSkillEnabled(id~ : String, enabled~ : Bool)
   CancelAgent
   // Second Ctrl-C while already interrupting: the cancel command was not
   // enough, so kill the engine process outright.

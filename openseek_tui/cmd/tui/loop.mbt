@@ -525,6 +525,7 @@ fn handle_slash_command(
       } else {
         cmds.push(AppendItem(Error("/inspect does not accept arguments")))
       }
+    "skills" => handle_skills_command(arguments, cmds)
     other => cmds.push(AppendItem(Error("Unknown slash command: /\{other}")))
   }
 }
@@ -833,6 +834,32 @@ fn update(state : State, message : Msg) -> Array[Cmd] {
       )
     BrowserOpened(outcome) =>
       cmds.push(AppendItem(Input(Notice(browser_notice(outcome)))))
+    SkillsSynced(errors) => state.builtin_skill_errors = errors
+    SkillsListed(Ok(summary)) =>
+      cmds.push(
+        AppendItem(
+          Notice(
+            ToolCall(@doc.Text::plain("Skills"), details=[
+              @doc.Text::plain(summary),
+            ]),
+          ),
+        ),
+      )
+    SkillsListed(Err(error)) =>
+      cmds.push(AppendItem(Error("could not list skills: \{error}")))
+    SkillToggled(id~, enabled~, Ok(_)) => {
+      let verb = if enabled { "enabled" } else { "disabled" }
+      let suffix = if state.session_created {
+        " (applies to new sessions)"
+      } else {
+        ""
+      }
+      cmds.push(AppendItem(command_notice("Skill \{id} \{verb}\{suffix}.")))
+    }
+    SkillToggled(id~, enabled~, Err(error)) => {
+      let verb = if enabled { "enable" } else { "disable" }
+      cmds.push(AppendItem(Error("could not \{verb} skill \{id}: \{error}")))
+    }
     // Tick is a 1s heartbeat: it keeps the message loop turning so the trailing
     // refresh_ui re-runs (the elapsed-time activity line keeps advancing during
     // quiet stretches) and steps the `/loop` countdown. Bookkeeping only — a
@@ -877,12 +904,14 @@ async fn run_message_loop(
   ui : @ui.Ui,
   group : @async.TaskGroup,
   messages : @async.Queue[Msg],
+  builtins : @skill_library.BuiltinSkills,
+  library_dir : String?,
 ) -> Unit {
   // The persistent serve-mode engine connection: one process serves every
   // prompt of this TUI session. Prompts, steers, and cancels are commands on
   // its stdin; a `!` shell command is a local task, kept in `command_tasks`
   // under its id so an interrupt can cancel it directly.
-  let engine = EngineClient(state.config, messages)
+  let engine = EngineClient(state.config, messages, builtins~, library_dir?)
   let command_tasks : Map[Int32, @async.Task[Unit]] = Map([])
   outer~: for ;; {
     // Apply every message already enqueued before deciding anything further:
@@ -908,7 +937,12 @@ async fn run_message_loop(
     for cmd in cmds {
       match cmd {
         AppendItem(item) => ui.append_item(item)
-        StartAgent(run_id~, task) => engine.prompt(group, run_id, task)
+        StartAgent(run_id~, task) => {
+          engine.prompt(group, run_id, task)
+          if engine.is_live() {
+            state.session_created = true
+          }
+        }
         RunCommand(id~, command) =>
           command_tasks[id] = group.spawn(no_wait=true) <| () => {
             run_shell_command(command, messages, id~, cwd=state.config.cwd)
@@ -922,7 +956,12 @@ async fn run_message_loop(
         SteerAgent(text) => engine.steer(text)
         SteerOutput(submission_id~, envelope) =>
           engine.steer(envelope, submission_id~)
-        UpdateGoal(goal) => engine.goal(group, goal)
+        UpdateGoal(goal) => {
+          engine.goal(group, goal)
+          if engine.is_live() {
+            state.session_created = true
+          }
+        }
         OpenViewer => {
           let session_root = state.config.session_root
           let session = state.config.session_id.value()
@@ -940,7 +979,43 @@ async fn run_message_loop(
             }
           }
         }
-        CompactSession(run_id~) => engine.compact(group, run_id)
+        ListSkills => {
+          let cwd = state.config.cwd
+          let syncing = builtins.is_syncing()
+          let builtin_errors = state.builtin_skill_errors.copy()
+          group.spawn_bg(no_wait=true) <| () => {
+            let result = try
+              format_skills_summary(
+                cwd~,
+                library_dir~,
+                syncing~,
+                builtin_errors~,
+              )
+            catch {
+              error => Err("\{error}")
+            } noraise {
+              summary => Ok(summary)
+            }
+            messages.put(SkillsListed(result))
+          }
+        }
+        SetSkillEnabled(id~, enabled~) =>
+          group.spawn_bg(no_wait=true) <| () => {
+            let result = try
+              @skill_library.set_skill_enabled(id, enabled~, library_dir?)
+            catch {
+              error => Err("\{error}")
+            } noraise {
+              _ => Ok(())
+            }
+            messages.put(SkillToggled(id~, enabled~, result))
+          }
+        CompactSession(run_id~) => {
+          engine.compact(group, run_id)
+          if engine.is_live() {
+            state.session_created = true
+          }
+        }
         CancelAgent => engine.cancel_turn()
         KillEngine => engine.kill()
         Quit => {

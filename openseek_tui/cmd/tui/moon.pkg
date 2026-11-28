@@ -3,6 +3,8 @@ import {
   "moonbitlang/jsonl",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/agent_skill",
+  "moonbitlang/openseek/skill_library",
   "moonbitlang/openseek_tui/cmd/tui/internal/command_context",
   "moonbitlang/openseek_tui/cmd/tui/internal/event",
   "moonbitlang/openseek_tui/cmd/tui/internal/process_tree",

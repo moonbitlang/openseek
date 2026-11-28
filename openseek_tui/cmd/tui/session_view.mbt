@@ -109,6 +109,7 @@ async fn append_session_history(state : State, ui : @ui.Ui) -> Unit {
     }
   }
   guard exists else { return }
+  state.session_created = true
   let session = store.load(session_id) catch {
     error => {
       ui.append_item(Error("failed to load session: \{error}"))
