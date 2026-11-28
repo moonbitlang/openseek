@@ -171,9 +171,7 @@ fn request(
   let command = @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let result = Ok(
-        @interop.bridge_request(owner.channel, @commands.github_review, {
-          cwd: owner.cwd,
-        }),
+        owner.host.request(@commands.github_review, { cwd: owner.cwd, }),
       ) catch {
         error => Err(@interop.bridge_error_text(error))
       }
@@ -212,7 +210,7 @@ fn request_file(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
       emit(FileLoaded(epoch, path, result.map_err(@interop.bridge_error_text)))
     },
     () => {
-      @interop.bridge_request(owner.channel, @commands.github_review_file, {
+      owner.host.request(@commands.github_review_file, {
         cwd: owner.cwd,
         path,
         base: review.base,
@@ -262,7 +260,7 @@ fn mutation(
   let command = @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let result = Ok(
-        @interop.bridge_request(owner.channel, @commands.github_review_mutate, {
+        owner.host.request(@commands.github_review_mutate, {
           cwd: owner.cwd,
           url: review.url,
           action,

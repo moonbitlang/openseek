@@ -1,4 +1,5 @@
 import { test, expect } from './support/test.js';
+import { CloudHarness, sessionA } from './support/cloud_harness.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 const repo = 'https://github.com/moonbitlang/openseek';
@@ -114,4 +115,17 @@ test('sidebar conversation rows render PR status badges with state colors and co
   // Batch endpoint was used rather than one request per PR.
   expect(app.requests.filter(r => r.method === 'github.pull_request_summaries').length).toBeGreaterThanOrEqual(1);
   expect(app.requests.filter(r => r.method === 'github.pull_request_summary')).toHaveLength(0);
+});
+
+test('Cloud sidebar reads an attached PR through the session that owns its gh login', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  const pr = summary(42, 'merged');
+  cloud.device.sessionArtifacts[sessionA] = [{ type: 'pull_request', url: pr.url }];
+  cloud.device.githubPullRequestSummaries[pr.url] = pr;
+  await cloud.install();
+  await cloud.goto();
+  const row = sidebarRow(page, 'Cloud fixture A');
+  await expect(row.locator('.row-pr-icon')).toHaveClass(/\bmerged\b/);
+  expect(cloud.requests.some(request => request.path === '/v1/sessions/' + sessionA +
+    '/github/github.pull_request_summaries' && request.headers.authorization === 'Bearer ts_fixture-123')).toBe(true);
 });

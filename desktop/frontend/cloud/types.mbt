@@ -1,6 +1,7 @@
 ///|
 #derive(Eq)
 pub(all) struct Session {
+  pull_requests : Array[String]
   id : String
   title : String?
   updated_at : Double?
@@ -466,6 +467,14 @@ fn decode_sessions(json : Json) -> Array[Session] raise RequestError {
     raise @cloud_client.RequestError(Malformed)
   }
   items.map(item => {
+    pull_requests: match item {
+      Object(fields) if !fields.contains("pull_requests") => []
+      Object(fields) =>
+        @json.from_json(fields["pull_requests"]) catch {
+          _ => raise @cloud_client.RequestError(Malformed)
+        }
+      _ => raise @cloud_client.RequestError(Malformed)
+    },
     id: required_string(item, "id"),
     title: match item {
       { "title": String(title), .. } => Some(title)

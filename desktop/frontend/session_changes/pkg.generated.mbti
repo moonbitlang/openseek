@@ -5,17 +5,18 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/github",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
 }
 
 // Values
-pub fn rows(locale? : @i18n.Locale, @interop.ConversationKey, Checkout?, State, @cmd.Emit[Msg]) -> Array[@html.Html]
+pub fn rows(locale? : @i18n.Locale, @interop.ConversationIdentity, Checkout?, State, @cmd.Emit[Msg]) -> Array[@html.Html]
 
-pub fn summary(locale? : @i18n.Locale, @interop.ConversationKey, Checkout?, State) -> String?
+pub fn summary(locale? : @i18n.Locale, @interop.ConversationIdentity, Checkout?, State) -> String?
 
-pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
+pub fn update(@cmd.Emit[Msg], Msg, State, account? : @protocol.AccountSession) -> (@cmd.Cmd, State)
 
 // Errors
 
@@ -50,16 +51,16 @@ pub fn Lookup::equal(Self, Self) -> Bool
 pub fn Lookup::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
-  Opened(@interop.ConversationKey)
-  Changed(@interop.ConversationKey)
+  Opened(@interop.ConversationIdentity)
+  Changed(@interop.ConversationIdentity)
   Listed(serial~ : Int32, Result[@protocol.SessionArtifacts, String])
-  MergedToggled(@interop.ConversationKey)
-  Remove(@interop.ConversationKey, @protocol.SessionArtifact)
-  RemoveAll(@interop.ConversationKey, Array[@protocol.SessionArtifact])
-  Removed(@interop.ConversationKey, @protocol.SessionArtifact, Result[@protocol.SessionArtifacts, String])
-  Summarized(url~ : String, generation~ : Int32, Result[@protocol.GitPullRequest?, String])
-  BatchLookup(channel~ : @interop.ChannelId, urls~ : Array[String], force~ : Bool)
-  BatchSummarized(Result[@protocol.GithubPullRequestSummariesReply, String])
+  MergedToggled(@interop.ConversationIdentity)
+  Remove(@interop.ConversationIdentity, @protocol.SessionArtifact)
+  RemoveAll(@interop.ConversationIdentity, Array[@protocol.SessionArtifact])
+  Removed(@interop.ConversationIdentity, @protocol.SessionArtifact, Result[@protocol.SessionArtifacts, String])
+  Summarized(key~ : String, generation~ : Int32, Result[@protocol.GitPullRequest?, String])
+  BatchLookup(host~ : @github.GithubHost, urls~ : Array[String], force~ : Bool)
+  BatchSummarized(@interop.ConversationIdentity?, Result[@protocol.GithubPullRequestSummariesReply, String])
   RecordSummary(PullRequest)
 }
 
@@ -99,7 +100,7 @@ pub fn PullRequestState::to_repr(Self) -> @debug.Repr
 
 #derive(Eq)
 pub struct State {
-  conversation : @interop.ConversationKey?
+  conversation : @interop.ConversationIdentity?
   phase : Phase
   serial : Int32
   removing : Array[@protocol.SessionArtifact]
@@ -111,8 +112,8 @@ pub struct State {
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::initial() -> Self
 pub fn State::not_equal(Self, Self) -> Bool
-pub fn State::phase_for(Self, @interop.ConversationKey) -> Phase
-pub fn State::summary(Self, String) -> PullRequest?
+pub fn State::phase_for(Self, @interop.ConversationIdentity) -> Phase
+pub fn State::summary(Self, String, owner? : @interop.ConversationIdentity) -> PullRequest?
 
 // Type aliases
 

@@ -58,7 +58,7 @@ pub(all) struct LauncherActions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
-  github : @cmd.Cmd
+  github : @cmd.Cmd?
   workflows : @cmd.Cmd
   jobs : @cmd.Cmd?
 }
@@ -106,10 +106,10 @@ fn LauncherActions::rows(
       self.review,
     ),
   )
+  if self.github is Some(action) {
+    entries.push(("GitHub", ui(locale, GithubHint), @icons.icon_github, action))
+  }
   if self.host_tools {
-    entries.push(
-      ("GitHub", ui(locale, GithubHint), @icons.icon_github, self.github),
-    )
     entries.push(
       (
         ui(locale, WorkflowsLabel),

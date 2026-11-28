@@ -9,6 +9,7 @@ fn deletion_state() -> State {
         id: "a",
         title: Some("A"),
         updated_at: None,
+        pull_requests: [],
         generating: false,
         archived: false,
         approval: "ask",

@@ -279,6 +279,17 @@ export class CloudHarness {
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     this.requests.push({ side: 'cloud', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
+    const github = path.match(/^\/v1\/sessions\/([^/]+)\/github\/([^/]+)$/);
+    if (github && request.method() === 'POST') {
+      return json(await this.device.dispatchRpc({ method: github[2], params: request.postDataJSON() }));
+    }
+    const artifacts = path.match(/^\/v1\/sessions\/([^/]+)\/artifacts$/);
+    if (artifacts) {
+      const remove = request.method() === 'DELETE';
+      return json(this.device.replyFor({ method: remove ? 'session.artifacts_remove' : 'session.artifacts_list',
+        params: { session: artifacts[1], artifact: remove ? request.postDataJSON() : undefined } }));
+    }
+    if (path === '/v1/me/connectors/list') return json({ connectors: [], authorization: null, error: null });
     const moonide = path.match(/^\/v1\/sessions\/[^/]+\/moonide\/(hover|definition|references|diagnostics|codelens)$/);
     if (moonide && request.method() === 'POST') {
       const empty = {
@@ -407,7 +418,7 @@ export class CloudHarness {
       if (this.pauseList) await this.pauseList;
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
-      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask', model: 'deepseek-flash', thinking: 'high', ...this.sessionSettings.get(id) })) }, status);
+      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, pull_requests: (this.device.sessionArtifacts[id] ?? []).filter(a => a.type === 'pull_request').map(a => a.url), updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id), approval: this.approvals.get(id) ?? 'ask', model: 'deepseek-flash', thinking: 'high', ...this.sessionSettings.get(id) })) }, status);
     }
     if (request.method() === 'PATCH' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       const body = request.postDataJSON();

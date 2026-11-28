@@ -11,6 +11,7 @@ pub fn view(
   emit : @cmd.Emit[Msg],
   state : State,
   locale : @i18n.Locale,
+  cloud~ : Bool = false,
 ) -> @html.Html {
   let busy = !(state.operation is Idle)
   let rows : Array[@html.Html] = []
@@ -50,7 +51,9 @@ pub fn view(
             } else {
               "form-row-status"
             },
-            if row.connected {
+            if row.connected && cloud {
+              text(locale, "Connected to Cloud", "已连接到 Cloud")
+            } else if row.connected {
               text(
                 locale, "Authorized on this computer", "已在这台电脑上授权",
               )
@@ -155,12 +158,21 @@ pub fn view(
       _ => ()
     }
   }
-  @ui.form_section(@icons.icon_link_external, "MCP", rows, actions=[
-    @html.button(
-      class="button",
-      disabled=busy,
-      on_click=emit(Refresh),
-      text(locale, "Refresh", "刷新"),
-    ),
-  ])
+  @ui.form_section(
+    @icons.icon_link_external,
+    if cloud {
+      "Cloud MCP"
+    } else {
+      "MCP"
+    },
+    rows,
+    actions=[
+      @html.button(
+        class="button",
+        disabled=busy,
+        on_click=emit(Refresh),
+        text(locale, "Refresh", "刷新"),
+      ),
+    ],
+  )
 }

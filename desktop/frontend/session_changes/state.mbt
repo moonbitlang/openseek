@@ -19,22 +19,22 @@
 ///|
 pub(all) enum Msg {
   /// The overview came on screen for this conversation.
-  Opened(@interop.ConversationKey)
+  Opened(@interop.ConversationIdentity)
   /// The host saved a new list for this conversation, or may have while it
   /// was unreachable: whatever the overview holds for it is out of date.
-  Changed(@interop.ConversationKey)
+  Changed(@interop.ConversationIdentity)
   /// The host answered list question number `serial`.
   Listed(serial~ : Int32, Result[@protocol.SessionArtifacts, String])
   /// The user folded or unfolded the conversation's merged pull requests.
-  MergedToggled(@interop.ConversationKey)
+  MergedToggled(@interop.ConversationIdentity)
   /// The user asked to take `artifact` off the conversation's list.
-  Remove(@interop.ConversationKey, @protocol.SessionArtifact)
+  Remove(@interop.ConversationIdentity, @protocol.SessionArtifact)
   /// The user asked to take every one of `artifacts` off the conversation's
   /// list at once: each is removed as if asked for on its own.
-  RemoveAll(@interop.ConversationKey, Array[@protocol.SessionArtifact])
+  RemoveAll(@interop.ConversationIdentity, Array[@protocol.SessionArtifact])
   /// The host answered the removal of `artifact` with the list that remains.
   Removed(
-    @interop.ConversationKey,
+    @interop.ConversationIdentity,
     @protocol.SessionArtifact,
     Result[@protocol.SessionArtifacts, String],
   )
@@ -42,21 +42,20 @@ pub(all) enum Msg {
   /// generation `generation`. `Ok(None)` means the address is not a pull
   /// request GitHub knows how to describe.
   Summarized(
-    url~ : String,
+    key~ : String,
     generation~ : Int32,
     Result[@protocol.GitPullRequest?, String],
   )
   /// Resolve pull request summaries in bulk (for sidebar badges) on `channel`.
   /// When `force` is false, pull requests already known to be `Merged` are
   /// skipped since merged pull requests do not change state.
-  BatchLookup(
-    channel~ : @interop.ChannelId,
-    urls~ : Array[String],
-    force~ : Bool,
-  )
+  BatchLookup(host~ : @github.GithubHost, urls~ : Array[String], force~ : Bool)
   /// GitHub answered a batch summary request. Failed lookups leave cached
   /// summaries standing.
-  BatchSummarized(Result[@protocol.GithubPullRequestSummariesReply, String])
+  BatchSummarized(
+    @interop.ConversationIdentity?,
+    Result[@protocol.GithubPullRequestSummariesReply, String],
+  )
   /// Seed the shared summary cache from another lookup (e.g. checkout PR probe).
   RecordSummary(PullRequest)
 }
@@ -88,7 +87,7 @@ pub extend Phase with Eq::{equal, not_equal}
 pub struct State {
   /// The conversation the phase describes; `None` before the overview first
   /// shows.
-  conversation : @interop.ConversationKey?
+  conversation : @interop.ConversationIdentity?
   phase : Phase
   /// Counts list questions, so the answer to a superseded one is recognized
   /// and dropped instead of overwriting its successor's.
@@ -129,8 +128,20 @@ pub extend Lookup with Eq::{equal, not_equal}
 
 ///|
 /// What GitHub last said about the pull request at `url`.
-pub fn State::summary(self : State, url : String) -> PullRequest? {
-  self.lookups.get(url).bind(lookup => lookup.summary)
+fn lookup_key(url : String, owner : @interop.ConversationIdentity?) -> String {
+  match owner {
+    Some(Cloud(..) as conversation) => conversation.key() + "\n" + url
+    _ => url
+  }
+}
+
+///|
+pub fn State::summary(
+  self : State,
+  url : String,
+  owner? : @interop.ConversationIdentity,
+) -> PullRequest? {
+  self.lookups.get(lookup_key(url, owner)).bind(lookup => lookup.summary)
 }
 
 ///|
@@ -152,7 +163,7 @@ pub fn State::initial() -> State {
 /// conversation it was asked about: for any other, nothing has been asked.
 pub fn State::phase_for(
   self : State,
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
 ) -> Phase {
   if self.conversation == Some(conversation) {
     self.phase
@@ -166,6 +177,7 @@ pub fn update(
   emit : @cmd.Emit[Msg],
   msg : Msg,
   state : State,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, State) {
   match msg {
     // One question at a time per conversation; another conversation's
@@ -180,9 +192,16 @@ pub fn update(
             conversation,
             state.next_generation(),
             waiting=Reloading(artifacts),
+            account?,
           )
         Unchecked | CheckFailed(_) =>
-          ask(emit, conversation, state.next_generation(), waiting=Checking)
+          ask(
+            emit,
+            conversation,
+            state.next_generation(),
+            waiting=Checking,
+            account?,
+          )
       }
     // A change to a list the overview is not showing changes nothing here:
     // that conversation is asked about when the overview shows it. For the
@@ -196,7 +215,7 @@ pub fn update(
         Loaded(artifacts) | Reloading(artifacts) => Reloading(artifacts)
         Unchecked | Checking | CheckFailed(_) => Checking
       }
-      ask(emit, conversation, state.next_generation(), waiting~)
+      ask(emit, conversation, state.next_generation(), waiting~, account?)
     }
     Listed(serial~, result) => {
       guard serial == state.serial &&
@@ -206,10 +225,13 @@ pub fn update(
       }
       match result {
         Ok(list) =>
-          look_up(emit, conversation.channel, list.artifacts, {
-            ..state,
-            phase: Loaded(list.artifacts),
-          })
+          look_up(
+            emit,
+            conversation,
+            list.artifacts,
+            { ..state, phase: Loaded(list.artifacts), },
+            account?,
+          )
         Err(message) => (@cmd.none, { ..state, phase: CheckFailed(message), })
       }
     }
@@ -220,9 +242,9 @@ pub fn update(
       (@cmd.none, { ..state, merged_open: !state.merged_open, })
     }
     Remove(conversation, artifact) =>
-      remove(emit, conversation, [artifact], state)
+      remove(emit, conversation, [artifact], state, account?)
     RemoveAll(conversation, artifacts) =>
-      remove(emit, conversation, artifacts, state)
+      remove(emit, conversation, artifacts, state, account?)
     // The reply is the list as the removal left it, which another client may
     // already have changed again, and an answer still out may predate the
     // removal. Neither is the last word: the list is asked for again, showing
@@ -239,6 +261,7 @@ pub fn update(
             conversation,
             { ..state, removing, remove_error: None, },
             waiting=Reloading(list.artifacts),
+            account?,
           )
         Err(message) =>
           (@cmd.none, { ..state, removing, remove_error: Some(message), })
@@ -246,15 +269,15 @@ pub fn update(
     }
     // An answer a later lookup of the same address superseded is dropped. A
     // failed lookup keeps what an earlier one found.
-    Summarized(url~, generation~, result) => {
-      guard state.lookups.get(url) is Some(lookup) &&
+    Summarized(key~, generation~, result) => {
+      guard state.lookups.get(key) is Some(lookup) &&
         lookup.generation == generation else {
         return (@cmd.none, state)
       }
       match result {
         Ok(found) => {
           let lookups = state.lookups.copy()
-          lookups[url] = {
+          lookups[key] = {
             ..lookup,
             summary: found.bind(PullRequest::from_reply),
           }
@@ -263,11 +286,16 @@ pub fn update(
         Err(_) => (@cmd.none, state)
       }
     }
-    BatchLookup(channel~, urls~, force~) => {
+    BatchLookup(host~, urls~, force~) => {
+      let owner = match host {
+        Desktop(_) => None
+        Cloud(account~, session~, ..) =>
+          Some(@interop.Cloud(account~, session~))
+      }
       let to_fetch : Array[String] = []
       for url in urls {
         guard !url.is_blank() && !to_fetch.contains(url) else { continue }
-        if !force && state.summary(url) is Some({ state: Merged, .. }) {
+        if !force && state.summary(url, owner?) is Some({ state: Merged, .. }) {
           continue
         }
         to_fetch.push(url)
@@ -275,32 +303,33 @@ pub fn update(
       guard !to_fetch.is_empty() else { return (@cmd.none, state) }
       let cmd = @cmd.attempt(
         result => {
-          emit(BatchSummarized(result.map_err(@interop.bridge_error_text)))
+          emit(
+            BatchSummarized(owner, result.map_err(@interop.bridge_error_text)),
+          )
         },
         () => {
-          @interop.bridge_request(
-            channel,
-            @commands.github_pull_request_summaries,
-            { urls: to_fetch, },
-          )
+          host.request(@commands.github_pull_request_summaries, {
+            urls: to_fetch,
+          })
         },
       )
       (cmd, state)
     }
-    BatchSummarized(result) =>
+    BatchSummarized(owner, result) =>
       match result {
         Ok(reply) => {
           let lookups = state.lookups.copy()
           let mut changed = false
           for url, pr in reply.pull_requests {
+            let key = lookup_key(url, owner)
             guard PullRequest::from_reply(pr) is Some(summary) else { continue }
             let generation = lookups
-              .get(url)
+              .get(key)
               .map(lookup => lookup.generation)
               .unwrap_or(0)
             let next : Lookup = { generation, summary: Some(summary), }
-            if lookups.get(url) != Some(next) {
-              lookups[url] = next
+            if lookups.get(key) != Some(next) {
+              lookups[key] = next
               changed = true
             }
           }
@@ -334,9 +363,10 @@ pub fn update(
 /// removals in flight together never undo one another.
 fn remove(
   emit : @cmd.Emit[Msg],
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
   artifacts : Array[@protocol.SessionArtifact],
   state : State,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, State) {
   guard state.conversation == Some(conversation) else {
     return (@cmd.none, state)
@@ -358,11 +388,24 @@ fn remove(
           )
         },
         () => {
-          @interop.bridge_request(
-            conversation.channel,
-            @commands.session_artifacts_remove,
-            { session: conversation.session, artifact, },
-          )
+          match conversation {
+            Host(key) =>
+              @interop.bridge_request(
+                key.channel,
+                @commands.session_artifacts_remove,
+                { session: key.session, artifact, },
+              )
+            Cloud(..) =>
+              @json.from_json(
+                cloud_request(
+                  conversation,
+                  account,
+                  "artifacts",
+                  Delete,
+                  body=artifact.to_json(),
+                ),
+              )
+          }
         },
       ),
     )
@@ -381,9 +424,10 @@ fn State::next_generation(self : State) -> State {
 /// not looked up yet, through the host on `channel`.
 fn look_up(
   emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
+  conversation : @interop.ConversationIdentity,
   artifacts : Array[@protocol.SessionArtifact],
   state : State,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, State) {
   let generation = state.generation
   let lookups = state.lookups.copy()
@@ -391,19 +435,20 @@ fn look_up(
   for artifact in artifacts {
     guard artifact.type_ is PullRequest else { continue }
     let url = artifact.url
+    let key = lookup_key(url, Some(conversation))
     // A new lookup keeps what the last one found until it answers.
-    let summary = match lookups.get(url) {
+    let summary = match lookups.get(key) {
       Some(lookup) if lookup.generation == generation => continue
       Some(lookup) => lookup.summary
       None => None
     }
-    lookups[url] = { generation, summary, }
+    lookups[key] = { generation, summary, }
     commands.push(
       @cmd.attempt(
         result => {
           emit(
             Summarized(
-              url~,
+              key~,
               generation~,
               result
               .map((reply : @protocol.GithubPullRequestSummaryReply) => {
@@ -414,11 +459,24 @@ fn look_up(
           )
         },
         () => {
-          @interop.bridge_request(
-            channel,
-            @commands.github_pull_request_summary,
-            { url, },
-          )
+          match conversation {
+            Host(key) =>
+              @interop.bridge_request(
+                key.channel,
+                @commands.github_pull_request_summary,
+                { url, },
+              )
+            Cloud(..) =>
+              @json.from_json(
+                cloud_request(
+                  conversation,
+                  account,
+                  "github/github.pull_request_summary",
+                  Post,
+                  body={ "url": url },
+                ),
+              )
+          }
         },
       ),
     )
@@ -432,19 +490,27 @@ fn look_up(
 /// own and its merged pull requests folded.
 fn ask(
   emit : @cmd.Emit[Msg],
-  conversation : @interop.ConversationKey,
+  conversation : @interop.ConversationIdentity,
   state : State,
   waiting~ : Phase,
+  account? : @protocol.AccountSession,
 ) -> (@cmd.Cmd, State) {
   let serial = state.serial + 1
   let cmd = @cmd.attempt(
     result => emit(Listed(serial~, result.map_err(@interop.bridge_error_text))),
     () => {
-      @interop.bridge_request(
-        conversation.channel,
-        @commands.session_artifacts_list,
-        { session: conversation.session, },
-      )
+      match conversation {
+        Host(key) =>
+          @interop.bridge_request(
+            key.channel,
+            @commands.session_artifacts_list,
+            { session: key.session, },
+          )
+        Cloud(..) =>
+          @json.from_json(
+            cloud_request(conversation, account, "artifacts", Get),
+          )
+      }
     },
   )
   let state = if state.conversation == Some(conversation) {
@@ -468,4 +534,26 @@ fn PullRequest::from_reply(reply : @protocol.GitPullRequest) -> PullRequest? {
     _ => return None
   }
   Some({ number: reply.number, title: reply.title, state, url: reply.url, })
+}
+
+///|
+async fn cloud_request(
+  owner : @interop.ConversationIdentity,
+  account : @protocol.AccountSession?,
+  path : String,
+  method_ : @http.RequestMethod,
+  body? : Json,
+) -> Json {
+  guard owner is Cloud(account=id, session~) &&
+    account is Some(auth) &&
+    auth.user.user_id == id else {
+    fail("Cloud account changed")
+  }
+  @cloud_client.request(
+    @cloud_client.CloudOrigin,
+    "/v1/sessions/\{@uri.encode_component(session)}/" + path,
+    method_,
+    token=auth.token,
+    body?,
+  )
 }

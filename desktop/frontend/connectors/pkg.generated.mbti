@@ -9,9 +9,9 @@ import {
 }
 
 // Values
-pub fn update(@cmd.Emit[Msg], Msg, State, open_external~ : (String) -> @cmd.Cmd) -> (@cmd.Cmd, State)
+pub fn update(@cmd.Emit[Msg], Msg, State, cloud_token? : String, open_external~ : (String) -> @cmd.Cmd) -> (@cmd.Cmd, State)
 
-pub fn view(@cmd.Emit[Msg], State, @i18n.Locale) -> @html.Html
+pub fn view(@cmd.Emit[Msg], State, @i18n.Locale, cloud? : Bool) -> @html.Html
 
 // Errors
 

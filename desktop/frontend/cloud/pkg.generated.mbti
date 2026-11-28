@@ -154,6 +154,7 @@ pub impl @json.FromJson for ControlState
 pub enum ControlStreamEvent {
   Snapshot(ControlSnapshot)
   EngineEvent(Event)
+  ArtifactsChanged(session~ : String, seq~ : Int32)
   NativeEvent(EngineFrame)
   EngineFailed(session~ : String, seq~ : Int32, error~ : String)
 }
@@ -414,6 +415,7 @@ pub fn Record::not_equal(Self, Self) -> Bool
 
 #derive(Eq)
 pub(all) struct Session {
+  pull_requests : Array[String]
   id : String
   title : String?
   updated_at : Double?

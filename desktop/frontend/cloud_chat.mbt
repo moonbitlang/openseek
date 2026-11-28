@@ -246,6 +246,53 @@ fn update_cloud(
   let docks = model.docks.copy()
   let pending_previews = model.pending_previews.copy()
   let file_commands : Array[@cmd.Cmd] = []
+  let mut changes = model.changes
+  if model.overview_conversation() is Some(Cloud(account~, session~) as owner) &&
+    cloud.user_id == Some(account) &&
+    message is @cloud.WatchEvent(epoch, id, stream, incoming) &&
+    epoch == cloud.epoch &&
+    id == session &&
+    stream.active &&
+    cloud.conversations.get(id) is Some(conversation) &&
+    conversation.stream is Some(current_stream) &&
+    physical_equal(current_stream, stream) &&
+    (
+      incoming is ArtifactsChanged(..) ||
+      (
+        incoming is Snapshot(_) &&
+        before.conversations.get(id) is Some({ last_seq: None, .. })
+      )
+    ) {
+    let (cmd, refreshed) = @session_changes.update(
+      dispatch.map(msg => Changes(msg)),
+      Changed(owner),
+      changes,
+      account?=model.account,
+    )
+    changes = refreshed
+    file_commands.push(cmd)
+  }
+  if message is @cloud.Listed(epoch, request, _) &&
+    epoch == cloud.epoch &&
+    request == before.list_request &&
+    model.account is Some(auth) &&
+    cloud.user_id == Some(auth.user.user_id) {
+    for session in cloud.sessions {
+      guard !session.pull_requests.is_empty() else { continue }
+      let host = @github.Cloud(
+        account=auth.user.user_id,
+        session=session.id,
+        token=auth.token,
+      )
+      let (cmd, next_changes) = @session_changes.update(
+        dispatch.map(msg => Changes(msg)),
+        BatchLookup(host~, urls=session.pull_requests, force=false),
+        changes,
+      )
+      file_commands.push(cmd)
+      changes = next_changes
+    }
+  }
   if before.epoch != cloud.epoch && before.user_id is Some(account) {
     let (panel, clear) = @fileeditor.forget_cloud_files(file_panel, account)
     file_panel = panel
@@ -280,6 +327,7 @@ fn update_cloud(
   }
   let next = {
     ..model,
+    changes,
     docks,
     pending_previews,
     file_panel,
@@ -595,7 +643,13 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         }
         context
       },
-      status: [],
+      status: if !pending &&
+        self.cloud_git is Some(presentation) &&
+        self.cloud_identity() == Some(owner) {
+        [@composer.GitStatus({ presentation, open: self.git_details_open, })]
+      } else {
+        []
+      },
       placeholder: shell_text(self.locale, AskPlaceholder),
       disabled: pending || !self.cloud.can_compose(owner.session()),
       primary_action: if conversation.generating ||
@@ -679,7 +733,10 @@ fn Model::cloud_chat_rows(
         } else {
           []
         },
-        pull_request: None,
+        pull_request: self.pull_request_badge(
+          item.pull_requests,
+          owner=@interop.Cloud(account~, session=item.id),
+        ),
         run_mark: @conversation.RunMark::for_task(
           running=item.generating ||
             conversation.map_or(false, conversation => {

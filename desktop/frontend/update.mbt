@@ -2053,7 +2053,12 @@ fn update(
     (
       model.active_session != previous.active_session ||
       model.focused != previous.focused ||
-      !(model.active_conversation() is Some(conv) && conv.shows_git_chip())
+      previous.cloud_identity() != model.cloud_identity() ||
+      !(if model.cloud_identity() is Some(_) {
+        model.cloud_git is Some(_)
+      } else {
+        model.active_conversation() is Some(conv) && conv.shows_git_chip()
+      })
     ) {
     { ..model, git_details_open: false, }
   } else {
@@ -2100,37 +2105,51 @@ fn update(
   } else {
     model
   }
+  let model = if model.cloud.epoch != previous.cloud.epoch {
+    { ..model, cloud_connectors: @connectors.State::empty(), }
+  } else {
+    model
+  }
   let ctx = file_ctx(model)
   let owns_panel = model.file_panel.owner == Some(ctx.owner)
-  let checkout = ctx.owner
-    .host()
-    .bind(owner => {
+  let source : (@github.GithubHost, String)? = match ctx.owner {
+    Host(owner) =>
       ctx.placement
       .bind(placement => placement.checkout_root())
-      .map(root => {
-        let previous = model.github.scope.filter(checkout => {
-          checkout.channel == owner.channel && checkout.cwd == root.path
-        })
-        @github.CheckoutScope::{
-          channel: owner.channel,
-          cwd: root.path,
-          head: if owns_panel {
-            model.file_panel.git_actual_head
-          } else {
-            previous.bind(checkout => checkout.head)
-          },
-          branch: match (owns_panel, model.file_panel.git_graph) {
-            (true, GitGraphReady(snapshot~, ..)) => snapshot.branch
-            _ => previous.bind(checkout => checkout.branch)
-          },
-        }
+      .map(root => (@github.Desktop(owner.channel), root.path))
+    Cloud(account~, session~) =>
+      ctx.cloud_files.map(files => {
+        (@github.Cloud(account~, session~, token=files.token), "/")
       })
+  }
+  let checkout = source.map(source => {
+    let (host, cwd) = source
+    let previous = model.github.scope.filter(scope => {
+      scope.host == host && scope.cwd == cwd
     })
+    @github.CheckoutScope::{
+      host,
+      cwd,
+      head: if owns_panel {
+        model.file_panel.git_actual_head
+      } else {
+        previous.bind(scope => scope.head)
+      },
+      branch: match (owns_panel, model.file_panel.git_graph) {
+        (true, GitGraphReady(snapshot~, ..)) => snapshot.branch
+        _ => previous.bind(scope => scope.branch)
+      },
+    }
+  })
   let github_visible = model.file_panel_visible() &&
-    model.devices.any(dev => {
-      ctx.owner.host().map_or(false, owner => dev.channel == owner.channel) &&
-      dev.bridge is Connected &&
-      dev.reconnect_failures == 0
+    (match ctx.owner {
+      Cloud(..) => ctx.cloud_files is Some(_)
+      Host(owner) =>
+        model.devices.any(dev => {
+          dev.channel == owner.channel &&
+          dev.bridge is Connected &&
+          dev.reconnect_failures == 0
+        })
     })
   let (github_cmd, github) = @github.reconcile(
     dispatch.map(msg => Github(msg)),
@@ -2147,7 +2166,12 @@ fn update(
     review_busy=model.file_panel.github_review.busy &&
       model.file_panel.github_review.checkout == checkout,
   )
-  let model = { ..model, github, }
+  let (cloud_git_cmd, model) = refresh_cloud_git(
+    dispatch,
+    { ..model, github, },
+    previous,
+    checkout,
+  )
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
   let model = {
     ..model,
@@ -2172,6 +2196,7 @@ fn update(
         dispatch.map(msg => Changes(msg)),
         Opened(conversation),
         model.changes,
+        account?=model.account,
       )
       (changes_cmd, { ..model, changes, })
     }
@@ -2250,6 +2275,7 @@ fn update(
       terminal_cmd,
       jobs_cmd,
       overview_cmd,
+      cloud_git_cmd,
       github_cmd,
       browser_cmd,
       preview_cmd,
@@ -2777,6 +2803,8 @@ fn update_msg(
         let selected = model.cloud_identity() == Some(action.identity().owner) ||
           model.cloud_draft_identity() == Some(action.identity().owner)
         match action {
+          @composer.GitDetailsToggled(..) if selected =>
+            return update_msg(dispatch, ToggleGitDetails, model)
           @composer.ContextContinueRequested(identity~) => {
             guard selected &&
               model.cloud_display_status() is Some(Finished(ContextYield)) &&
@@ -4991,6 +5019,19 @@ fn update_msg(
           select_menu: None,
         },
       )
+    CloudConnectors(epoch, msg) => {
+      guard model.cloud.epoch == epoch && model.account is Some(account) else {
+        return (@cmd.none, model)
+      }
+      let (cmd, cloud_connectors) = @connectors.update(
+        dispatch.map(msg => CloudConnectors(epoch, msg)),
+        msg,
+        model.cloud_connectors,
+        cloud_token=account.token,
+        open_external=url => open_external_link(dispatch, url),
+      )
+      (cmd, { ..model, cloud_connectors, })
+    }
     SettingsSectionSelected(Connectors) => {
       let (cmd, connectors) = @connectors.update(
         dispatch.map(msg => Connectors(msg)),
@@ -4999,7 +5040,19 @@ fn update_msg(
         open_external=url => open_external_link(dispatch, url),
       )
       (
-        @cmd.batch([cmd, @dialog.close("api-setup-dialog")]),
+        @cmd.batch([
+          if model.is_desktop {
+            cmd
+          } else {
+            @cmd.none
+          },
+          if model.account is Some(_) {
+            dispatch(CloudConnectors(model.cloud.epoch, Refresh))
+          } else {
+            @cmd.none
+          },
+          @dialog.close("api-setup-dialog"),
+        ]),
         {
           ..model,
           connectors,
@@ -6718,10 +6771,18 @@ fn update_msg(
     }
     OpenPathResolved(context, reply) =>
       finish_open_path(dispatch, model, context, reply)
+    CloudGitLoaded(generation, value) =>
+      if generation == model.cloud_git_generation {
+        (@cmd.none, { ..model, cloud_git: value, })
+      } else {
+        (@cmd.none, model)
+      }
     ToggleGitDetails => {
       let opening = !model.git_details_open
       let model = { ..model, git_details_open: opening, }
-      guard opening else { return (@cmd.none, model) }
+      guard opening && model.cloud_identity() is None else {
+        return (@cmd.none, model)
+      }
       // Opening it is a request for current information, and everything it
       // shows goes stale on its own: CI finishes minutes after the run that
       // started it, and the working tree keeps moving. Nothing else looks
@@ -7349,10 +7410,11 @@ fn update_msg(
         dispatch.map(msg => Changes(msg)),
         msg,
         model.changes,
+        account?=model.account,
       )
       let mut next = { ..model, changes, }
       if msg is (Listed(_, ..) | Removed(_, _, _)) &&
-        changes.conversation is Some(conversation) &&
+        changes.conversation is Some(Host(conversation)) &&
         changes.phase is (Loaded(artifacts) | Reloading(artifacts)) &&
         next.device_state(conversation.channel) is Some(dev) {
         let urls = extract_pull_request_urls(artifacts)
@@ -8359,11 +8421,11 @@ fn update_device_msg(
         model
       }
       // Attachment changes are not replayed across a connection gap.
-      let model = if model.changes.conversation is Some(conversation) &&
+      let model = if model.changes.conversation is Some(Host(conversation)) &&
         conversation.channel == channel {
         let (cmd, changes) = @session_changes.update(
           dispatch.map(msg => Changes(msg)),
-          Changed(conversation),
+          Changed(Host(conversation)),
           model.changes,
         )
         commands.push(cmd)
@@ -10506,10 +10568,10 @@ fn update_device_msg(
     }
     ArtifactsChanged(session) => {
       let key : @interop.ConversationKey = { channel, session, }
-      let owned_by_overview = model.changes.conversation == Some(key)
+      let owned_by_overview = model.changes.conversation == Some(Host(key))
       let (cmd, changes) = @session_changes.update(
         dispatch.map(msg => Changes(msg)),
-        Changed(key),
+        Changed(Host(key)),
         model.changes,
       )
       // When the overview is already watching this conversation, its own

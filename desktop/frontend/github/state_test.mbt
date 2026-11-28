@@ -6,7 +6,7 @@ fn step(state : @github.State, msg : @github.Msg) -> @github.State {
 ///|
 fn owner() -> @github.CheckoutScope {
   {
-    channel: Local,
+    host: Desktop(Local),
     cwd: "/workspace",
     branch: Some("feature"),
     head: Some("head"),
@@ -108,7 +108,7 @@ test "switching workspace or host and hiding reject pending GitHub responses" {
   for
     next_owner in [
       { ..owner, cwd: "/other", },
-      { ..owner, channel: Remote("other-host"), },
+      { ..owner, host: Desktop(Remote("other-host")), },
     ] {
     let (_, next) = @github.reconcile(emit(), state, Some(next_owner), true)
     let ignored = step(next, Listed(state.epoch, AllOpen, Ok(reply(1))))
@@ -208,7 +208,7 @@ test "checkout completion cannot cross workspace or host changes even after retu
   for
     next_owner in [
       { ..owner, cwd: "/other", },
-      { ..owner, channel: Remote("other-host"), },
+      { ..owner, host: Desktop(Remote("other-host")), },
     ] {
     let (_, other) = @github.reconcile(emit(), pending, Some(next_owner), true)
     assert_true(other.checkout is None)

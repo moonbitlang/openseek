@@ -1471,6 +1471,7 @@ priv struct Model {
   // in-flight actions, the last failure — which only that page can see.
   schedules : SchedulePage
   connectors : @connectors.State
+  cloud_connectors : @connectors.State
   skills : @skills.State
   // The focused host's skills library. Root-owned rather than page-owned
   // because the composer's `$` completion reads the same list, which is why
@@ -1505,6 +1506,8 @@ priv struct Model {
   // counter living on it restarts at zero and hands the old checkout's
   // outstanding replies a number the new one accepts. Kept whole while the
   // frontend runs, it can only ever be spent.
+  cloud_git : @composer.GitPresentation?
+  cloud_git_generation : Int32
   git_request_generation : Int32
   // Whether the composer's git chip has its details popover open. Global UI
   // for the focused conversation like `quick_open`, not conversation state:
@@ -1918,6 +1921,7 @@ priv enum Msg {
   OpenSkills
   // Everything the Skills page does with itself once it is open.
   Connectors(@connectors.Msg)
+  CloudConnectors(Int32, @connectors.Msg)
   Skills(@skills.Msg)
   Send
   SendFollowup(@composer.FollowupChoice)
@@ -2112,6 +2116,7 @@ priv enum Msg {
   // The host chooses the viewer; the frontend retains the navigation context.
   OpenPathResolved(FileOpenContext, @protocol.OpenPathReply)
   // Open or close the composer git chip's details popover.
+  CloudGitLoaded(Int32, @composer.GitPresentation?)
   ToggleGitDetails
   // Show or hide the conversation overview, and the stored choice read back
   // at startup.
@@ -2880,6 +2885,7 @@ fn initial_model(
     codex: @codex.State(),
     schedules: SchedulePage::empty(),
     connectors: @connectors.State::empty(),
+    cloud_connectors: @connectors.State::empty(),
     skills: @skills.State::empty(),
     installed_skills: [],
     cloud_skills: [],
@@ -2888,6 +2894,8 @@ fn initial_model(
     project_menu_query: "",
     composer_entry_changes: [],
     quick_open: @quick_open.State::empty(),
+    cloud_git: None,
+    cloud_git_generation: 0,
     git_request_generation: 0,
     git_details_open: false,
     docks: Map([]),
@@ -3881,13 +3889,20 @@ fn Model::active_conversation(self : Model) -> Conversation? {
 ///|
 /// The conversation the overview describes: the OpenSeek conversation on
 /// screen, while the overview is shown.
-fn Model::overview_conversation(self : Model) -> @interop.ConversationKey? {
+fn Model::overview_conversation(self : Model) -> @interop.ConversationIdentity? {
+  if self.overview_open &&
+    self.screen is Chat &&
+    self.cloud_identity() is Some(owner) {
+    return Some(owner)
+  }
   guard self.overview_open &&
     self.screen is Chat &&
     self.chat_column() is Transcript(conversation~, ..) else {
     return None
   }
-  Some({ channel: conversation.device, session: conversation.session_id, })
+  Some(
+    Host({ channel: conversation.device, session: conversation.session_id, }),
+  )
 }
 
 ///|

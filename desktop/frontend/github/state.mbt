@@ -1,7 +1,17 @@
 ///|
 #derive(Eq)
+pub(all) enum GithubHost {
+  Desktop(@interop.ChannelId)
+  Cloud(account~ : String, session~ : String, token~ : String)
+}
+
+///|
+pub extend GithubHost with Eq::{equal, not_equal}
+
+///|
+#derive(Eq)
 pub(all) struct CheckoutScope {
-  channel : @interop.ChannelId
+  host : GithubHost
   cwd : String
   branch : String?
   head : String?
@@ -187,11 +197,7 @@ fn request(
       )
     },
     () => {
-      @interop.bridge_request(owner.channel, @commands.github_list, {
-        cwd: owner.cwd,
-        kind,
-        limit,
-      })
+      owner.host.request(@commands.github_list, { cwd: owner.cwd, kind, limit, })
     },
   )
   (command, state.with_group(kind, { ..group, loading: true, error: None, }))
@@ -226,8 +232,8 @@ pub fn reconcile(
   review_active~ : Bool = false,
   review_busy~ : Bool = false,
 ) -> (@cmd.Cmd, State) {
-  let owner_changed = state.scope.map(scope => (scope.channel, scope.cwd)) !=
-    checkout.map(scope => (scope.channel, scope.cwd))
+  let owner_changed = state.scope.map(scope => (scope.host, scope.cwd)) !=
+    checkout.map(scope => (scope.host, scope.cwd))
   let changed = state.scope != checkout
   let current_active = active || review_active
   let reopened = current_active && !state.current_active
@@ -485,7 +491,7 @@ fn request_detail(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
       emit(DetailLoaded(epoch, result.map_err(@interop.bridge_error_text)))
     },
     () => {
-      @interop.bridge_request(owner.channel, @commands.github_pull_request, {
+      owner.host.request(@commands.github_pull_request, {
         cwd: owner.cwd,
         repository_url: detail.repository_url,
         number: detail.item.number,
@@ -567,7 +573,7 @@ fn request_checkout(
       emit(CheckedOut(epoch, result.map_err(@interop.bridge_error_text)))
     },
     () => {
-      @interop.bridge_request(owner.channel, @commands.github_checkout, {
+      owner.host.request(@commands.github_checkout, {
         cwd: owner.cwd,
         repository_url: checkout.repository_url,
         number: checkout.number,
@@ -600,11 +606,9 @@ fn request_current(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
       emit(CurrentLoaded(epoch, result.map_err(@interop.bridge_error_text)))
     },
     () => {
-      @interop.bridge_request(
-        checkout.channel,
-        @commands.github_checkout_status,
-        { cwd: checkout.cwd, },
-      )
+      checkout.host.request(@commands.github_checkout_status, {
+        cwd: checkout.cwd,
+      })
     },
   )
   (command, { ..state, current_epoch: epoch, current_loading: true, })

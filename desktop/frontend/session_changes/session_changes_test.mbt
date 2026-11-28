@@ -4,8 +4,8 @@ fn quiet() -> @cmd.Emit[@session_changes.Msg] {
 }
 
 ///|
-fn conversation(session : String) -> @interop.ConversationKey {
-  { channel: Local, session, }
+fn conversation(session : String) -> @interop.ConversationIdentity {
+  Host({ channel: Local, session, })
 }
 
 ///|
@@ -42,7 +42,7 @@ fn listed(
 ///|
 /// Open the overview on `key` and answer with `artifacts`.
 fn loaded(
-  key : @interop.ConversationKey,
+  key : @interop.ConversationIdentity,
   artifacts : Array[@protocol.SessionArtifact],
 ) -> @session_changes.State {
   let (_, checking) = @session_changes.update(
@@ -325,7 +325,7 @@ test "each attached pull request is looked up once per generation" {
   let (_, described) = @session_changes.update(
     quiet(),
     Summarized(
-      url~,
+      key=url,
       generation=state.generation,
       described(1, "open", draft=true),
     ),
@@ -384,7 +384,7 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
   let first = state.generation
   let (_, open) = @session_changes.update(
     quiet(),
-    Summarized(url~, generation=first, described(1, "open")),
+    Summarized(key=url, generation=first, described(1, "open")),
     state,
   )
   let (_, changed) = @session_changes.update(quiet(), Changed(one), open)
@@ -397,19 +397,19 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
   // The earlier lookup answering late is not the latest word.
   let (_, stale) = @session_changes.update(
     quiet(),
-    Summarized(url~, generation=first, described(1, "closed")),
+    Summarized(key=url, generation=first, described(1, "closed")),
     asked,
   )
   assert_true(stale == asked)
   let (_, failed) = @session_changes.update(
     quiet(),
-    Summarized(url~, generation=second, Err("gh is not signed in")),
+    Summarized(key=url, generation=second, Err("gh is not signed in")),
     asked,
   )
   assert_true(failed.summary(url) is Some({ state: Open, .. }))
   let (_, merged) = @session_changes.update(
     quiet(),
-    Summarized(url~, generation=second, described(1, "merged")),
+    Summarized(key=url, generation=second, described(1, "merged")),
     asked,
   )
   assert_true(merged.summary(url) is Some({ state: Merged, .. }))
@@ -417,13 +417,13 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
   // know, takes the row back to its bare address.
   let (_, nothing) = @session_changes.update(
     quiet(),
-    Summarized(url~, generation=second, Ok(None)),
+    Summarized(key=url, generation=second, Ok(None)),
     merged,
   )
   assert_true(nothing.summary(url) is None)
   let (_, unknown) = @session_changes.update(
     quiet(),
-    Summarized(url~, generation=second, described(1, "queued")),
+    Summarized(key=url, generation=second, described(1, "queued")),
     merged,
   )
   assert_true(unknown.summary(url) is None)
@@ -441,7 +441,7 @@ test "merged pull requests fold into one row the user can unfold" {
   let summarize = (state : @session_changes.State, number, reply) => {
     @session_changes.update(
       quiet(),
-      Summarized(url=pull(number).url, generation=state.generation, reply),
+      Summarized(key=pull(number).url, generation=state.generation, reply),
       state,
     ).1
   }
