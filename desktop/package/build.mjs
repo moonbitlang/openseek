@@ -289,7 +289,7 @@ class Build {
       [join(this.desktop, "frontend/build/viewer.css"), "viewer.css"],
     ]) {
       await this.commandRun(esbuildBinary, [entry, "--bundle", "--external:*.ttf",
-        "--external:*.woff2", `--outfile=${join(output, name)}`]);
+        "--external:*.woff2", "--loader:.png=dataurl", `--outfile=${join(output, name)}`]);
     }
     const officeFonts = this.officeFontSource();
     await mkdir(join(output, "fonts", "LICENSES"), { recursive: true });
