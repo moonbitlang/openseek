@@ -26,6 +26,7 @@ OpenSeek terminal UI.
 
 Options:
   -h, --help                                                   Show help information.
+  -V, --version                                                Show version information.
   --continue                                                   Resume the most recently active session in --session-root.
   --api-key <api-key>                                          API key for the selected chat provider. [env: OPENSEEK_API_KEY] [default: ]
   --model <model>                                              Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, glm-5.3-flash, or any model id configured in Settings. [env: OPENSEEK_MODEL] [default: deepseek-flash]
@@ -41,6 +42,16 @@ Options:
   --system-prompt-file <system-prompt-file>                    Read the system prompt of the session this launch creates from this file instead of the built-in prompt; a session that already exists keeps the prompt it stored.
   --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the system prompt of the session this launch creates; a session that already exists keeps the prompt it stored.
   -C, --change-directory <change-directory>                    Run as if started in this directory: it becomes the workspace, and a relative --session-root or --engine path resolves against it.
+```
+
+## Version
+
+`openseek_tui --version` prints the TUI version alongside its pinned `openseek`
+engine version and exits successfully.
+
+```mooncram
+$ openseek_tui.exe --version
+openseek_tui 0.8.1 (openseek 0.8.1)
 ```
 
 ## API Key Is Required
@@ -94,6 +105,34 @@ $ env DEEPSEEK=test-key openseek_tui.exe --engine openseek-not-a-real-binary
 error: engine 'openseek-not-a-real-binary' is not usable: it must be on PATH, executable, and accept `--help` (exit 0) the way openseek does.
 Pass --engine <path> to a working openseek binary, or omit --engine to run the pinned release through moonx.
 [1]
+```
+
+Once an explicit `--engine` passes `--help`, the UI also asks it for
+`--version` (best-effort; non-zero exit or unrecognized output never blocks
+startup) so the startup banner and status bar display the engine's actual
+version.
+
+```mooncram
+$ sh <<'EOF'
+> bin=$(mktemp -d)
+> cat > "$bin/fake-engine" <<ENGINE
+> #!/bin/sh
+> echo "\$@" >> "$bin/args"
+> if [ "\$1" = "--version" ]; then echo "openseek 0.9.0"; fi
+> exit 0
+> ENGINE
+> cat > "$bin/tty-sidecar" <<'SIDECAR'
+> #!/bin/sh
+> printf '\203\027\000\000\000no controlling terminal'
+> SIDECAR
+> chmod +x "$bin/fake-engine" "$bin/tty-sidecar"
+> if env DEEPSEEK=test-key TTY_SIDECAR="$bin/tty-sidecar" openseek_tui.exe --engine "$bin/fake-engine" > "$bin/stdout" 2> "$bin/stderr"; then echo exit-zero; else echo exit-non-zero; fi
+> cat "$bin/args"
+> rm -rf "$bin"
+> EOF
+exit-non-zero
+--help
+--version
 ```
 
 ## The Default Engine Is The Pinned Release Under `moonx`

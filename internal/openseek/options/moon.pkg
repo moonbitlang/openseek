@@ -10,6 +10,19 @@ import {
   "moonbitlang/openseek/internal/openseek/testkit",
 } for "test"
 
+import {
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/core/debug",
+} for "wbtest"
+
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+options(
+  "allow-experimental-packages": [
+    "moonbitlang/core/async",
+    "moonbitlang/core/async/fs",
+  ],
+)

@@ -90,3 +90,14 @@ test "setup requires no model credentials and has no installation options" {
     assert_true(error.contains("unexpected argument"))
   }
 }
+
+///|
+test "root command reports its version for --version and -V" {
+  for flag in ["--version", "-V"] {
+    guard @argparse.parse_outcome(@options.root_command(), argv=[flag])
+      is Version(text) else {
+      fail("expected Version outcome for \{flag}")
+    }
+    assert_eq(text, "openseek 0.8.1")
+  }
+}
