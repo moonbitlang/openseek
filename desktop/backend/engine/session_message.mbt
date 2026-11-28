@@ -132,3 +132,43 @@ pub async fn submit_session_message(
   }
   live.watch_message(reply.run_id, submission_id, steering=false, notify)
 }
+
+///|
+/// Where a conversation's live engine runs and what it was started with:
+/// what a conversation it starts inherits.
+pub struct RunSettings {
+  // The store the engine writes, in the form session listings name it.
+  session_root : String?
+  // The conversation's saved base prompt, before the engine adds its
+  // environment: `None` for the built-in prompt, as a fork takes it.
+  system_prompt : String?
+  model : String
+  thinking : @protocol.OpenSeekThinking
+  approval : @protocol.OpenSeekApproval
+}
+
+///|
+/// The settings of `session`'s live engine, or `None` when the conversation
+/// has no engine running.
+pub async fn run_settings(
+  manager : EngineManager,
+  session : String,
+) -> RunSettings? {
+  guard manager.pump is Serving(sessions~) &&
+    sessions.get(session) is Some(slot) &&
+    slot.live() is Some(engine) else {
+    return None
+  }
+  let system_prompt = match engine.session_root {
+    Some(root) =>
+      saved_session_prompt(SessionStore(root.to_string()), SessionId(session))
+    None => None
+  }
+  Some({
+    session_root: engine.session_root.map(root => root.resource_path()),
+    system_prompt,
+    model: engine.model,
+    thinking: engine.thinking,
+    approval: engine.approval,
+  })
+}

@@ -340,6 +340,7 @@ fn Entry::view(
       SubrunDock(..) => "subruns"
       ApiSetupNotice(..) => "api-setup"
       ApprovalRequest(_) => "approval"
+      SessionProposals(..) => "proposals"
       CodexRequests(..) => "codex-requests"
       PendingSteerPanel(..) => "steers"
       ShellCommandsRunning(..) => "shell-commands"
