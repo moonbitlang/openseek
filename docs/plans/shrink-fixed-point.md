@@ -129,9 +129,9 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
    be clean (its check could rewrite a stale `pkg.generated.mbti`). Parse the
    candidates and map each package name to its directory as Moon resolves
    it: `moon check --dry-run` prints one `moonc check` per package, naming
-   its source files and `-pkg <name>`, from Moon's workspace root, which may
-   be above the checkout; the checkout's prefix is the one under which most
-   printed files are tracked. A package whose files are outside the checkout
+   its source files and `-pkg <name>`, from Moon's workspace root: the
+   nearest `moon.work` at or above the checkout root, as Moon finds it. A
+   package whose files are outside the checkout
    (a `moon.work` member beside it) is reported as not in this checkout and
    keeps the run from a plain fixed point. Keep
    packages under `--path`, not under `--exclude`, not named by `--skip`, and
@@ -495,5 +495,11 @@ Eleventh pass (Codex, xhigh, P1 findings only, the six fix commits):
 
 | Codex finding | Resolution |
 |---|---|
-| P1: with `moon.work` above the checkout, Moon prints `./repo/src/x.mbt`, which matches no tracked file, so the package drops out | The checkout's prefix in Moon's paths is inferred, the one under which most printed files are tracked; the workspace-above mode (the previous script fails it) |
+| P1: with `moon.work` above the checkout, Moon prints `./repo/src/x.mbt`, which matches no tracked file, so the package drops out | The checkout's prefix in Moon's paths was inferred from which printed files are tracked (replaced in the twelfth pass); the workspace-above mode (the previous script fails it) |
 | P1: an open browser on the old frontend loses the selected job's trace from a host that lists jobs without it, at the same protocol revision | `HostProtocolRevision` is 16, and the E2E harness's `hostProtocol` with it |
+
+Twelfth pass (Codex, xhigh, P1 findings only, the seven fix commits):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: the inferred prefix fails when a package's first listed file is generated and untracked, and a sibling with the same layout can outvote the checkout | The prefix is no longer inferred: Moon's workspace root is the nearest `moon.work` at or above the checkout root, found as Moon finds it (scripts may read any path). The workspace-above mode writes a real `moon.work` above the fixture, and alpha's first listed file is untracked |

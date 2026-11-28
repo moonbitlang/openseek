@@ -183,7 +183,7 @@ async fn moon_child(dir : String) -> Unit {
   )
   match args {
     // With `moon.work` above the checkout, Moon prints paths from there.
-    ["check", "--dry-run"] if @fs.exists(dir + "/workspace-above") =>
+    ["check", "--dry-run"] if @fs.exists("../moon.work") =>
       println(
         DryRun
         .replace_all(old=" ./", new=" ./shrink-repo/")
@@ -209,12 +209,13 @@ async fn moon_child(dir : String) -> Unit {
 
 ///|
 /// What `moon check --dry-run` prints for the fixture: one `moonc check` per
-/// package, naming its files. The nested module's package lives under its
-/// `source` directory, `ghost` has no tracked file, and `fx/elsewhere/z` is a
+/// package, naming its files. Alpha's first file is generated and not
+/// tracked, the nested module's package lives under its `source` directory,
+/// `ghost` has no tracked file, and `fx/elsewhere/z` is a
 /// `moon.work` member beside the checkout, in a directory whose name needs
 /// quoting.
 const DryRun : String =
-  #|moonc check ./alpha/a.mbt ./alpha/generated_x.mbt ./alpha/reexport.mbt -w -a -o ./_build/native/debug/check/fx/app/alpha/alpha.mi -pkg fx/app/alpha -pkg-type library
+  #|moonc check ./alpha/generated_config.mbt ./alpha/a.mbt ./alpha/generated_x.mbt ./alpha/reexport.mbt -w -a -o ./_build/native/debug/check/fx/app/alpha/alpha.mi -pkg fx/app/alpha -pkg-type library
   #|moonc check ./alpha/a.mbt ./alpha/a_test.mbt -o ./_build/native/debug/check/fx/app/alpha/alpha.blackbox_test.mi -pkg fx/app/alpha_blackbox_test -pkg-type library
   #|moonc check ./alpha/nested/n.mbt -o ./_build/native/debug/check/fx/app/alpha/nested/nested.mi -pkg fx/app/alpha/nested -pkg-type library
   #|moonc check ./beta/b.mbt -pkg fx/app/beta -pkg-type library
@@ -557,7 +558,10 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         write(repo + "/.git/sequencer/todo", "pick \{beta1}\n")
       }
       "shrink-unmapped" => write(calls + "/analyze-1.txt", UnmappedAnalysis)
-      "shrink-workspace-above" => write(calls + "/workspace-above", "")
+      // Moon's workspace root is the directory above the checkout, found by
+      // its `moon.work` as Moon finds it.
+      "shrink-workspace-above" =>
+        write(temp + "/moon.work", "members = [\n  \"./shrink-repo\",\n]\n")
       "shrink-ahead" => {
         append(repo + "/README.md", "local")
         ignore(git(repo, ["commit", "-q", "-am", "local commit"]))
@@ -612,7 +616,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         @fs.remove(repo + "/.git/sequencer", recursive=true)
       }
       "shrink-unmapped" => write(calls + "/analyze-1.txt", FirstAnalysis)
-      "shrink-workspace-above" => @fs.remove(calls + "/workspace-above")
+      "shrink-workspace-above" => @fs.remove(temp + "/moon.work")
       _ => ()
     }
     // Whatever happened, the checkout is back where it was, with no pick

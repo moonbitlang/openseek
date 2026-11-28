@@ -6842,63 +6842,54 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
+          #|/// The checkout's prefix in Moon's paths, which start at its workspace root:
+          #|/// the directory of the nearest `moon.work` at or above the checkout root,
+          #|/// as Moon finds it. `""` when that is the checkout root or there is none,
+          #|/// `repo/` when `moon.work` is one level up.
+          #|async fn workspace_prefix() -> String {
+          #|  let root = run("git", ["rev-parse", "--show-toplevel"]).trim().to_owned()
+          #|  let mut dir = root
+          #|  for ;; {
+          #|    if @fs.exists("\{dir}/moon.work") {
+          #|      return if dir == root {
+          #|        ""
+          #|      } else {
+          #|        "\{root[dir.length():].trim_start(chars="/")}/"
+          #|      }
+          #|    }
+          #|    match dir.rev_split_once("/") {
+          #|      Some((parent, _)) if !parent.is_empty() => dir = parent.to_owned()
+          #|      _ => return ""
+          #|    }
+          #|  }
+          #|}
+          #|
+          #|///|
           #|/// Each workspace package's directory in this checkout, by package name, as
           #|/// Moon itself resolves it: `moon check --dry-run` prints one `moonc check`
           #|/// command per package, naming its source files and `-pkg <name>`. Reading
           #|/// the manifests instead would mean parsing every way a `moon.mod` can set a
-          #|/// module's name and `source`. Moon prints paths from its workspace root,
-          #|/// which may be above this checkout (`./repo/src/x.mbt`): the checkout's
-          #|/// prefix is the one under which most printed files are tracked here
-          #|/// (`listed`). A package outside it (a dependency, or a `moon.work` member
-          #|/// beside the checkout) is left out.
-          #|async fn package_dirs(listed : Array[String]) -> Map[String, String] {
-          #|  let tracked : Set[String] = Set::from_array(listed)
-          #|  let files : Array[(String, String)] = []
+          #|/// module's name and `source`. Moon's paths start at its workspace root,
+          #|/// where the checkout is at `prefix` (`workspace_prefix`); a package outside
+          #|/// it (a dependency, or a `moon.work` member beside the checkout) is left
+          #|/// out.
+          #|async fn package_dirs(prefix : String) -> Map[String, String] {
+          #|  let dirs : Map[String, String] = Map([])
           #|  for line in run("moon", ["check", "--dry-run"]).split("\n") {
           #|    guard line.strip_prefix("moonc check ") is Some(rest) else { continue }
           #|    let args = words(rest)
           #|    guard args.search("-pkg") is Some(at) &&
           #|      args.get(at + 1) is Some(name) &&
+          #|      !dirs.contains(name) &&
           #|      args.iter().find_first(arg => arg.has_suffix(".mbt")) is Some(file) &&
-          #|      !file.has_prefix("/") else {
+          #|      file.strip_prefix("./").unwrap_or(file).strip_prefix(prefix)
+          #|      is Some(path) &&
+          #|      !path.has_prefix("../") &&
+          #|      !path.has_prefix("/") &&
+          #|      !path.has_prefix(".mooncakes/") else {
           #|      continue
           #|    }
-          #|    files.push((name, file.strip_prefix("./").unwrap_or(file).to_owned()))
-          #|  }
-          #|  let counts : Map[String, Int] = Map([])
-          #|  for entry in files {
-          #|    let file = entry.1
-          #|    let mut start = 0
-          #|    for ;; {
-          #|      if tracked.contains(file[start:].to_owned()) {
-          #|        let prefix = file[:start].to_owned()
-          #|        counts[prefix] = counts.get(prefix).unwrap_or(0) + 1
-          #|        break
-          #|      }
-          #|      match file[start:].find("/") {
-          #|        Some(slash) => start = start + slash + 1
-          #|        None => break
-          #|      }
-          #|    }
-          #|  }
-          #|  let mut prefix = ""
-          #|  let mut most = 0
-          #|  for candidate, count in counts {
-          #|    if count > most {
-          #|      prefix = candidate
-          #|      most = count
-          #|    }
-          #|  }
-          #|  let dirs : Map[String, String] = Map([])
-          #|  for entry in files {
-          #|    let (name, file) = entry
-          #|    guard !dirs.contains(name) &&
-          #|      file.strip_prefix(prefix) is Some(rest) &&
-          #|      !rest.has_prefix("../") &&
-          #|      !rest.has_prefix(".mooncakes/") else {
-          #|      continue
-          #|    }
-          #|    dirs[name] = parts(rest.to_owned()).0
+          #|    dirs[name] = parts(path.to_owned()).0
           #|  }
           #|  dirs
           #|}
@@ -6953,7 +6944,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      entry.to_owned()
           #|    }
           #|  ]
-          #|  let dirs = package_dirs(listed)
+          #|  let dirs = package_dirs(workspace_prefix())
           #|  let packages : Array[Package] = []
           #|  // A package with candidates whose files are not in this checkout (a
           #|  // `moon.work` member beside it) cannot be worked on: it is reported, so
