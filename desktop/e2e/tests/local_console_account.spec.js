@@ -44,6 +44,7 @@ test('local Console signs in independently and keeps its account across reload a
   await expect(page.locator('.cloud-home').getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await openLocalWork(page, local);
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await expect(page.locator('.cloud-home').getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await selectAccountMenuItem(page, 'Sign in');
   await expect(local.row(sessionA)).toBeVisible();
   expect(local.localRequests.some(request => request.path === '/v2/auth/login')).toBe(true);
@@ -93,6 +94,7 @@ test('local Console logout clears only Cloud account state and preserves local w
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
   await expect(local.row(sessionA)).toHaveCount(0);
   await expect(accountMenuTrigger(page)).toHaveAccessibleName('Account');
+  await expect(page.locator('.cloud-home').getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
 });
 
 test('a fresh browser opens the local host directly without a Cloud account or cookie', async ({ page, baseURL }) => {

@@ -140,12 +140,13 @@ fn follow_page_path(
         ..model,
         chat_navigation_generation: model.chat_navigation_generation + 1,
       }
-      let (write, next) = navigation_visit(model, location, replace=false)
-      let (activate, next) = activate_navigation(dispatch, {
-        ..next,
-        navigation: { ..next.navigation, phase: Waiting, },
-      })
-      Some((@cmd.batch([enter, write, activate]), next))
+      let (visit, model) = enter_location(
+        dispatch,
+        model,
+        location,
+        replace=false,
+      )
+      Some((@cmd.batch([enter, visit]), model))
     }
     _ => None
   }

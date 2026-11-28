@@ -1,4 +1,20 @@
 ///|
+/// Enter `location`: record it in history, then activate it.
+fn enter_location(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  location : @routes.Location,
+  replace~ : Bool,
+) -> (@cmd.Cmd, Model) {
+  let (write, next) = navigation_visit(model, location, replace~)
+  let (activate, next) = activate_navigation(dispatch, {
+    ..next,
+    navigation: { ..next.navigation, phase: Waiting, },
+  })
+  (@cmd.batch([write, activate]), next)
+}
+
+///|
 fn replace_with_new_navigation(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -7,16 +23,30 @@ fn replace_with_new_navigation(
   guard model.console.page_device is Some(device) else {
     return (@cmd.none, model)
   }
-  let (write, next) = navigation_visit(
+  enter_location(
+    dispatch,
     model,
     { device: Some(device), target, },
     replace=true,
   )
-  let (activate, next) = activate_navigation(dispatch, {
-    ..next,
-    navigation: { ..next.navigation, phase: Waiting, },
-  })
-  (@cmd.batch([write, activate]), next)
+}
+
+///|
+/// Whether a Cloud page still exists for the signed-in account: a
+/// conversation not deleted since, or the draft still pending. A page naming
+/// another account is gone.
+fn Model::cloud_target_available(self : Model, target : @routes.Target) -> Bool {
+  match (target, self.cloud.user_id) {
+    (CloudSession(account~, session~), Some(user)) =>
+      (account is None || account == Some(user)) &&
+      !self.cloud.retired.contains(session)
+    (CloudDraft(account~, id~), Some(user)) =>
+      (account is None || account == Some(user)) &&
+      self.cloud.draft_identity() ==
+      Some(@interop.Cloud(account=user, session=id))
+    (CloudSession(..) | CloudDraft(..), None) => false
+    _ => true
+  }
 }
 
 ///|
@@ -44,14 +74,13 @@ fn activate_navigation(
     }
     return (@cmd.none, next)
   }
-  if location.target is CloudSession(account=owner, session~) {
+  if location.target is CloudSession(session~, ..) {
     guard model.account is Some(account) &&
       model.cloud.user_id == Some(account.user.user_id) else {
       return (@cmd.none, { ..model, selected_conversation: None, })
     }
     let account = account.user.user_id
-    if (owner is Some(owner) && owner != account) ||
-      model.cloud.retired.contains(session) {
+    if !model.cloud_target_available(location.target) {
       return (
         @cmd.none,
         {
@@ -75,14 +104,13 @@ fn activate_navigation(
       { ..next, navigation: { ..next.navigation, phase: Active, }, },
     )
   }
-  if location.target is CloudDraft(account=owner, id~) {
+  if location.target is CloudDraft(id~, ..) {
     guard model.account is Some(account) &&
       model.cloud.user_id == Some(account.user.user_id) else {
       return (@cmd.none, { ..model, selected_conversation: None, })
     }
     let account = account.user.user_id
-    guard (owner is None || owner == Some(account)) &&
-      model.cloud.draft_identity() == Some(@interop.Cloud(account~, session=id)) else {
+    guard model.cloud_target_available(location.target) else {
       return (
         @cmd.none,
         {

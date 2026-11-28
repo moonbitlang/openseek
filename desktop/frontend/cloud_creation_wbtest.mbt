@@ -166,17 +166,20 @@ test "signed-out Cloud New stays disabled and sign-in does not resume creation" 
 }
 
 ///|
-test "Cloud blank selection survives sidebar browsing and Settings over a Work project" {
+test "Cloud blank selection survives a trip to Work and Settings" {
   let initial = integrated_cloud_model().with_active_project(
     Some(@interop.ChannelId::Local.test_project()),
   )
   let (_, blank) = update(test_dispatch(), CloudAction(@cloud.Create), initial)
   assert_true(blank.sidebar_mode is ChatMode)
   let identity = blank.composer_input().identity.owner
+  let (_, work) = update(test_dispatch(), SidebarModeSelected(WorkMode), blank)
+  assert_true(work.sidebar_mode is WorkMode)
+  assert_false(work.cloud_selected())
   let (_, browsed) = update(
     test_dispatch(),
-    SidebarModeSelected(WorkMode),
-    blank,
+    SidebarModeSelected(ChatMode),
+    work,
   )
   assert_true(browsed.cloud_selected())
   assert_true(browsed.active_conversation() is None)
@@ -203,12 +206,7 @@ test "Cloud creation behind Settings promotes its navigation without leaving Set
     CloudAction(@cloud.Create),
     integrated_cloud_model(),
   )
-  let (_, browsed) = update(
-    test_dispatch(),
-    SidebarModeSelected(WorkMode),
-    blank,
-  )
-  let pending = submit_blank_cloud(browsed)
+  let pending = submit_blank_cloud(blank)
   assert_true(pending.cloud.creating_session())
   let (_, settings) = update(test_dispatch(), OpenSetup, pending)
   let (_, created) = update(

@@ -1,0 +1,313 @@
+///|
+/// A Work conversation with a typed draft and a run in flight on screen, after
+/// the Cloud conversation `cloud-a` was on screen before it.
+fn work_after_cloud() -> Model raise {
+  let model = integrated_cloud_model()
+    .with_active_project(Some(@interop.ChannelId::Local.test_project()))
+    .with_listed(["desktop-test"])
+  let (_, model) = update(
+    test_dispatch(),
+    OpenSession(Local, "desktop-test"),
+    model,
+  )
+  model.replace_conversation({
+    ..model.active(),
+    task: "half-written follow-up",
+    run: Starting(submission_id="in-flight"),
+  })
+}
+
+///|
+test "the mode switch moves the column to each mode's last page and back" {
+  let work = work_after_cloud()
+  assert_true(work.sidebar_mode is WorkMode)
+  assert_true(work.navigation.location is Some({ target: Session(_), .. }))
+  let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
+  assert_true(chat.sidebar_mode is ChatMode)
+  assert_true(
+    chat.cloud_identity() is Some(@interop.Cloud(session="cloud-a", ..)),
+  )
+  assert_true(
+    chat.navigation.location
+    is Some({ target: CloudSession(session="cloud-a", ..), .. }),
+  )
+  // Leaving the column is a navigation, so the intents it fences retire.
+  assert_true(chat.chat_navigation_generation > work.chat_navigation_generation)
+  let (_, back) = update(test_dispatch(), SidebarModeSelected(WorkMode), chat)
+  assert_true(back.sidebar_mode is WorkMode)
+  assert_false(back.cloud_selected())
+  assert_eq(back.active_session, "desktop-test")
+  let restored = back.active()
+  assert_eq(restored.task, "half-written follow-up")
+  assert_true(restored.run is Starting(submission_id="in-flight"))
+  assert_true(back.navigation.location == work.navigation.location)
+}
+
+///|
+test "picking the mode already on screen leaves the column and the intents" {
+  let work = work_after_cloud()
+  let (_, same) = update(test_dispatch(), SidebarModeSelected(WorkMode), work)
+  assert_true(same.navigation.location == work.navigation.location)
+  assert_eq(same.chat_navigation_generation, work.chat_navigation_generation)
+  assert_eq(same.active_session, work.active_session)
+}
+
+///|
+test "a mode with no page yet opens its fresh page" {
+  // Chat: from a Work conversation, with no Cloud page shown before.
+  let model = {
+    ..integrated_cloud_model(),
+    mode_returns: ModeReturns::empty(),
+  }
+  let (_, work) = update(
+    test_dispatch(),
+    OpenSession(Local, "desktop-test"),
+    model,
+  )
+  let work = { ..work, mode_returns: { ..work.mode_returns, chat: None, }, }
+  let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
+  assert_true(chat.navigation.location is Some({ target: Cloud, .. }))
+  assert_true(chat.cloud_selected() && chat.cloud_identity() is None)
+  assert_true(chat.sidebar_mode is ChatMode)
+  // Work: from a Cloud conversation, with no Work page shown before.
+  let (_, fresh) = update(test_dispatch(), SidebarModeSelected(WorkMode), model)
+  assert_true(fresh.navigation.location is Some({ target: ChatNew, .. }))
+  assert_false(fresh.cloud_selected())
+  assert_true(fresh.sidebar_mode is WorkMode)
+}
+
+///|
+test "a remembered Cloud conversation deleted since opens Cloud home" {
+  let work = work_after_cloud()
+  let work = {
+    ..work,
+    cloud: { ..work.cloud, retired: work.cloud.retired + ["cloud-a"], },
+  }
+  let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
+  assert_true(chat.navigation.location is Some({ target: Cloud, .. }))
+  assert_true(chat.cloud_identity() is None)
+}
+
+///|
+test "a remembered Cloud page of another account opens Cloud home" {
+  let work = work_after_cloud()
+  assert_true(
+    work.mode_returns.chat
+    is Some({ target: CloudSession(account=Some("fixture-user"), ..), .. }),
+  )
+  let switched = {
+    ..work,
+    cloud: { ..work.cloud, user_id: Some("other-user"), },
+  }
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    switched,
+  )
+  assert_true(chat.navigation.location is Some({ target: Cloud, .. }))
+  assert_true(chat.cloud_identity() is None)
+}
+
+///|
+test "the narrow drawer stays open across a mode switch" {
+  let work = { ..work_after_cloud(), narrow: true, sidebar_open: true, }
+  let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
+  assert_true(chat.cloud_identity() is Some(_))
+  assert_true(chat.sidebar_open)
+  let (_, back) = update(test_dispatch(), SidebarModeSelected(WorkMode), chat)
+  assert_eq(back.active_session, "desktop-test")
+  assert_true(back.sidebar_open)
+}
+
+///|
+test "a page without a host shows Chat alone" {
+  let cloud = integrated_cloud_model()
+  let cloud = {
+    ..cloud,
+    is_desktop: false,
+    console: { ..cloud.console, page_device: None, },
+    devices: [],
+  }
+  let (_, picked) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    cloud,
+  )
+  assert_true(picked.sidebar_mode is ChatMode)
+  assert_true(picked.navigation.location == cloud.navigation.location)
+  assert_eq(picked.chat_navigation_generation, cloud.chat_navigation_generation)
+}
+
+///|
+test "a stored Chat pick moves a blank Work start page to Chat" {
+  let model = test_model()
+  let blank = {
+    ..model,
+    navigation: {
+      ..model.navigation,
+      location: Some({ device: model.console.page_device, target: ChatNew, }),
+    },
+  }
+  let (_, launched) = update(
+    test_dispatch(),
+    SidebarModeLoaded(ChatMode),
+    blank,
+  )
+  assert_true(launched.navigation.location is Some({ target: Cloud, .. }))
+  assert_true(launched.sidebar_mode is ChatMode)
+  assert_false(launched.reopen_in_chat)
+  // The start page can be learned after the stored pick: the pick waits.
+  let (_, waiting) = update(test_dispatch(), SidebarModeLoaded(ChatMode), model)
+  assert_true(waiting.navigation.location is None)
+  let (_, arrived) = update(test_dispatch(), ToggleSidebar, {
+    ..waiting,
+    navigation: blank.navigation,
+  })
+  assert_true(arrived.navigation.location is Some({ target: Cloud, .. }))
+  // A start page the URL names stays.
+  let named = {
+    ..model,
+    navigation: {
+      ..model.navigation,
+      location: Some({
+        device: model.console.page_device,
+        target: Session("desktop-test"),
+      }),
+    },
+  }
+  let (_, kept) = update(test_dispatch(), SidebarModeLoaded(ChatMode), named)
+  assert_true(kept.navigation.location == named.navigation.location)
+  assert_false(kept.reopen_in_chat)
+}
+
+///|
+test "a Cloud draft created while Work is on screen reopens as its conversation" {
+  let initial = integrated_cloud_model().with_active_project(
+    Some(@interop.ChannelId::Local.test_project()),
+  )
+  let (_, blank) = update(test_dispatch(), CloudAction(@cloud.Create), initial)
+  let pending = submit_blank_cloud(blank)
+  let request = pending.cloud.creation.unwrap().request
+  let (_, work) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    pending,
+  )
+  let (_, created) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Created(3, request, "new-cloud")),
+    work,
+  )
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    created,
+  )
+  assert_true(
+    chat.navigation.location
+    is Some({ target: CloudSession(session="new-cloud", ..), .. }),
+  )
+  assert_true(
+    chat.cloud_identity() is Some(@interop.Cloud(session="new-cloud", ..)),
+  )
+}
+
+///|
+test "a Cloud home draft created while Work is on screen reopens as its conversation" {
+  let (_, work) = update(test_dispatch(), OpenSession(Local, "desktop-test"), {
+    ..integrated_cloud_model().with_active_project(
+      Some(@interop.ChannelId::Local.test_project()),
+    ),
+    mode_returns: ModeReturns::empty(),
+  })
+  let work = { ..work, mode_returns: { ..work.mode_returns, chat: None, }, }
+  let (_, home) = update(test_dispatch(), SidebarModeSelected(ChatMode), work)
+  assert_true(home.navigation.location is Some({ target: Cloud, .. }))
+  let pending = submit_blank_cloud(home)
+  let request = pending.cloud.creation.unwrap().request
+  let (_, back) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    pending,
+  )
+  let (_, created) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Created(3, request, "new-cloud")),
+    back,
+  )
+  let (_, chat) = update(
+    test_dispatch(),
+    SidebarModeSelected(ChatMode),
+    created,
+  )
+  assert_true(
+    chat.navigation.location
+    is Some({ target: CloudSession(session="new-cloud", ..), .. }),
+  )
+}
+
+///|
+test "the drawer stays open until the new Work chat a switch opens arrives" {
+  let cloud = integrated_cloud_model().with_active_project(
+    Some(@interop.ChannelId::Local.test_project()),
+  )
+  // The host's chat holds a typed draft, so Work needs a new chat.
+  let cloud = {
+    ..cloud,
+    conversations: cloud.conversations.map(conv => { ..conv, task: "typed", }),
+    narrow: true,
+    sidebar_open: true,
+  }
+  let (_, preparing) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    cloud,
+  )
+  assert_true(preparing.navigation.phase is PreparingNew)
+  let (_, ready) = update(
+    test_dispatch(),
+    Navigation(
+      SessionReady(
+        { channel: Local, session: "fresh-work", },
+        revision=preparing.navigation.revision,
+      ),
+    ),
+    preparing,
+  )
+  assert_eq(ready.active_session, "fresh-work")
+  assert_true(ready.sidebar_open)
+}
+
+///|
+test "signed-out Cloud home keeps Chat over the Codex thread it replaced" {
+  let codex = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "codex-thread-1",
+      "cwd": "/work",
+      "projectRoot": "/work",
+      "preview": "Codex task",
+      "updatedAt": 2000,
+      "turns": [],
+    },
+  })
+  let model = test_model().with_active_project(
+    Some(@interop.ChannelId::Local.test_project()),
+  )
+  let thread = {
+    ..model,
+    codex,
+    screen: Codex,
+    navigation: {
+      ..model.navigation,
+      location: Some({
+        device: model.console.page_device,
+        target: Thread("codex-thread-1"),
+      }),
+    },
+    sidebar_revealed: Some((WorkMode, "codex-thread-1")),
+  }
+  assert_true(thread.account is None)
+  let (_, chat) = update(test_dispatch(), SidebarModeSelected(ChatMode), thread)
+  assert_true(chat.navigation.location is Some({ target: Cloud, .. }))
+  assert_true(chat.sidebar_mode is ChatMode)
+}
