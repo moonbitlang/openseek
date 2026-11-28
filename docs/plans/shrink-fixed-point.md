@@ -130,7 +130,8 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
    candidates and map each package name to its directory as Moon resolves
    it: `moon check --dry-run` prints one `moonc check` per package, naming
    its source files and `-pkg <name>`, from Moon's workspace root: the
-   nearest `moon.work` at or above the checkout root, as Moon finds it. A
+   nearest `moon.work` at or above the checkout root that lists the
+   checkout, as Moon finds it. A
    package whose files are outside the checkout
    (a `moon.work` member beside it) is reported as not in this checkout and
    keeps the run from a plain fixed point. Keep
@@ -503,3 +504,9 @@ Twelfth pass (Codex, xhigh, P1 findings only, the seven fix commits):
 | Codex finding | Resolution |
 |---|---|
 | P1: the inferred prefix fails when a package's first listed file is generated and untracked, and a sibling with the same layout can outvote the checkout | The prefix is no longer inferred: Moon's workspace root is the nearest `moon.work` at or above the checkout root, found as Moon finds it (scripts may read any path). The workspace-above mode writes a real `moon.work` above the fixture, and alpha's first listed file is untracked |
+
+Thirteenth pass (Codex, xhigh, P1 findings only, the eight fix commits):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: an ancestor `moon.work` that does not list the checkout is used, though Moon ignores it, so the checkout's own paths lose a real prefix | An ancestor `moon.work` counts only when its `members` hold the checkout (or a module in it); the workspace-sibling mode (the previous script fails it) |

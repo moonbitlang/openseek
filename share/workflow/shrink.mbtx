@@ -970,18 +970,25 @@ priv struct Package {
 
 ///|
 /// The checkout's prefix in Moon's paths, which start at its workspace root:
-/// the directory of the nearest `moon.work` at or above the checkout root,
-/// as Moon finds it. `""` when that is the checkout root or there is none,
-/// `repo/` when `moon.work` is one level up.
+/// the directory of the nearest `moon.work` at or above the checkout root
+/// whose members hold the checkout, as Moon finds it (it ignores one that
+/// does not list the checkout). `""` when that is the checkout root or there
+/// is none, `repo/` when `moon.work` is one level up.
 async fn workspace_prefix() -> String {
   let root = run("git", ["rev-parse", "--show-toplevel"]).trim().to_owned()
   let mut dir = root
   for ;; {
-    if @fs.exists("\{dir}/moon.work") {
-      return if dir == root {
-        ""
-      } else {
-        "\{root[dir.length():].trim_start(chars="/")}/"
+    let manifest = "\{dir}/moon.work"
+    if dir == root && @fs.exists(manifest) {
+      return ""
+    }
+    if dir != root && @fs.exists(manifest) {
+      let inside = root[dir.length():].trim_start(chars="/").to_owned()
+      let lists = members(@fs.read_file(manifest).text()).any(listed => {
+        listed == inside || listed.has_prefix("\{inside}/")
+      })
+      if lists {
+        return "\{inside}/"
       }
     }
     match dir.rev_split_once("/") {
@@ -989,6 +996,26 @@ async fn workspace_prefix() -> String {
       _ => return ""
     }
   }
+}
+
+///|
+/// The member directories a `moon.work` lists, `members = ["./a", "b/c"]`,
+/// without `./` or a trailing `/`.
+fn members(text : String) -> Array[String] {
+  guard text.split_once("members") is Some((_, rest)) &&
+    rest.split_once("[") is Some((_, rest)) &&
+    rest.split_once("]") is Some((list, _)) else {
+    return []
+  }
+  let found : Array[String] = []
+  // Between the quotes: every second piece.
+  for index, part in list.split("\"").collect() {
+    if index % 2 == 1 {
+      let path = part.strip_prefix("./").unwrap_or(part).trim_end(chars="/")
+      found.push(path.to_owned())
+    }
+  }
+  found
 }
 
 ///|
