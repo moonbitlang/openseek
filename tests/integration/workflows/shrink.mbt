@@ -349,19 +349,19 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     @fs.mkdir(repo + "/" + dir, recursive=true)
   }
   write(repo + "/README.md", "fixture\n")
-  // The module's name is its top-level assignment: after a rule whose
-  // `name:` argument is not, indented, and with a trailing comment. A module
-  // the script cannot map would drop its packages and read as a fixed point.
+  // The root module is a legacy manifest with the comments and trailing
+  // comma Moon accepts, one of them before its brace. A module the script
+  // cannot map would drop its packages and read as a fixed point.
   write(
-    repo + "/moon.mod",
-    "rule(\n  name: \"generate\", // code-generation rule\n  command: \"true\",\n)\n\n  name = \"fx/app\" // the fixture app\n\nversion = \"0.1.0\"\n",
+    repo + "/moon.mod.json",
+    "// the fixture app\n{\n  // its name\n  \"name\": \"fx/app\",\n  \"version\": \"0.1.0\",\n}\n",
   )
-  // A module whose packages live under its `source` directory, in a legacy
-  // manifest with the comments and trailing comma Moon accepts, one of them
-  // before its brace.
+  // A module whose packages live under its `source` directory, set in its
+  // `options(...)` block. Its name is the top-level assignment, indented and
+  // with a trailing comment, after a rule whose `name:` argument is not.
   write(
-    repo + "/sub/moon.mod.json",
-    "// the nested module\n{\n  // its packages\n  \"name\": \"fx/sub\",\n  \"source\": \"src/\",\n}\n",
+    repo + "/sub/moon.mod",
+    "rule(\n  name: \"generate\", // code-generation rule\n  command: \"true\",\n)\n\n  name = \"fx/sub\" // the nested module\n\noptions(\n  source: \"src/\",\n)\n",
   )
   write(
     repo + "/alpha/moon.pkg",

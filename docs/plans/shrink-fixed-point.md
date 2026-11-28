@@ -474,3 +474,9 @@ Eighth pass (Codex, xhigh, the three fix commits):
 | P2: a proactive budget stop after a failure prints no continuation | Both host-limit stops print it |
 | P2: a first round too large for the budget is retried at the same size | Not fixed: a follow-up |
 | P2: usage read from a child's earlier report chunks is lost at a refusal | Not fixed: the stop line's token count only. A follow-up |
+
+Ninth pass (Codex, xhigh, P1 findings only, the four fix commits):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: `moon.mod` sets `source` in an `options(...)` block (`source: "custom"`), which the assignment-only reader missed, faking a fixed point | A `moon.mod` field is a top-level assignment or an `options(...)` argument; other blocks' arguments are not. The fixture's nested module is a `moon.mod` with a rule, an indented `name =` and `options(source: ...)`, and its root a legacy `moon.mod.json` that opens with a comment (the previous reader loses `sub/src/delta`) |

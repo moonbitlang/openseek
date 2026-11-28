@@ -6803,10 +6803,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|///|
           #|/// A top-level string field of a module manifest. A `moon.mod.json` is read
           #|/// as JSON, or, when it has the comments and trailing commas Moon accepts,
-          #|/// by its `"key": "x"` lines. In a `moon.mod`, a top-level field is an
-          #|/// assignment, `key = "x"` (indented or not, with any comment after the
-          #|/// value), while the arguments of a block such as `rule(...)` are written
-          #|/// `key: "x"`, so a rule's `name` is not the module's.
+          #|/// by its `"key": "x"` lines. A `moon.mod` sets a field with an assignment,
+          #|/// `key = "x"` (indented or not, with any comment after the value), or as
+          #|/// an argument of its `options(...)` block, `key: "x"`; the arguments of
+          #|/// any other block, such as `rule(...)`, are not the module's.
           #|fn manifest_field(text : String, key : String, json~ : Bool) -> String? {
           #|  if json {
           #|    let parsed = try Some(@json.parse(text)) catch { _ => None }
@@ -6816,20 +6816,60 @@ fn bundled_workflow(name : StringView) -> String? {
           #|        _ => None
           #|      }
           #|    }
-          #|  }
-          #|  let (name, separator) = if json { ("\"\{key}\"", ':') } else { (key, '=') }
-          #|  for line in text.split("\n") {
-          #|    guard line.trim_start().strip_prefix(name) is Some(rest) &&
-          #|      rest.trim_start() is [first, .. value] &&
-          #|      first == separator &&
-          #|      value.trim_start() is ['"', .. quoted] else {
-          #|      continue
+          #|    for line in text.split("\n") {
+          #|      if quoted_after(line, "\"\{key}\"", ':') is Some(value) {
+          #|        return Some(value)
+          #|      }
           #|    }
-          #|    if quoted.find("\"") is Some(end) {
-          #|      return Some(quoted[:end].to_owned())
+          #|    return None
+          #|  }
+          #|  // The block a line is inside, by the name before its `(`.
+          #|  let mut block : String? = None
+          #|  for line in text.split("\n") {
+          #|    let line = line.trim()
+          #|    let args = match block {
+          #|      Some(name) => Some((name, line))
+          #|      None => {
+          #|        if quoted_after(line, key, '=') is Some(value) {
+          #|          return Some(value)
+          #|        }
+          #|        match line.find("(") {
+          #|          Some(open) => {
+          #|            let name = line[:open].trim().to_owned()
+          #|            block = Some(name)
+          #|            Some((name, line[open + 1:]))
+          #|          }
+          #|          None => None
+          #|        }
+          #|      }
+          #|    }
+          #|    guard args is Some((name, rest)) else { continue }
+          #|    if name == "options" {
+          #|      for arg in rest.split(",") {
+          #|        if quoted_after(arg, key, ':') is Some(value) {
+          #|          return Some(value)
+          #|        }
+          #|      }
+          #|    }
+          #|    if rest.contains(")") {
+          #|      block = None
           #|    }
           #|  }
           #|  None
+          #|}
+          #|
+          #|///|
+          #|/// The quoted value of `key`, then `separator`, at the start of `text`: `x`
+          #|/// in `key = "x" // note` or `key: "x",`.
+          #|fn quoted_after(text : StringView, key : String, separator : Char) -> String? {
+          #|  guard text.trim_start().strip_prefix(key) is Some(rest) &&
+          #|    rest.trim_start() is [first, .. value] &&
+          #|    first == separator &&
+          #|    value.trim_start() is ['"', .. quoted] &&
+          #|    quoted.find("\"") is Some(end) else {
+          #|    return None
+          #|  }
+          #|  Some(quoted[:end].to_owned())
           #|}
           #|
           #|///|
