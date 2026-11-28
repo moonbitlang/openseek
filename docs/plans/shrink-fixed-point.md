@@ -464,3 +464,13 @@ Seventh pass (Codex, xhigh, both fix commits):
 | P2: a test kit's test-only rows are reported as unmapped | The kit filter runs first; a package left with no candidates is neither |
 | P2: size-bounded history pages break the desktop's paging cursor, miss the first page's running jobs, and count UTF-16 units | Replaced: listed jobs leave out their `data` (the trace), so a page stays small at 100 rows; `selected`, which every desktop list request asks for, carries it |
 | P2: an external module whose name extends a local module's maps to a local directory | Not fixed: needs the analyzer's package locations. A follow-up |
+
+Eighth pass (Codex, xhigh, the three fix commits):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: on a first-page reply the desktop ordered the list rows after merging `selected`, so the selected job lost its trace | `selected` is merged last (a frontend test with both copies; it fails without the fix) |
+| P2: a `moon.mod.json` that opens with a comment reads as a `moon.mod` | The format is the file's name; the fixture's nested manifest opens with a comment |
+| P2: a proactive budget stop after a failure prints no continuation | Both host-limit stops print it |
+| P2: a first round too large for the budget is retried at the same size | Not fixed: a follow-up |
+| P2: usage read from a child's earlier report chunks is lost at a refusal | Not fixed: the stop line's token count only. A follow-up |

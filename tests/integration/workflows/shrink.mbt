@@ -357,10 +357,11 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     "rule(\n  name: \"generate\", // code-generation rule\n  command: \"true\",\n)\n\n  name = \"fx/app\" // the fixture app\n\nversion = \"0.1.0\"\n",
   )
   // A module whose packages live under its `source` directory, in a legacy
-  // manifest with the comment and trailing comma Moon accepts.
+  // manifest with the comments and trailing comma Moon accepts, one of them
+  // before its brace.
   write(
     repo + "/sub/moon.mod.json",
-    "{\n  // the nested module\n  \"name\": \"fx/sub\",\n  \"source\": \"src/\",\n}\n",
+    "// the nested module\n{\n  // its packages\n  \"name\": \"fx/sub\",\n  \"source\": \"src/\",\n}\n",
   )
   write(
     repo + "/alpha/moon.pkg",

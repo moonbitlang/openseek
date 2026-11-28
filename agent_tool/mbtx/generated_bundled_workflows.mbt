@@ -6367,9 +6367,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  let mut worked = 0
           #|  let mut round = 0
           #|  let mut ending = ""
-          #|  // The host refused a call: the run stops with its continuation even when
-          #|  // the abandoned round already recorded failures.
-          #|  let mut refused = false
+          #|  // The run stopped at the host's limits, before a call or at a refusal:
+          #|  // it prints its continuation even when a round recorded failures.
+          #|  let mut limited = false
           #|  for ;; {
           #|    if options.rounds is Some(limit) && round >= limit {
           #|      ending = "stopped: --rounds \{limit}"
@@ -6418,6 +6418,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    let fits = host_room(worked)
           #|    guard fits > 0 else {
           #|      ending = "stopped: the host's call or trace budget is spent"
+          #|      limited = true
           #|      break
           #|    }
           #|    round += 1
@@ -6439,7 +6440,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|        // skipped, so the continuation offers them again.
           #|        println("round \{round}: stopped by the host: \{first_line(why)}")
           #|        ending = "stopped: the host refused a call in round \{round}"
-          #|        refused = true
+          #|        limited = true
           #|        break
           #|      }
           #|      error => raise error
@@ -6526,7 +6527,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  )
           #|  // A run that stopped short, or gave packages up, can go on from its last
           #|  // round: check out that branch and run again with these arguments.
-          #|  if (failures is [] || refused) && ending != "fixed point" {
+          #|  if (failures is [] || limited) && ending != "fixed point" {
           #|    let last = match stack {
           #|      [.., (branch, _)] => Some(branch)
           #|      [] => None
@@ -6779,14 +6780,22 @@ fn bundled_workflow(name : StringView) -> String? {
           #|/// directories through it.
           #|async fn module_dirs() -> Array[(String, String)] {
           #|  let modules : Array[(String, String)] = []
-          #|  for entry in manifests(["moon.mod", "moon.mod.json"]) {
-          #|    guard manifest_field(entry.1, "name") is Some(name) else { continue }
-          #|    let dir = match manifest_field(entry.1, "source").map(directory) {
-          #|      None | Some("") => entry.0
-          #|      Some(source) if entry.0.is_empty() => source
-          #|      Some(source) => "\{entry.0}/\{source}"
+          #|  // The file name says the format: a legacy `moon.mod.json` may open with a
+          #|  // comment rather than its brace.
+          #|  for format in [("moon.mod", false), ("moon.mod.json", true)] {
+          #|    let (file, json) = format
+          #|    for entry in manifests([file]) {
+          #|      guard manifest_field(entry.1, "name", json~) is Some(name) else {
+          #|        continue
+          #|      }
+          #|      let dir = match
+          #|        manifest_field(entry.1, "source", json~).map(directory) {
+          #|        None | Some("") => entry.0
+          #|        Some(source) if entry.0.is_empty() => source
+          #|        Some(source) => "\{entry.0}/\{source}"
+          #|      }
+          #|      modules.push((name, dir))
           #|    }
-          #|    modules.push((name, dir))
           #|  }
           #|  modules
           #|}
@@ -6798,8 +6807,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|/// assignment, `key = "x"` (indented or not, with any comment after the
           #|/// value), while the arguments of a block such as `rule(...)` are written
           #|/// `key: "x"`, so a rule's `name` is not the module's.
-          #|fn manifest_field(text : String, key : String) -> String? {
-          #|  let json = text.trim_start() is ['{', ..]
+          #|fn manifest_field(text : String, key : String, json~ : Bool) -> String? {
           #|  if json {
           #|    let parsed = try Some(@json.parse(text)) catch { _ => None }
           #|    if parsed is Some(Object(fields)) {
