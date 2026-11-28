@@ -1755,7 +1755,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// with no compatibility layer for older ones: increment this whenever a host
 /// command, reply or event changes incompatibly, and a browser shows a
 /// mismatched host as unavailable before sending it any request.
-pub const HostProtocolRevision : Int32 = 15
+pub const HostProtocolRevision : Int32 = 16
 
 ///|
 /// Immutable identity of the installed desktop package. The native host reads

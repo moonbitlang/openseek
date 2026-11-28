@@ -182,6 +182,13 @@ async fn moon_child(dir : String) -> Unit {
       } : Json).stringify(),
   )
   match args {
+    // With `moon.work` above the checkout, Moon prints paths from there.
+    ["check", "--dry-run"] if @fs.exists(dir + "/workspace-above") =>
+      println(
+        DryRun
+        .replace_all(old=" ./", new=" ./shrink-repo/")
+        .replace_all(old="'../side by side/", new="'side by side/"),
+      )
     ["check", "--dry-run"] => println(DryRun)
     ["ide", "analyze"] => {
       let turn = calls
@@ -508,7 +515,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-continue", "shrink-none", "shrink-skip", "shrink-fixed", "shrink-bad-number",
       "shrink-subdir", "shrink-dirty", "shrink-ahead", "shrink-stack-on", "shrink-option-value",
       "shrink-unknown-option", "shrink-merging", "shrink-sequencing", "shrink-unmapped",
-      "shrink-host-limit",
+      "shrink-host-limit", "shrink-workspace-above",
     ] {
     let host = fake_host("shrink", mode)
     host.fixture["base#1"] = head
@@ -550,6 +557,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         write(repo + "/.git/sequencer/todo", "pick \{beta1}\n")
       }
       "shrink-unmapped" => write(calls + "/analyze-1.txt", UnmappedAnalysis)
+      "shrink-workspace-above" => write(calls + "/workspace-above", "")
       "shrink-ahead" => {
         append(repo + "/README.md", "local")
         ignore(git(repo, ["commit", "-q", "-am", "local commit"]))
@@ -571,7 +579,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-check-fails" | "shrink-conflict" => ["--no-pr"]
       // A directory that starts with `-` must replay as one, not as an option.
       "shrink-rounds" => ["--no-pr", "--rounds", "1", "--exclude", "./-vendor"]
-      "shrink-none" => ["--no-pr", "--path", "beta"]
+      "shrink-none" | "shrink-workspace-above" => ["--no-pr", "--path", "beta"]
       "shrink-skip" => ["--no-pr", "--rounds", "1", "--skip", "alpha"]
       "shrink-stack-on" => ["--stack-on", "other"]
       "shrink-fixed" => ["--no-pr", "--path", "nowhere"]
@@ -604,6 +612,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         @fs.remove(repo + "/.git/sequencer", recursive=true)
       }
       "shrink-unmapped" => write(calls + "/analyze-1.txt", FirstAnalysis)
+      "shrink-workspace-above" => @fs.remove(calls + "/workspace-above")
       _ => ()
     }
     // Whatever happened, the checkout is back where it was, with no pick
@@ -817,7 +826,9 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
           ],
         )
       }
-      "shrink-none" => {
+      // The same run as shrink-none, with `moon.work` one level above the
+      // checkout: its packages are found under the checkout's prefix.
+      "shrink-none" | "shrink-workspace-above" => {
         // A round with nothing accepted publishes nothing, and its package
         // is not offered again.
         assert_eq(labels, ["shrink:beta", "shrink:review-beta"], msg=output)

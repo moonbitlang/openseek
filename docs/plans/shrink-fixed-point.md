@@ -129,9 +129,11 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
    be clean (its check could rewrite a stale `pkg.generated.mbti`). Parse the
    candidates and map each package name to its directory as Moon resolves
    it: `moon check --dry-run` prints one `moonc check` per package, naming
-   its source files and `-pkg <name>`. A package whose files are outside the
-   checkout (a `moon.work` member beside it) is reported as not in this
-   checkout and keeps the run from a plain fixed point. Keep
+   its source files and `-pkg <name>`, from Moon's workspace root, which may
+   be above the checkout; the checkout's prefix is the one under which most
+   printed files are tracked. A package whose files are outside the checkout
+   (a `moon.work` member beside it) is reported as not in this checkout and
+   keeps the run from a plain fixed point. Keep
    packages under `--path`, not under `--exclude`, not named by `--skip`, and
    not given up earlier in this run (see Progress). With none left, the run has reached the fixed
    point: "fixed point" when the analyzer reports nothing in scope, else
@@ -488,3 +490,10 @@ Tenth pass (Codex, xhigh, P1 findings only, the five fix commits):
 |---|---|
 | P1: a quoted `"source":` key in `options(...)` is missed, faking a fixed point | Superseded: the script no longer reads module manifests. Each pass found another way a `moon.mod` can set a name or `source` (comments, indentation, `rule(...)` arguments, `options(...)`, quoted keys, parentheses in comments), so packages are mapped to directories from `moon check --dry-run`, Moon's own resolution, which the analyzer shares. On this repository it maps all 333 analyzed packages |
 | P1: a `)` in a comment ends the `options(...)` block early | Superseded likewise |
+
+Eleventh pass (Codex, xhigh, P1 findings only, the six fix commits):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: with `moon.work` above the checkout, Moon prints `./repo/src/x.mbt`, which matches no tracked file, so the package drops out | The checkout's prefix in Moon's paths is inferred, the one under which most printed files are tracked; the workspace-above mode (the previous script fails it) |
+| P1: an open browser on the old frontend loses the selected job's trace from a host that lists jobs without it, at the same protocol revision | `HostProtocolRevision` is 16, and the E2E harness's `hostProtocol` with it |
