@@ -171,6 +171,29 @@ test "first-page polling refreshes a selected historical row while paused" {
 }
 
 ///|
+test "a selected job on the first page keeps the trace its selected view carries" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  // The page lists the job without its trace; `selected` carries it.
+  let listed = fixture_job("bg-1", Running)
+  let trace : Json = { "ptc_calls": [{ "name": "subagent" }] }
+  let full = { ..listed, job: { ..listed.job, data: Some(trace), }, }
+  let state = {
+    ..State::empty(),
+    jobs: [listed],
+    selected: Some(("runtime", "bg-1")),
+  }
+  let reply : @protocol.JobsListReply = {
+    jobs: [listed],
+    selected: Some(full),
+    next_offset: None,
+    errors: [],
+  }
+  let (_, next) = update(emit, Listed(0, 0, Ok(reply)), state)
+  assert_eq(next.jobs.length(), 1)
+  assert_true(selected_job(next) is Some(view) && view.job.data == Some(trace))
+}
+
+///|
 fn reading_fixture() -> State {
   {
     ..State::empty(),

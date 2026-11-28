@@ -120,6 +120,27 @@ async test "job history distinguishes dead owner from disconnected client and ma
 }
 
 ///|
+async test "history rows leave out a job's trace and the selected job keeps it" {
+  let root = @fs.tmpdir(prefix="job-history-data-")
+  defer @fs.remove(root, recursive=true)
+  @fs.mkdir("\{root}/gen-1")
+  @fs.write_text("\{root}/gen-1/owner.lock", "")
+  let trace : Json = { "ptc_calls": [{ "name": "large", "content": "trace" }] }
+  let record = {
+    ..job_record_fixture(),
+    id: "bg-1",
+    state: Exited(0),
+    data: Some(trace),
+  }
+  @fs.write_text("\{root}/gen-1/bg-1.json", record.to_json().stringify())
+  let page = job_history_page(root, Map([]), 0, [])
+  assert_eq(page.jobs.map(view => view.job.id), ["bg-1"])
+  assert_true(page.jobs[0].job.data is None)
+  let selected = selected_job_view(root, Map([]), "gen-1", "bg-1")
+  assert_eq(selected.job.data, Some(trace))
+}
+
+///|
 async test "history decodes only its requested page and preserves runtime job order" {
   let root = @fs.tmpdir(prefix="job-history-pages-")
   defer @fs.remove(root, recursive=true)

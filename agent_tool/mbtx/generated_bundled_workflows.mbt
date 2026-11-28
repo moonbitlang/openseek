@@ -5234,7 +5234,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
           #|///|
           #|/// The most verifiers one run starts. With five lenses that is 13 children,
-          #|/// inside the session's 16 at once and a script's 64 in all.
+          #|/// inside the session's 16 at once and a script's 128 in all.
           #|const MaxVerifiers : Int32 = 8
           #|
           #|///|
@@ -5864,6 +5864,2047 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    1 if total == 0 => println("<system>no matches</system>")
           #|    code => @env.exit(code)
           #|  }
+          #|}
+          #|
+        ),
+      )
+    "shrink.mbtx" =>
+      Some(
+        (
+          #|---
+          #|import {
+          #|  "moonbitlang/openseek_tools@0.2.0" @tools,
+          #|  "moonbitlang/async",
+          #|  "moonbitlang/async/fs",
+          #|  "moonbitlang/async/shell",
+          #|  "moonbitlang/core/encoding/utf8",
+          #|  "moonbitlang/core/env",
+          #|  "moonbitlang/core/json",
+          #|}
+          #|---
+          #|
+          #|///|
+          #|/// Run with mbtx(description="Shrink the public API", filename="@builtin/shrink.mbtx", args=["--", "optional focus"]).
+          #|/// Shrinks the workspace's public API in rounds until `moon ide analyze`
+          #|/// finds nothing left to shrink: one worker per package resolves each
+          #|/// exported item no other package uses, a fresh explore child reviews each
+          #|/// change, and each round becomes one pull request stacked on the previous
+          #|/// round's, never merged (docs/plans/shrink-fixed-point.md).
+          #|const Usage : String =
+          #|  #|usage: @builtin/shrink.mbtx [--path DIR ...] [--exclude DIR ...]
+          #|  #|                            [--skip DIR ...] [--max-packages N] [--rounds N]
+          #|  #|                            [--check-target T ...] [--check-in DIR ...]
+          #|  #|                            [--stack-on BRANCH] [--no-pr] [--] [FOCUS...]
+          #|  #|
+          #|  #|Shrinks this workspace's public API until `moon ide analyze` reports no
+          #|  #|exported item without a production use in another package. Each round
+          #|  #|analyzes the workspace, gives each of the packages with the most
+          #|  #|candidates one worker in its own worktree, has a fresh reviewer read each
+          #|  #|change, combines the accepted ones, checks the whole workspace, and opens
+          #|  #|one pull request stacked on the previous round's. Nothing is merged.
+          #|  #|
+          #|  #|Run it from the repository root with no uncommitted changes to tracked
+          #|  #|files, ideally in a checkout of its own: each round checks out its commit
+          #|  #|(detached), and HEAD is restored at the end. Unless --no-pr, HEAD must be
+          #|  #|an ancestor of origin/HEAD (with --stack-on, exactly origin/BRANCH) and
+          #|  #|gh must be signed in.
+          #|  #|
+          #|  #|--path DIR (repeatable) shrinks only packages under DIR. --exclude DIR
+          #|  #|(repeatable) leaves packages under DIR alone. --skip DIR (repeatable)
+          #|  #|leaves the one package in DIR alone. --max-packages N changes at
+          #|  #|most N packages per round (default 8, at most 16; fewer when the start
+          #|  #|quota or the host's trace budget is short). --rounds N stops after
+          #|  #|N rounds. --check-target T (repeatable) checks each combined round with
+          #|  #|`moon check --deny-warn --no-mbti --target T` (default: once, with no
+          #|  #|--target). --check-in DIR (repeatable) also runs that check in DIR, a
+          #|  #|separate workspace that imports this one. --stack-on BRANCH opens the first round's pull request against
+          #|  #|BRANCH, to continue an earlier run's stack. --no-pr keeps each round on a
+          #|  #|local branch. FOCUS, joined with spaces, is an emphasis for workers; a
+          #|  #|word of it that starts with `-` must follow `--`.
+          #|  #|
+          #|  #|A run that stops short, or gives packages up, prints the arguments that
+          #|  #|continue it from its last round's branch.
+          #|
+          #|///|
+          #|const DefaultPackages : Int = 8
+          #|
+          #|///|
+          #|const MaxPackages : Int = 16
+          #|
+          #|///|
+          #|/// Workers the engine runs at once; a ninth start is refused, not queued.
+          #|const LiveWorkers : Int = 8
+          #|
+          #|///|
+          #|/// Children one script may start (the engine's `ScriptQuota`); a round of k
+          #|/// packages takes at most 2k.
+          #|const StartQuota : Int = 128
+          #|
+          #|///|
+          #|/// Bytes of tool calls the host retains for one script (`MaxTraceBytes` in
+          #|/// agent_tool/ptc). A call past it, or past `CallBudget`, is refused.
+          #|const TraceBudget : Int = 4194304
+          #|
+          #|///|
+          #|/// Tool calls the host serves one script (`MaxCallsPerProgram` in
+          #|/// agent_tool/ptc). A wait that times out with nothing ended counts too.
+          #|const CallBudget : Int = 1024
+          #|
+          #|///|
+          #|/// What one package was assumed to add to the trace before any is measured:
+          #|/// the second live run averaged 37.5 KB (two briefs of about 9 KB, two
+          #|/// reports of about 8 KB, and the waits).
+          #|const PackageTraceBytes : Int = 48000
+          #|
+          #|///|
+          #|/// Calls one package was assumed to take before any is measured: the second
+          #|/// live run averaged 7.4, four packages a round.
+          #|const PackageCalls : Int = 16
+          #|
+          #|///|
+          #|/// Trace kept free beyond the estimate, for a round that runs over it.
+          #|const TraceReserve : Int = 524288
+          #|
+          #|///|
+          #|/// Calls kept free beyond the estimate, for a round that runs over it.
+          #|const CallReserve : Int = 128
+          #|
+          #|///|
+          #|/// The host's framing around one call's arguments and result.
+          #|const TraceEntryBytes : Int = 256
+          #|
+          #|///|
+          #|/// What this script's tool calls have added to the host's retained trace.
+          #|let traced : Ref[Int] = Ref(0)
+          #|
+          #|///|
+          #|/// The tool calls this script has made.
+          #|let called : Ref[Int] = Ref(0)
+          #|
+          #|///|
+          #|/// The host refused a call for one of its per-script limits. Nothing ran;
+          #|/// the round in flight is abandoned and the run stops with its continuation.
+          #|suberror HostLimit {
+          #|  HostLimit(String)
+          #|}
+          #|
+          #|///|
+          #|/// How many more packages fit in what is left of the host's limits, after
+          #|/// `worked` packages: each is assumed to cost a quarter more than they
+          #|/// averaged so far, and never less than the starting estimates. Rounds are
+          #|/// sized by this; a round that still runs over is stopped by `HostLimit`.
+          #|fn host_room(worked : Int) -> Int {
+          #|  let room = (budget : Int, reserve : Int, used : Int, floor : Int) => {
+          #|    let measured = if worked > 0 { used * 5 / (worked * 4) } else { 0 }
+          #|    let each = if measured > floor { measured } else { floor }
+          #|    let left = budget - reserve - used
+          #|    if left > 0 {
+          #|      left / each
+          #|    } else {
+          #|      0
+          #|    }
+          #|  }
+          #|  let bytes = room(TraceBudget, TraceReserve, traced.val, PackageTraceBytes)
+          #|  let calls = room(CallBudget, CallReserve, called.val, PackageCalls)
+          #|  if bytes < calls {
+          #|    bytes
+          #|  } else {
+          #|    calls
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Call a host tool and count what the host retains of it: the call and its
+          #|/// JSON result, in UTF-8 bytes, as the host measures them.
+          #|async fn tool(name : String, arguments : Json) -> @tools.CallResult {
+          #|  let result = @tools.call(name, arguments)
+          #|  called.val += 1
+          #|  let reply : Map[String, Json] = {
+          #|    "content": Json::string(result.content),
+          #|    "is_error": Json::boolean(result.is_error),
+          #|  }
+          #|  if result.data is Some(data) {
+          #|    reply["data"] = data
+          #|  }
+          #|  traced.val += TraceEntryBytes +
+          #|    @utf8.encode(name).length() +
+          #|    @utf8.encode(arguments.stringify()).length() +
+          #|    @utf8.encode(Json::object(reply).stringify()).length()
+          #|  if result.is_error &&
+          #|    (result.content.contains("PTC trace budget exhausted") ||
+          #|    result.content.contains("PTC program exhausted its")) {
+          #|    raise HostLimit(result.content)
+          #|  }
+          #|  result
+          #|}
+          #|
+          #|///|
+          #|const ReviewSteps : Int = 60
+          #|
+          #|///|
+          #|/// The engine's limit for a worktree name: `[a-z0-9][a-z0-9-]{0,39}`.
+          #|const NameChars : Int = 40
+          #|
+          #|///|
+          #|/// What workers and reviewers are told about shrinking a package's API: the
+          #|/// method of shrink_package.md and the traps past sweeps hit.
+          #|const Guidance : String =
+          #|  #|# Shrinking a MoonBit package's public API
+          #|  #|
+          #|  #|`moon ide analyze` lists each exported item with `// usage: N (M in test)`.
+          #|  #|N counts uses from OTHER packages of the workspace, M how many of those are
+          #|  #|in tests; uses inside the item's own package never count. An item defined
+          #|  #|in the package's `exports.mbt` is marked `, in exports.mbt`: that file
+          #|  #|holds the items exported on purpose without a consumer. A type whose
+          #|  #|`pub(all)` or `pub(open)` can narrow to `pub` is marked
+          #|  #|`(all) or (open) can be removed`.
+          #|  #|
+          #|  #|## Resolve every candidate, one of four ways
+          #|  #|- **Drop `pub`** when only its own package uses it (N == 0 and the
+          #|  #|  compiler reports no unused warning afterwards).
+          #|  #|- **Delete it** when nothing uses it and it is vestigial: an unused
+          #|  #|  warning after dropping `pub` says so. Making it private instead only
+          #|  #|  trades the export for a warning. Delete what only it used, too.
+          #|  #|- **Narrow** `pub(all)`/`pub(open)` to `pub` when no other package
+          #|  #|  constructs the type or implements the trait.
+          #|  #|- **Move the block to `exports.mbt`** (keeping `pub`), with a `///` line
+          #|  #|  that names why, when it is exported on purpose. Only these reasons count:
+          #|  #|  - a test seam that tests of other packages use (name them);
+          #|  #|  - protocol or round-trip surface: wire types, JSON codecs;
+          #|  #|  - a documented tunable, or one member of a symmetric family whose
+          #|  #|    other members are used;
+          #|  #|  - a consumer the analyzer cannot see, named with its file and line: a
+          #|  #|    `.mbtx` script; a module outside the workspace, such as a separate app
+          #|  #|    workspace; a js-only app; a `{ ..x, f }` record update of a
+          #|  #|    `pub(all)` type in another package (the narrowing hint misses it);
+          #|  #|    or outside users of a published module.
+          #|  #|  "Might be useful later" is not a reason: delete it instead.
+          #|  #|
+          #|  #|Never leave a candidate where it is. If none of the first three ways is
+          #|  #|right, the analyzer missed a consumer or the export is deliberate: record
+          #|  #|that in exports.mbt, so the next analysis does not list it again. The one
+          #|  #|exception is an item defined in a generated file; say so.
+          #|  #|
+          #|  #|## Tests
+          #|  #|Test use alone never justifies an export. If only this package's own
+          #|  #|blackbox tests (`*_test.mbt`) use the item, make it private and move those
+          #|  #|tests into the package, or test it through the public API. A whitebox file
+          #|  #|(`*_wbtest.mbt`) is enough only when the package's own code also uses the
+          #|  #|item: `moon check --deny-warn` does not count whitebox tests as uses, so a
+          #|  #|private item that only they reach is `unused_value`. Then either delete it
+          #|  #|with its tests (it is vestigial), or move its tests into inline `test`
+          #|  #|blocks in the package's source file beside it, which do count as uses.
+          #|  #|If tests of another package use it, it is a test
+          #|  #|seam (`exports.mbt`, naming those tests); never edit another package's
+          #|  #|files.
+          #|  #|
+          #|  #|You cannot delete a file. When a file has no code left (say all its tests
+          #|  #|moved to the whitebox file), leave nothing in it but comments, or nothing
+          #|  #|at all: the workflow deletes such files when it combines the round.
+          #|  #|
+          #|  #|## Traps
+          #|  #|- A trait implementation used through a trait object cannot be demoted
+          #|  #|  (`implementation of method X is private`); derive-generated methods are
+          #|  #|  not blocks you can edit.
+          #|  #|- `priv` on a field of a plain `pub` struct is redundant: shrink the type's
+          #|  #|  visibility, not its fields.
+          #|  #|- Narrowing `pub(all)` to `pub` keeps a type usable from other packages:
+          #|  #|  they can still match its variants and read its fields. Only building a
+          #|  #|  value (a literal, a constructor call, `{ ..x, f }`) needs `pub(all)`.
+          #|  #|- A type made private surfaces `missing_priv`: mark it `priv`. A
+          #|  #|  `pub extend T with Eq::{..}` keeps the type in the interface; replace it
+          #|  #|  with a private `impl Eq for T` if the type still needs `Eq`.
+          #|  #|- Demoting an explicit impl can trip the implicit-method-promotion
+          #|  #|  deprecation: call it as `Show::to_string(x)` or `ToJson::to_json(x)`.
+          #|  #|- A parameter default that no caller passes shows up as
+          #|  #|  `unused_default_value` once the function is private: make the
+          #|  #|  parameter required or drop it.
+          #|  #|- The analyzer only sees the workspace. Before ANY visibility change
+          #|  #|  (dropping `pub`, deleting, narrowing), `git grep -n -w <name>` the whole
+          #|  #|  repository: `.mbtx` scripts, js-only apps, and modules outside the
+          #|  #|  workspace (such as a separate app module) use items it counts as
+          #|  #|  unused. Narrowing breaks code that constructs the type with a literal
+          #|  #|  or matches it from outside.
+          #|  #|
+          #|  #|## Verify
+          #|  #|A shrink breaks consumers, not the package, so check the whole workspace:
+          #|  #|`moon check --deny-warn --no-mbti` from the repository root for each
+          #|  #|target the repository builds (its AGENTS.md says which; `--no-mbti` keeps
+          #|  #|the check from rewriting other packages' interface files), and check any
+          #|  #|consumer outside the workspace that `git grep` found. Then `moon test`
+          #|  #|for the package, and `moon check` (which regenerates its
+          #|  #|pkg.generated.mbti) and `moon fmt` with the package path only. The
+          #|  #|package's pkg.generated.mbti may only lose lines, or change
+          #|  #|`pub(all)` to `pub`.
+          #|
+          #|///|
+          #|async fn main {
+          #|  let options = {
+          #|    paths: [],
+          #|    excludes: [],
+          #|    skips: [],
+          #|    max_packages: DefaultPackages,
+          #|    rounds: None,
+          #|    checks: [],
+          #|    check_dirs: [],
+          #|    stack_on: None,
+          #|    publish: true,
+          #|    focus: "",
+          #|  }
+          #|  let words : Array[String] = []
+          #|  for args = @env.args()[1:] {
+          #|    match args {
+          #|      [] => break
+          #|      ["--help" | "-h", ..] => {
+          #|        println(Usage)
+          #|        return
+          #|      }
+          #|      // A flag's value is never another option: `--exclude --no-pr` would
+          #|      // otherwise exclude a directory named `--no-pr` and still publish.
+          #|      [
+          #|        "--path"
+          #|        | "--exclude"
+          #|        | "--skip"
+          #|        | "--max-packages"
+          #|        | "--rounds"
+          #|        | "--check-target"
+          #|        | "--check-in"
+          #|        | "--stack-on" as flag,
+          #|        value,
+          #|        ..,
+          #|      ] if value.has_prefix("-") =>
+          #|        fail("\{flag} needs a value, not \{value}\n\{Usage}")
+          #|      ["--path", dir, .. rest] => {
+          #|        options.paths.push(directory(dir))
+          #|        continue rest
+          #|      }
+          #|      ["--exclude", dir, .. rest] => {
+          #|        options.excludes.push(directory(dir))
+          #|        continue rest
+          #|      }
+          #|      ["--skip", dir, .. rest] => {
+          #|        options.skips.push(directory(dir))
+          #|        continue rest
+          #|      }
+          #|      ["--max-packages", value, .. rest] => {
+          #|        options.max_packages = count("--max-packages", value, MaxPackages)
+          #|        continue rest
+          #|      }
+          #|      ["--rounds", value, .. rest] => {
+          #|        options.rounds = Some(count("--rounds", value, 99))
+          #|        continue rest
+          #|      }
+          #|      ["--check-target", target, .. rest] => {
+          #|        options.checks.push(target)
+          #|        continue rest
+          #|      }
+          #|      ["--check-in", dir, .. rest] => {
+          #|        options.check_dirs.push(directory(dir))
+          #|        continue rest
+          #|      }
+          #|      ["--stack-on", branch, .. rest] => {
+          #|        options.stack_on = Some(branch)
+          #|        continue rest
+          #|      }
+          #|      ["--no-pr", .. rest] => {
+          #|        options.publish = false
+          #|        continue rest
+          #|      }
+          #|      [
+          #|        "--path"
+          #|        | "--exclude"
+          #|        | "--skip"
+          #|        | "--max-packages"
+          #|        | "--rounds"
+          #|        | "--check-target"
+          #|        | "--check-in"
+          #|        | "--stack-on" as flag,
+          #|      ] => fail("\{flag} needs a value\n\{Usage}")
+          #|      ["--", .. rest] => {
+          #|        words.append(rest.to_owned())
+          #|        break
+          #|      }
+          #|      // A mistyped option is an error, not focus text.
+          #|      [word, ..] if word.has_prefix("-") =>
+          #|        fail("unknown option \{word}; focus text that starts with - goes after --\n\{Usage}")
+          #|      [word, .. rest] => {
+          #|        words.push(word)
+          #|        continue rest
+          #|      }
+          #|    }
+          #|  }
+          #|  options.focus = words.join(" ").trim().to_owned()
+          #|  // Preflight: everything that would stop the run is checked before any
+          #|  // child starts, so a run that cannot finish spends no tokens.
+          #|  let prefix = run("git", ["rev-parse", "--show-prefix"]).trim()
+          #|  guard prefix.is_empty() else {
+          #|    fail(
+          #|      "run this from the repository root, not \{prefix}: workers' worktrees are made from the session's workspace, which must be the root",
+          #|    )
+          #|  }
+          #|  clean(
+          #|    "commit or stash the changes to tracked files first: each round checks out its own commit",
+          #|  )
+          #|  idle()
+          #|  let head = run("git", ["rev-parse", "HEAD"]).trim().to_owned()
+          #|  // What to check out again at the end: the branch, or the commit when
+          #|  // HEAD is detached.
+          #|  let start = match run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).trim() {
+          #|    "HEAD" => head
+          #|    branch => branch.to_owned()
+          #|  }
+          #|  let target = if options.publish {
+          #|    Some(pr_target(options.stack_on))
+          #|  } else {
+          #|    None
+          #|  }
+          #|  let kits = test_kits()
+          #|  println(
+          #|    "shrink: from \{start} at \{short(head)}; if the run is killed, finish or abort any cherry-pick and check out \{start} again",
+          #|  )
+          #|  // Rounds move HEAD; whatever else happens, the checkout is put back.
+          #|  let swept : Result[Unit, Error] = try {
+          #|    sweep(options, head, start, target, kits)
+          #|    Ok(())
+          #|  } catch {
+          #|    error => Err(error)
+          #|  }
+          #|  let restored = @shell.Cmd("git", ["checkout", "-q", start]).output(
+          #|    timeout_ms=60000,
+          #|  ) catch {
+          #|    error => fail("could not check out \{start} again: \{error}")
+          #|  }
+          #|  guard restored.exit_code() == 0 else {
+          #|    fail("could not check out \{start} again: \{first_line(restored.stderr())}")
+          #|  }
+          #|  match swept {
+          #|    Ok(_) => ()
+          #|    Err(error) => raise error
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// What the command line asked for.
+          #|priv struct Options {
+          #|  paths : Array[String]
+          #|  /// Directories whose packages are all left alone.
+          #|  excludes : Array[String]
+          #|  /// Single packages left alone.
+          #|  skips : Array[String]
+          #|  mut max_packages : Int
+          #|  mut rounds : Int?
+          #|  checks : Array[String]
+          #|  /// Separate workspaces whose check also gates a combined round.
+          #|  check_dirs : Array[String]
+          #|  mut stack_on : String?
+          #|  mut publish : Bool
+          #|  mut focus : String
+          #|}
+          #|
+          #|///|
+          #|/// Fail with `why` when tracked files have changes.
+          #|async fn clean(why : String) -> Unit {
+          #|  let changed = run("git", ["status", "--porcelain", "--untracked-files=no"])
+          #|  guard changed.trim().is_empty() else { fail("\{why}\n\{changed}") }
+          #|}
+          #|
+          #|///|
+          #|/// Fail when a git operation is in progress. A merge whose result matches
+          #|/// HEAD leaves `git status --porcelain` empty, and so does a cherry-pick
+          #|/// sequence between two picks; the checkout that ends every run, or the
+          #|/// script's own `cherry-pick --abort`, would silently discard either. The
+          #|/// markers are files in this worktree's git directory, looked up by path:
+          #|/// as revisions, a branch named `MERGE_HEAD` would resolve too.
+          #|async fn idle() -> Unit {
+          #|  for operation in [
+          #|      ("MERGE_HEAD", "merge"),
+          #|      ("CHERRY_PICK_HEAD", "cherry-pick"),
+          #|      ("REVERT_HEAD", "revert"),
+          #|      ("sequencer", "cherry-pick or revert sequence"),
+          #|      ("rebase-merge", "rebase"),
+          #|      ("rebase-apply", "rebase"),
+          #|      ("BISECT_LOG", "bisect"),
+          #|    ] {
+          #|    let (entry, name) = operation
+          #|    let path = run("git", ["rev-parse", "--git-path", entry]).trim().to_owned()
+          #|    guard !@fs.exists(path) else {
+          #|      fail("a \{name} is in progress (\{entry}): finish or abort it first")
+          #|    }
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// The rounds: analyze, work, review, combine, check and publish, until the
+          #|/// analyzer reports no candidate the run may still work on.
+          #|async fn sweep(
+          #|  options : Options,
+          #|  head : String,
+          #|  start : String,
+          #|  target : Target?,
+          #|  kits : Array[String],
+          #|) -> Unit {
+          #|  // Packages given up this run: never offered again, so the rounds end.
+          #|  let skipped : Array[String] = []
+          #|  // The items each package's last accepted change was given; any of them
+          #|  // still listed afterwards means the change did not resolve it.
+          #|  let given : Map[String, Array[String]] = Map([])
+          #|  let failures : Array[String] = []
+          #|  // Each round's branch and where it went.
+          #|  let stack : Array[(String, String)] = []
+          #|  let mut base = head
+          #|  // The branch the next round's pull request targets.
+          #|  let mut parent = match target {
+          #|    Some(target) => target.base
+          #|    None => ""
+          #|  }
+          #|  // Children started and the tokens they spent, counted as they happen, so
+          #|  // a round the host stops still counts.
+          #|  let started : Ref[Int] = Ref(0)
+          #|  let tokens : Ref[Int] = Ref(0)
+          #|  // Packages given to workers so far, to measure what one costs the trace.
+          #|  let mut worked = 0
+          #|  let mut round = 0
+          #|  let mut ending = ""
+          #|  // The run stopped at the host's limits, before a call or at a refusal:
+          #|  // it prints its continuation even when a round recorded failures.
+          #|  let mut limited = false
+          #|  for ;; {
+          #|    if options.rounds is Some(limit) && round >= limit {
+          #|      ending = "stopped: --rounds \{limit}"
+          #|      break
+          #|    }
+          #|    let (analyzed, unmapped) = analyze(kits)
+          #|    if unmapped is [_, ..] {
+          #|      println(
+          #|        "  not in this checkout: \{unmapped.join(" ")}",
+          #|      )
+          #|    }
+          #|    let packages = analyzed.filter(pkg => within(pkg.dir, options.paths))
+          #|    let open : Array[Package] = []
+          #|    for pkg in packages {
+          #|      if skipped.contains(pkg.dir) ||
+          #|        options.skips.contains(pkg.dir) ||
+          #|        (options.excludes is [_, ..] && within(pkg.dir, options.excludes)) {
+          #|        continue
+          #|      }
+          #|      if given.get(pkg.dir) is Some(items) {
+          #|        let left = pkg.candidates.filter(row => items.contains(row.code))
+          #|        if left is [_, ..] {
+          #|          println(
+          #|            "  \{shown(pkg.dir)}: unresolved after its change: \{left.map(row => row.code).join("; ")}",
+          #|          )
+          #|          skipped.push(pkg.dir)
+          #|          continue
+          #|        }
+          #|      }
+          #|      open.push(pkg)
+          #|    }
+          #|    guard open is [_, ..] else {
+          #|      let left = [..packages.map(pkg => shown(pkg.dir)), ..unmapped]
+          #|      ending = if left is [] {
+          #|        "fixed point"
+          #|      } else {
+          #|        "fixed point except \{left.join(" ")}"
+          #|      }
+          #|      break
+          #|    }
+          #|    let room = (StartQuota - started.val) / 2
+          #|    guard room > 0 else {
+          #|      ending = "stopped: the start quota is spent"
+          #|      break
+          #|    }
+          #|    let fits = host_room(worked)
+          #|    guard fits > 0 else {
+          #|      ending = "stopped: the host's call or trace budget is spent"
+          #|      limited = true
+          #|      break
+          #|    }
+          #|    round += 1
+          #|    let mut limit = options.max_packages
+          #|    if room < limit {
+          #|      limit = room
+          #|    }
+          #|    if fits < limit {
+          #|      limit = fits
+          #|    }
+          #|    let works = select(open, limit)
+          #|    worked += works.length()
+          #|    println(
+          #|      "round \{round}: packages=\{open.length()} chosen=\{works.length()}",
+          #|    )
+          #|    work_and_review(works, base, options.focus, failures, started, tokens) catch {
+          #|      HostLimit(why) => {
+          #|        // Nothing of this round is kept: its packages are neither given nor
+          #|        // skipped, so the continuation offers them again.
+          #|        println("round \{round}: stopped by the host: \{first_line(why)}")
+          #|        ending = "stopped: the host refused a call in round \{round}"
+          #|        limited = true
+          #|        break
+          #|      }
+          #|      error => raise error
+          #|    }
+          #|    let accepted = works.filter(work => work.review is Accepted(_))
+          #|    for work in works {
+          #|      print_work(work)
+          #|      if work.review is Accepted(_) {
+          #|        given[work.pkg.dir] = work.pkg.candidates.map(row => row.code)
+          #|      } else {
+          #|        skipped.push(work.pkg.dir)
+          #|      }
+          #|    }
+          #|    guard accepted is [_, ..] else {
+          #|      println("round \{round}: nothing accepted")
+          #|      continue
+          #|    }
+          #|    // Combine: the accepted commits, in package order, on the round's base.
+          #|    // Their files are disjoint, so the picks cannot conflict.
+          #|    ignore(run("git", ["checkout", "-q", "--detach", base]))
+          #|    let picks = accepted.filter_map(work => {
+          #|      work.change.map(change => (change.commit, work.pkg.dir, change.summary))
+          #|    })
+          #|    if combine(picks) is Some(why) {
+          #|      failures.push(
+          #|        "round \{round}: the accepted changes do not combine: \{why}",
+          #|      )
+          #|      ending = "stopped: round \{round} does not combine"
+          #|      break
+          #|    }
+          #|    let tip = run("git", ["rev-parse", "HEAD"]).trim().to_owned()
+          #|    let branch = "shrink/r\{round}-\{tip[:8]}"
+          #|    ignore(run("git", ["branch", "-f", branch, tip]))
+          #|    for work in accepted {
+          #|      if work.change is Some(change) {
+          #|        // Its commit is on the round's branch now.
+          #|        ignore(
+          #|          @shell.Cmd("git", ["branch", "-D", change.branch]).output(
+          #|            timeout_ms=30000,
+          #|          ),
+          #|        ) catch {
+          #|          _ => ()
+          #|        }
+          #|      }
+          #|    }
+          #|    // Each package was checked alone; this is the first check of them
+          #|    // together.
+          #|    if combined_check(options.checks, options.check_dirs) is Some(why) {
+          #|      failures.push("round \{round} (\{branch}) fails its check: \{why}")
+          #|      ending = "stopped: round \{round} fails its check"
+          #|      break
+          #|    }
+          #|    let api = api_change(base, tip)
+          #|    let pr = match target {
+          #|      None => "branch \{branch}"
+          #|      Some(target) =>
+          #|        match open_pr(round, branch, tip, parent, accepted, api, target) {
+          #|          Ok(url) => url
+          #|          Err(why) => {
+          #|            failures.push("round \{round}: \{why}")
+          #|            ending = "stopped: round \{round} was not published"
+          #|            println("round \{round}: tip=\{short(tip)} pr=\{why}")
+          #|            break
+          #|          }
+          #|        }
+          #|    }
+          #|    println(
+          #|      "round \{round}: accepted=\{accepted.length()} tip=\{short(tip)} api: \{api} pr=\{pr}",
+          #|    )
+          #|    stack.push((branch, pr))
+          #|    parent = branch
+          #|    base = tip
+          #|  }
+          #|  // Reviewers may build a change in a worktree inside their scratch lab;
+          #|  // the lab is gone once they end, and this drops the records left behind.
+          #|  ignore(@shell.Cmd("git", ["worktree", "prune"]).output(timeout_ms=30000)) catch {
+          #|    _ => ()
+          #|  }
+          #|  for entry in stack {
+          #|    println("stack: \{entry.0} \{entry.1}")
+          #|  }
+          #|  println(
+          #|    "\{ending}: rounds=\{round} starts=\{started.val} tokens=\{tokens.val}",
+          #|  )
+          #|  // A run that stopped short, or gave packages up, can go on from its last
+          #|  // round: check out that branch and run again with these arguments.
+          #|  if (failures is [] || limited) && ending != "fixed point" {
+          #|    let last = match stack {
+          #|      [.., (branch, _)] => Some(branch)
+          #|      [] => None
+          #|    }
+          #|    println(
+          #|      "continue from \{last.unwrap_or(start)}: \{continuation(options, last, skipped)}",
+          #|    )
+          #|  }
+          #|  guard failures is [] else {
+          #|    fail("the shrink is incomplete: \{failures.join("; ")}")
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// The arguments that run the shrink on from `last`, the branch of its
+          #|/// latest round, with the same scope and limits.
+          #|fn continuation(
+          #|  options : Options,
+          #|  last : String?,
+          #|  skipped : Array[String],
+          #|) -> String {
+          #|  let args : Array[String] = []
+          #|  for dir in options.paths {
+          #|    args.append(["--path", argument(dir)])
+          #|  }
+          #|  if options.max_packages != DefaultPackages {
+          #|    args.append(["--max-packages", options.max_packages.to_string()])
+          #|  }
+          #|  for target in options.checks {
+          #|    args.append(["--check-target", target])
+          #|  }
+          #|  for dir in options.check_dirs {
+          #|    args.append(["--check-in", argument(dir)])
+          #|  }
+          #|  match (options.publish, last, options.stack_on) {
+          #|    (false, _, _) => args.push("--no-pr")
+          #|    (true, Some(branch), _) | (true, None, Some(branch)) =>
+          #|      args.append(["--stack-on", branch])
+          #|    (true, None, None) => ()
+          #|  }
+          #|  if options.rounds is Some(limit) {
+          #|    args.append(["--rounds", limit.to_string()])
+          #|  }
+          #|  for dir in options.excludes {
+          #|    args.append(["--exclude", argument(dir)])
+          #|  }
+          #|  for dir in [..options.skips, ..skipped] {
+          #|    args.append(["--skip", argument(dir)])
+          #|  }
+          #|  if !options.focus.is_empty() {
+          #|    args.append(["--", options.focus])
+          #|  }
+          #|  args.join(" ")
+          #|}
+          #|
+          #|///|
+          #|/// Cherry-pick each `(commit, package directory, summary)` onto HEAD, in
+          #|/// order, and amend it into one commit per package that says what it is:
+          #|/// the engine names a worker's commit after its worktree. Workers cannot
+          #|/// delete files, so the files a commit left without code in its package are
+          #|/// removed in that same commit. On any failure (a nonzero exit, or an error
+          #|/// such as a timeout) the pick is aborted so the checkout can be restored;
+          #|/// the reason, if it failed.
+          #|async fn combine(picks : Array[(String, String, String)]) -> String? {
+          #|  for pick in picks {
+          #|    let (commit, dir, summary) = pick
+          #|    let failed = try {
+          #|      let picked = @shell.Cmd("git", ["cherry-pick", commit]).output(
+          #|        timeout_ms=300000,
+          #|      )
+          #|      if picked.exit_code() == 0 {
+          #|        None
+          #|      } else {
+          #|        Some(first_line(picked.stderr()))
+          #|      }
+          #|    } catch {
+          #|      error => Some("\{error}")
+          #|    }
+          #|    if failed is Some(why) {
+          #|      return Some(abort_pick(why))
+          #|    }
+          #|    let cleaned : Result[Unit, Error] = try {
+          #|      let emptied : Array[String] = []
+          #|      for
+          #|        line in run("git", ["show", "--name-only", "--format=", "HEAD"]).split(
+          #|          "\n",
+          #|        ) {
+          #|        let file = line.trim().to_owned()
+          #|        let (parent, name) = parts(file)
+          #|        if parent == dir &&
+          #|          name.has_suffix(".mbt") &&
+          #|          @fs.exists(file) &&
+          #|          no_code(@fs.read_file(file).text()) {
+          #|          emptied.push(file)
+          #|        }
+          #|      }
+          #|      if emptied is [_, ..] {
+          #|        ignore(run("git", ["rm", "-q", "--", ..emptied]))
+          #|      }
+          #|      let title = if dir.is_empty() {
+          #|        "refactor: shrink public API"
+          #|      } else {
+          #|        "refactor(\{dir}): shrink public API"
+          #|      }
+          #|      let message = if summary.trim().is_empty() {
+          #|        ["-m", title]
+          #|      } else {
+          #|        ["-m", title, "-m", summary.trim().to_owned()]
+          #|      }
+          #|      ignore(run("git", ["commit", "-q", "--amend", ..message]))
+          #|      Ok(())
+          #|    } catch {
+          #|      error => Err(error)
+          #|    }
+          #|    if cleaned is Err(error) {
+          #|      ignore(
+          #|        @shell.Cmd("git", ["reset", "-q", "--hard", "HEAD"]).output(
+          #|          timeout_ms=60000,
+          #|        ),
+          #|      ) catch {
+          #|        _ => ()
+          #|      }
+          #|      return Some("amending the commit for \{shown(dir)}: \{error}")
+          #|    }
+          #|  }
+          #|  None
+          #|}
+          #|
+          #|///|
+          #|/// Abort a cherry-pick that failed for `why`; the reason, with the abort's
+          #|/// own failure if it failed too.
+          #|async fn abort_pick(why : String) -> String {
+          #|  let aborted = @shell.Cmd("git", ["cherry-pick", "--abort"]).output(
+          #|    timeout_ms=60000,
+          #|  ) catch {
+          #|    error => return "\{why}; the abort failed too: \{error}"
+          #|  }
+          #|  guard aborted.exit_code() == 0 else {
+          #|    "\{why}; the abort failed too: \{first_line(aborted.stderr())}"
+          #|  }
+          #|  why
+          #|}
+          #|
+          #|///|
+          #|/// Whether a source file holds nothing but blank lines and comments.
+          #|fn no_code(text : String) -> Bool {
+          #|  text
+          #|  .split("\n")
+          #|  .all(line => {
+          #|    let line = line.trim()
+          #|    line.is_empty() || line.has_prefix("//")
+          #|  })
+          #|}
+          #|
+          #|///|
+          #|/// Run `program` and return its standard output, failing with its standard
+          #|/// error when it exits nonzero.
+          #|async fn run(program : String, args : Array[String]) -> String {
+          #|  let output = @shell.Cmd(program, args).output(
+          #|    timeout_ms=600000,
+          #|    max_output_bytes=67108864,
+          #|  )
+          #|  guard output.exit_code() == 0 else {
+          #|    fail(
+          #|      "\{program} \{args.join(" ")} failed (exit \{output.exit_code()}): \{output.stderr().trim()}",
+          #|    )
+          #|  }
+          #|  output.stdout()
+          #|}
+          #|
+          #|///|
+          #|/// Where pull requests go: the first round's base branch by name (not its
+          #|/// remote-tracking ref) and the repository every `gh` call names.
+          #|priv struct Target {
+          #|  base : String
+          #|  repo : String
+          #|}
+          #|
+          #|///|
+          #|async fn pr_target(stack_on : String?) -> Target {
+          #|  let base = match stack_on {
+          #|    Some(branch) => {
+          #|      // A continued stack goes on from its last round's tip exactly, so
+          #|      // each pull request carries only its own round.
+          #|      let tip = @shell.Cmd("git", ["rev-parse", "origin/\{branch}"]).output(
+          #|        timeout_ms=30000,
+          #|      )
+          #|      guard tip.exit_code() == 0 &&
+          #|        tip.stdout().trim() == run("git", ["rev-parse", "HEAD"]).trim() else {
+          #|        fail(
+          #|          "HEAD is not origin/\{branch}: check out the last round's branch to continue its stack",
+          #|        )
+          #|      }
+          #|      branch
+          #|    }
+          #|    None => {
+          #|      let resolved = @shell.Cmd("git", [
+          #|        "rev-parse", "--abbrev-ref", "origin/HEAD",
+          #|      ]).output(timeout_ms=30000)
+          #|      let default_ref = resolved.stdout().trim().to_owned()
+          #|      guard resolved.exit_code() == 0 &&
+          #|        default_ref.strip_prefix("origin/") is Some(base) &&
+          #|        !base.is_empty() else {
+          #|        fail(
+          #|          "origin/HEAD does not name the default branch: run `git remote set-head origin --auto`, or pass --no-pr",
+          #|        )
+          #|      }
+          #|      let ancestor = @shell.Cmd("git", [
+          #|        "merge-base", "--is-ancestor", "HEAD", default_ref,
+          #|      ]).output(timeout_ms=30000)
+          #|      guard ancestor.exit_code() == 0 else {
+          #|        fail(
+          #|          "HEAD is not on \{default_ref}, so the first pull request would carry local commits too: update HEAD to \{default_ref}, or pass --no-pr",
+          #|        )
+          #|      }
+          #|      base.to_owned()
+          #|    }
+          #|  }
+          #|  // The repository branches are pushed to, so every PR is opened where its
+          #|  // head branch is, whatever gh would pick by default.
+          #|  let origin = run("git", ["remote", "get-url", "origin"]).trim().to_owned()
+          #|  let repo = run("gh", [
+          #|    "repo", "view", origin, "--json", "nameWithOwner", "--jq", ".nameWithOwner",
+          #|  ]).trim()
+          #|  guard !repo.is_empty() else {
+          #|    fail("gh repo view named no repository for origin (\{origin})")
+          #|  }
+          #|  ignore(run("gh", ["auth", "status"]))
+          #|  { base, repo: repo.to_owned(), }
+          #|}
+          #|
+          #|///|
+          #|/// Tracked files named `moon.pkg`, `moon.pkg.json`, `moon.mod` or
+          #|/// `moon.mod.json`, with their text.
+          #|async fn manifests(names : Array[String]) -> Array[(String, String)] {
+          #|  let found : Array[(String, String)] = []
+          #|  for entry in run("git", ["ls-files", "-z"]).split("\u{0}") {
+          #|    let (dir, name) = parts(entry.to_owned())
+          #|    if names.contains(name) {
+          #|      found.push((dir, @fs.read_file(entry.to_owned()).text()))
+          #|    }
+          #|  }
+          #|  found
+          #|}
+          #|
+          #|///|
+          #|/// Packages that other packages import only for their tests: test kits,
+          #|/// whose test-only items are their purpose (shrink_package.md).
+          #|async fn test_kits() -> Array[String] {
+          #|  let production : Array[String] = []
+          #|  let tests : Array[String] = []
+          #|  for entry in manifests(["moon.pkg"]) {
+          #|    // `import { "a", "b" @b, } for "test"`: the names up to the closing
+          #|    // brace, and what follows it.
+          #|    let mut block : Array[String]? = None
+          #|    for line in entry.1.split("\n") {
+          #|      let line = line.trim()
+          #|      match block {
+          #|        None if line.has_prefix("import") && line.has_suffix("{") =>
+          #|          block = Some([])
+          #|        None => ()
+          #|        Some(names) if line.has_prefix("}") => {
+          #|          if line.contains("for \"test\"") || line.contains("for \"wbtest\"") {
+          #|            tests.append(names)
+          #|          } else {
+          #|            production.append(names)
+          #|          }
+          #|          block = None
+          #|        }
+          #|        Some(names) =>
+          #|          if line is ['"', .. rest] && rest.split_once("\"") is Some((name, _)) {
+          #|            names.push(name.to_owned())
+          #|          }
+          #|      }
+          #|    }
+          #|  }
+          #|  for entry in manifests(["moon.pkg.json"]) {
+          #|    let parsed = @json.parse(entry.1) catch { _ => continue }
+          #|    guard parsed is Object(fields) else { continue }
+          #|    for key, value in fields {
+          #|      guard value is Array(items) else { continue }
+          #|      let names = [
+          #|        for item in items if item
+          #|        is (String(name) | { "path": String(name), .. }) => name
+          #|      ]
+          #|      if key == "import" {
+          #|        production.append(names)
+          #|      } else if key is ("test-import" | "wbtest-import") {
+          #|        tests.append(names)
+          #|      }
+          #|    }
+          #|  }
+          #|  [
+          #|    for name in tests if !production.contains(name) => name
+          #|  ]
+          #|}
+          #|
+          #|///|
+          #|/// One candidate: the analyzer's declaration line and its usage comment,
+          #|/// and whether only tests use it.
+          #|priv struct Row {
+          #|  code : String
+          #|  comment : String
+          #|  test_only : Bool
+          #|}
+          #|
+          #|///|
+          #|/// One package with candidates: its directory ("" for the root), its own
+          #|/// tracked source files, and the analyzer rows to resolve.
+          #|priv struct Package {
+          #|  dir : String
+          #|  files : Array[String]
+          #|  candidates : Array[Row]
+          #|}
+          #|
+          #|///|
+          #|/// Each workspace package's directory in this checkout, by package name, as
+          #|/// Moon itself resolves it: `moon check --dry-run` prints one `moonc check`
+          #|/// command per package, naming its source files and `-pkg <name>`. Reading
+          #|/// the manifests instead would mean parsing every way a `moon.mod` can set a
+          #|/// module's name and `source`, and every way Moon picks its workspace (an
+          #|/// ancestor `moon.work`, its members by relative or absolute path or through
+          #|/// a symlink, `MOON_WORK`). The printed paths start at the workspace root:
+          #|/// the directory at or above the checkout under which most of them exist.
+          #|/// A package's real path then says whether it is in the checkout; one that
+          #|/// is not (a dependency, or a `moon.work` member beside the checkout) is
+          #|/// left out.
+          #|async fn package_dirs() -> Map[String, String] {
+          #|  let root = @fs.realpath(
+          #|    run("git", ["rev-parse", "--show-toplevel"]).trim(),
+          #|  )
+          #|  let packages : Array[(String, Array[String])] = []
+          #|  let seen : Set[String] = Set([])
+          #|  for line in run("moon", ["check", "--dry-run"]).split("\n") {
+          #|    guard line.strip_prefix("moonc check ") is Some(rest) else { continue }
+          #|    let args = words(rest)
+          #|    guard args.search("-pkg") is Some(at) &&
+          #|      args.get(at + 1) is Some(name) &&
+          #|      !seen.contains(name) else {
+          #|      continue
+          #|    }
+          #|    seen.insert(name)
+          #|    let files = [
+          #|      for arg in args if arg.has_suffix(".mbt") => {
+          #|        arg.strip_prefix("./").unwrap_or(arg).to_owned()
+          #|      }
+          #|    ]
+          #|    packages.push((name, files))
+          #|  }
+          #|  // Moon's workspace root: the nearest directory, from the checkout up,
+          #|  // under which the most printed files exist. A file Moon would generate
+          #|  // first may not exist yet, so the count need not be all of them.
+          #|  let sample : Array[String] = []
+          #|  for entry in packages {
+          #|    for file in entry.1 {
+          #|      if sample.length() < 400 && !file.has_prefix("/") {
+          #|        sample.push(file)
+          #|      }
+          #|    }
+          #|  }
+          #|  let mut base = root
+          #|  let mut most = 0
+          #|  let mut dir = root
+          #|  for ;; {
+          #|    let mut found = 0
+          #|    for file in sample {
+          #|      if @fs.exists("\{dir}/\{file}") {
+          #|        found += 1
+          #|      }
+          #|    }
+          #|    if found > most {
+          #|      base = dir
+          #|      most = found
+          #|    }
+          #|    match dir.rev_split_once("/") {
+          #|      Some((parent, _)) if !parent.is_empty() => dir = parent.to_owned()
+          #|      _ => break
+          #|    }
+          #|  }
+          #|  let dirs : Map[String, String] = Map([])
+          #|  for entry in packages {
+          #|    let (name, files) = entry
+          #|    for file in files {
+          #|      let path = if file.has_prefix("/") { file } else { "\{base}/\{file}" }
+          #|      guard @fs.exists(path) else { continue }
+          #|      let real = @fs.realpath(path)
+          #|      if real.strip_prefix("\{root}/") is Some(inside) &&
+          #|        !inside.has_prefix(".mooncakes/") {
+          #|        dirs[name] = parts(inside.to_owned()).0
+          #|      }
+          #|      break
+          #|    }
+          #|  }
+          #|  dirs
+          #|}
+          #|
+          #|///|
+          #|/// The words of a command line as a shell would split it, with single or
+          #|/// double quotes around a word that holds a space.
+          #|fn words(line : StringView) -> Array[String] {
+          #|  let found : Array[String] = []
+          #|  let word = StringBuilder()
+          #|  let mut quote : Char? = None
+          #|  let mut started = false
+          #|  for char in line {
+          #|    match (quote, char) {
+          #|      (Some(open), char) if char == open => quote = None
+          #|      (Some(_), char) => word.write_char(char)
+          #|      (None, '\'' | '"') => {
+          #|        quote = Some(char)
+          #|        started = true
+          #|      }
+          #|      (None, ' ' | '\t') =>
+          #|        if started {
+          #|          found.push(word.to_string())
+          #|          word.reset()
+          #|          started = false
+          #|        }
+          #|      (None, char) => {
+          #|        word.write_char(char)
+          #|        started = true
+          #|      }
+          #|    }
+          #|  }
+          #|  if started {
+          #|    found.push(word.to_string())
+          #|  }
+          #|  found
+          #|}
+          #|
+          #|///|
+          #|/// Run the analyzer over the whole workspace and return the packages that
+          #|/// have candidates, sorted by directory, and the names of those whose files
+          #|/// are not in this checkout. A test kit's test-only items are not candidates.
+          #|async fn analyze(kits : Array[String]) -> (Array[Package], Array[String]) {
+          #|  let output = run("moon", ["ide", "analyze"])
+          #|  // The analyzer checks first, and a check may rewrite interface files;
+          #|  // the next round's checkout must not lose or trip over that.
+          #|  clean(
+          #|    "`moon ide analyze` changed tracked files (an out-of-date pkg.generated.mbti?): commit them first",
+          #|  )
+          #|  let listed = [
+          #|    for entry in run("git", ["ls-files", "-z"]).split("\u{0}") if !entry.is_empty() => {
+          #|      entry.to_owned()
+          #|    }
+          #|  ]
+          #|  let dirs = package_dirs()
+          #|  let packages : Array[Package] = []
+          #|  // A package with candidates whose files are not in this checkout (a
+          #|  // `moon.work` member beside it) cannot be worked on: it is reported, so
+          #|  // the run never reads it as a fixed point.
+          #|  let unmapped : Array[String] = []
+          #|  for name, rows in candidates(output) {
+          #|    let rows = if kits.contains(name) {
+          #|      rows.filter(row => !row.test_only)
+          #|    } else {
+          #|      rows
+          #|    }
+          #|    guard rows is [_, ..] else { continue }
+          #|    guard dirs.get(name) is Some(dir) else {
+          #|      unmapped.push(name)
+          #|      continue
+          #|    }
+          #|    let files = listed.filter(file => {
+          #|      let (parent, base) = parts(file)
+          #|      parent == dir && base.has_suffix(".mbt") && !base.has_prefix("generated_")
+          #|    })
+          #|    // The analyzer lists a re-exported value as an ordinary declaration,
+          #|    // and does not count the uses that go through the re-export.
+          #|    let reexported : Array[String] = []
+          #|    for file in files {
+          #|      reexported.append(reexports(@fs.read_file(file).text()))
+          #|    }
+          #|    let rows = rows.filter(row => {
+          #|      match declared_name(row.code) {
+          #|        Some(name) =>
+          #|          !reexported.contains(name) &&
+          #|          !(name.split_once("::") is Some((owner, _)) &&
+          #|          reexported.contains(owner.to_owned()))
+          #|        None => true
+          #|      }
+          #|    })
+          #|    if files is [_, ..] && rows is [_, ..] {
+          #|      packages.push({ dir, files, candidates: rows, })
+          #|    }
+          #|  }
+          #|  packages.sort_by((a, b) => a.dir.lexical_compare(b.dir))
+          #|  (packages, unmapped)
+          #|}
+          #|
+          #|///|
+          #|/// The names a source file re-exports with `pub using @pkg { a, type T, b as
+          #|/// c }`, as other packages see them.
+          #|fn reexports(text : String) -> Array[String] {
+          #|  let names : Array[String] = []
+          #|  for part in text.split("pub using").drop(1) {
+          #|    guard part.split_once("{") is Some((_, rest)) &&
+          #|      rest.split_once("}") is Some((items, _)) else {
+          #|      continue
+          #|    }
+          #|    for item in items.split(",") {
+          #|      let item = item.trim()
+          #|      let item = item.strip_prefix("type ").unwrap_or(item)
+          #|      let item = item.strip_prefix("trait ").unwrap_or(item).trim()
+          #|      let name = match item.rev_split_once(" as ") {
+          #|        Some((_, renamed)) => renamed.trim()
+          #|        None => item
+          #|      }
+          #|      if !name.is_empty() {
+          #|        names.push(name.to_owned())
+          #|      }
+          #|    }
+          #|  }
+          #|  names
+          #|}
+          #|
+          #|///|
+          #|/// The name an analyzer row declares: `f` in `pub async fn[T : Show] f(…)`,
+          #|/// `T::m` in `pub fn T::m(…)`, `X` in `pub const X : Int = 1`.
+          #|fn declared_name(code : String) -> String? {
+          #|  // Type parameters may hold spaces: drop the first bracketed group after
+          #|  // `fn`.
+          #|  let code = match code.split_once("fn[") {
+          #|    Some((before, after)) =>
+          #|      match after.split_once("] ") {
+          #|        Some((_, rest)) => "\{before}fn \{rest}"
+          #|        None => code
+          #|      }
+          #|    None => code
+          #|  }
+          #|  let keywords = [
+          #|    "pub", "pub(all)", "pub(open)", "async", "fn", "const", "let", "struct", "enum",
+          #|    "suberror", "trait", "type", "typealias", "extern",
+          #|  ]
+          #|  for word in code.split(" ") {
+          #|    let word = word.to_owned()
+          #|    if word.is_empty() || keywords.contains(word) {
+          #|      continue
+          #|    }
+          #|    // `T::m(` keeps its `::`; a type annotation's `:` is its own word.
+          #|    let name = match
+          #|      word.find_by(char => char is ('(' | '[' | '{' | '<' | '=')) {
+          #|      Some(end) => word[:end]
+          #|      None => word[:]
+          #|    }
+          #|    let name = name.trim_end(chars=":")
+          #|    return if name.is_empty() { None } else { Some(name.to_owned()) }
+          #|  }
+          #|  None
+          #|}
+          #|
+          #|///|
+          #|/// The analyzer's candidates by package name: exported top-level items with
+          #|/// no production use in another package, and types whose visibility can
+          #|/// narrow, leaving out what `exports.mbt` keeps on purpose. Rows without a
+          #|/// usage comment are not counted as unused. Trait implementations and
+          #|/// `pub using` re-exports are left out: the analyzer misses uses through
+          #|/// dynamic dispatch and through a re-export.
+          #|fn candidates(output : String) -> Map[String, Array[Row]] {
+          #|  let found : Map[String, Array[Row]] = Map([])
+          #|  let mut current = ""
+          #|  for line in output.split("\n") {
+          #|    if line is [.. "package \"", .. name, '"'] {
+          #|      current = name.to_owned()
+          #|      continue
+          #|    }
+          #|    // Members (fields, variants, trait methods) are indented; the last `//`
+          #|    // starts the comment, as a value may hold a `//` of its own.
+          #|    guard !current.is_empty() &&
+          #|      line is ['p', ..] &&
+          #|      line.rev_split_once("//") is Some((code, comment)) else {
+          #|      continue
+          #|    }
+          #|    let comment = comment.trim()
+          #|    let code = code.trim()
+          #|    guard !comment.contains("in exports.mbt") &&
+          #|      !code.has_prefix("pub impl") &&
+          #|      !code.has_prefix("pub using") else {
+          #|      continue
+          #|    }
+          #|    let test_only = match usage(comment) {
+          #|      Some((total, tests)) if total == tests => total > 0
+          #|      _ if comment.has_prefix("(all) or (open) can be removed") => false
+          #|      _ => continue
+          #|    }
+          #|    let row = { code: code.to_owned(), comment: comment.to_owned(), test_only, }
+          #|    match found.get(current) {
+          #|      Some(rows) => rows.push(row)
+          #|      None => found[current] = [row]
+          #|    }
+          #|  }
+          #|  found
+          #|}
+          #|
+          #|///|
+          #|/// The counts of a usage comment `usage: N (M in test)`: uses from other
+          #|/// packages, and how many of them are in tests.
+          #|fn usage(comment : StringView) -> (Int, Int)? {
+          #|  guard comment.strip_prefix("usage: ") is Some(rest) &&
+          #|    rest.split_once(" (") is Some((total, rest)) &&
+          #|    rest.split_once(" in test") is Some((tests, _)) else {
+          #|    return None
+          #|  }
+          #|  match (number(total), number(tests)) {
+          #|    (Some(total), Some(tests)) => Some((total, tests))
+          #|    _ => None
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// A decimal count, or None when the text is not one.
+          #|fn number(text : StringView) -> Int? {
+          #|  guard !text.is_empty() else { return None }
+          #|  let mut result = 0
+          #|  for char in text {
+          #|    guard char >= '0' && char <= '9' else { return None }
+          #|    result = result * 10 + char.to_int() - '0'.to_int()
+          #|  }
+          #|  Some(result)
+          #|}
+          #|
+          #|///|
+          #|/// The interface change between two commits: lines removed and added in
+          #|/// pkg.generated.mbti files, and lines added to exports.mbt files.
+          #|async fn api_change(base : String, tip : String) -> String {
+          #|  let mut removed = 0
+          #|  let mut added = 0
+          #|  let mut kept = 0
+          #|  for line in run("git", ["diff", "--numstat", base, tip]).split("\n") {
+          #|    guard line.split("\t").to_array() is [plus, minus, path] else { continue }
+          #|    let plus = number(plus).unwrap_or(0)
+          #|    let minus = number(minus).unwrap_or(0)
+          #|    let (_, name) = parts(path.to_owned())
+          #|    if name == "pkg.generated.mbti" {
+          #|      removed += minus
+          #|      added += plus
+          #|    } else if name == "exports.mbt" {
+          #|      kept += plus
+          #|    }
+          #|  }
+          #|  "pkg.generated.mbti -\{removed} +\{added}, exports.mbt +\{kept}"
+          #|}
+          #|
+          #|///|
+          #|/// A path's directory ("" at the root) and file name.
+          #|fn parts(path : String) -> (String, String) {
+          #|  match path.rev_split_once("/") {
+          #|    Some((dir, name)) => (dir.to_owned(), name.to_owned())
+          #|    None => ("", path)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// A `--path` argument as a directory prefix: no `./`, no trailing `/`, and
+          #|/// "" for the root.
+          #|fn directory(path : String) -> String {
+          #|  let path = path.trim().trim_end(chars="/")
+          #|  let path = path.strip_prefix("./").unwrap_or(path)
+          #|  if path == "." {
+          #|    ""
+          #|  } else {
+          #|    path.to_owned()
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Whether `dir` is one of `paths` or below one; any directory when there are
+          #|/// none.
+          #|fn within(dir : String, paths : Array[String]) -> Bool {
+          #|  paths.is_empty() ||
+          #|  paths.any(path => path.is_empty() || dir == path || dir.has_prefix("\{path}/"))
+          #|}
+          #|
+          #|///|
+          #|/// A directory as shown to people and children: "." for the root.
+          #|fn shown(dir : String) -> String {
+          #|  if dir.is_empty() {
+          #|    "."
+          #|  } else {
+          #|    dir
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// `dir` as a continuation argument: a directory that starts with `-` keeps
+          #|/// its `./`, or it would read as an option.
+          #|fn argument(dir : String) -> String {
+          #|  if dir.has_prefix("-") {
+          #|    "./\{dir}"
+          #|  } else {
+          #|    shown(dir)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// What a worker made, once it passed the gate.
+          #|priv struct Change {
+          #|  base : String
+          #|  commit : String
+          #|  branch : String
+          #|  summary : String
+          #|  verification : String
+          #|}
+          #|
+          #|///|
+          #|/// How a change fared in review.
+          #|priv enum Review {
+          #|  Pending
+          #|  Accepted(String)
+          #|  Rejected(String)
+          #|  Unreviewed(String)
+          #|}
+          #|
+          #|///|
+          #|/// One chosen package and what became of it this round.
+          #|priv struct Work {
+          #|  pkg : Package
+          #|  name : String
+          #|  mut worker : String
+          #|  mut change : Change?
+          #|  mut review : Review
+          #|}
+          #|
+          #|///|
+          #|/// The packages with the most candidates (ties by directory), at most `limit`.
+          #|fn select(packages : Array[Package], limit : Int) -> Array[Work] {
+          #|  let ranked = packages.copy()
+          #|  ranked.sort_by((a, b) => {
+          #|    match b.candidates.length().compare(a.candidates.length()) {
+          #|      0 => a.dir.lexical_compare(b.dir)
+          #|      order => order
+          #|    }
+          #|  })
+          #|  [
+          #|    for
+          #|      pkg in ranked[:if ranked.length() < limit {
+          #|        ranked.length()
+          #|      } else {
+          #|        limit
+          #|      }] => {
+          #|      {
+          #|        pkg,
+          #|        name: worktree_name(pkg.dir),
+          #|        worker: "not started",
+          #|        change: None,
+          #|        review: Pending,
+          #|      }
+          #|    }
+          #|  ]
+          #|}
+          #|
+          #|///|
+          #|/// A worktree name the engine accepts: `shrink-`, a hash of the directory
+          #|/// that keeps long paths apart, and as much of the directory as fits.
+          #|fn worktree_name(dir : String) -> String {
+          #|  let slug = StringBuilder()
+          #|  let mut gap = false
+          #|  for char in dir.to_lower() {
+          #|    if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+          #|      if gap && !slug.is_empty() {
+          #|        slug.write_char('-')
+          #|      }
+          #|      gap = false
+          #|      slug.write_char(char)
+          #|    } else {
+          #|      gap = true
+          #|    }
+          #|  }
+          #|  let hash = short_hash(dir)
+          #|  let room = NameChars - "shrink--".length() - hash.length()
+          #|  let slug = String::from_iter(slug.to_string().iter().take(room)).trim_end(
+          #|    chars="-",
+          #|  )
+          #|  let slug = if slug.is_empty() { "root" } else { slug.to_owned() }
+          #|  "shrink-\{hash}-\{slug}"
+          #|}
+          #|
+          #|///|
+          #|/// 32-bit FNV-1a over the text's characters, as 8 hex digits.
+          #|fn short_hash(text : String) -> String {
+          #|  let mut hash : UInt = 2166136261
+          #|  for char in text {
+          #|    hash = (hash ^ char.to_int().reinterpret_as_uint()) * 16777619
+          #|  }
+          #|  let digits = "0123456789abcdef".to_array()
+          #|  String::from_array(
+          #|    [
+          #|      for shift in 0..<8 => {
+          #|        digits[((hash >> (28 - shift * 4)) & 15).reinterpret_as_int()]
+          #|      }
+          #|    ],
+          #|  )
+          #|}
+          #|
+          #|///|
+          #|/// Run one round's workers, at most `LiveWorkers` at once, and review each
+          #|/// change that passes the gate as soon as its worker ends. The children it
+          #|/// starts and the tokens they spend are added to `started` and `tokens` as
+          #|/// they happen.
+          #|async fn work_and_review(
+          #|  works : Array[Work],
+          #|  head : String,
+          #|  focus : String,
+          #|  failures : Array[String],
+          #|  started : Ref[Int],
+          #|  tokens : Ref[Int],
+          #|) -> Unit {
+          #|  let live : Map[String, Role] = Map([])
+          #|  let mut next = 0
+          #|  for ;; {
+          #|    while next < works.length() &&
+          #|          live.values().filter(role => role is Worker(_)).count() < LiveWorkers {
+          #|      let index = next
+          #|      next += 1
+          #|      match start_worker(works[index], focus) {
+          #|        Running(id) => {
+          #|          started.val += 1
+          #|          live[id] = Worker(index)
+          #|        }
+          #|        Refused(why) => {
+          #|          works[index].worker = "not started: \{why}"
+          #|          failures.push(
+          #|            "the worker for \{shown(works[index].pkg.dir)} was not started",
+          #|          )
+          #|        }
+          #|      }
+          #|    }
+          #|    if live.is_empty() {
+          #|      break
+          #|    }
+          #|    for id in wait_any(live.keys().collect()) {
+          #|      guard live.get(id) is Some(role) else { continue }
+          #|      let end = finish(id)
+          #|      // The host reports a worker ended once its outcome is recorded, and
+          #|      // captures its worktree after that: until the capture is done, it is
+          #|      // still running, and it still holds one of the host's worker slots.
+          #|      if role is Worker(_) &&
+          #|        end.subagent
+          #|        is {
+          #|          "workspace": {
+          #|            "worktree": { "state": { "kind": "working", .. }, .. },
+          #|            ..
+          #|          },
+          #|          ..
+          #|        } {
+          #|        continue
+          #|      }
+          #|      live.remove(id)
+          #|      tokens.val += end.tokens
+          #|      match role {
+          #|        Worker(index) => {
+          #|          let work = works[index]
+          #|          if end.report is None {
+          #|            failures.push(
+          #|              "the worker for \{shown(work.pkg.dir)} did not report",
+          #|            )
+          #|          }
+          #|          match gate(end, head) {
+          #|            Err(why) => work.worker = why
+          #|            Ok(change) => {
+          #|              work.worker = "committed \{short(change.commit)}"
+          #|              work.change = Some(change)
+          #|              let launch = start(
+          #|                "explore",
+          #|                review_input(work, change),
+          #|                "shrink:review-\{shown(work.pkg.dir)}",
+          #|                ReviewSteps,
+          #|              )
+          #|              match launch {
+          #|                Running(id) => {
+          #|                  started.val += 1
+          #|                  live[id] = Reviewer(index)
+          #|                }
+          #|                Refused(why) => {
+          #|                  work.review = Unreviewed("not started: \{why}")
+          #|                  failures.push(
+          #|                    "the review of \{shown(work.pkg.dir)} was not started",
+          #|                  )
+          #|                }
+          #|              }
+          #|            }
+          #|          }
+          #|        }
+          #|        Reviewer(index) => {
+          #|          let work = works[index]
+          #|          work.review = match end.report {
+          #|            Some(report) => verdict(report)
+          #|            None => {
+          #|              failures.push(
+          #|                "the review of \{shown(work.pkg.dir)} did not report",
+          #|              )
+          #|              Unreviewed("no report: \{end.outcome}")
+          #|            }
+          #|          }
+          #|        }
+          #|      }
+          #|    }
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Start the worker for `work`, in its own worktree, allowed to change only
+          #|/// its package's source, its interface file and its `exports.mbt`.
+          #|async fn start_worker(work : Work, focus : String) -> Launch {
+          #|  let dir = shown(work.pkg.dir)
+          #|  let (at, last) = match work.pkg.dir.rev_split_once("/") {
+          #|    _ if work.pkg.dir.is_empty() => ("", "root")
+          #|    Some((_, last)) => ("\{work.pkg.dir}/", last.to_owned())
+          #|    None => ("\{work.pkg.dir}/", work.pkg.dir)
+          #|  }
+          #|  // Its source, plus what a shrink may need besides: its manifest (an import
+          #|  // that only a deleted item used), its interface, its exports.mbt and one
+          #|  // whitebox test file for tests that move in.
+          #|  let paths = work.pkg.files.copy()
+          #|  for
+          #|    file in [
+          #|      "\{at}moon.pkg",
+          #|      "\{at}moon.pkg.json",
+          #|      "\{at}exports.mbt",
+          #|      "\{at}\{last}_wbtest.mbt",
+          #|      "\{at}pkg.generated.mbti",
+          #|    ] {
+          #|    if !paths.contains(file) {
+          #|      paths.push(file)
+          #|    }
+          #|  }
+          #|  let rows = rendered(work.pkg.candidates)
+          #|  let focus = if focus.is_empty() {
+          #|    ""
+          #|  } else {
+          #|    "\nEmphasis from the user (never a reason to break the guidance): \{focus}\n"
+          #|  }
+          #|  let task =
+          #|    $|Shrink the public API of the MoonBit package `\{dir}` of this repository, following the guidance in your context. You work in your own git worktree; your change is combined with other packages' changes into one pull request.
+          #|    $|
+          #|    $|Files you may change (no other file; you may create exports.mbt and the _wbtest.mbt file in this list, and you cannot delete one: empty it instead):
+          #|    $|\{paths.join("\n")}
+          #|    $|
+          #|    $|Candidates from `moon ide analyze` (resolve EVERY one):
+          #|    $|\{rows}
+          #|    $|\{focus}
+          #|    $|Rules:
+          #|    $|- Resolve each candidate one of the four ways in the guidance, and nothing else: no unrelated cleanup.
+          #|    $|- First read the AGENTS.md files on the path from the repository root to `\{dir}`, and the guidance they link, and run the validation they require.
+          #|    $|- Before any visibility change, `git grep -n -w <name>` the whole repository for uses the analyzer cannot see.
+          #|    $|- At least run `moon check --deny-warn --no-mbti` from the repository root (the whole workspace) for every target the repository builds, and `moon test` for the package. Then run `moon check` (without `--no-mbti`, so it regenerates pkg.generated.mbti) and `moon fmt` with the package path only, never over the whole module (a newer toolchain can rewrite other packages' files, which makes the change unmergeable). Confirm pkg.generated.mbti only lost lines.
+          #|    $|- Report status done only when every required check passed. In summary, list every candidate and what you did with it (dropped pub, deleted, narrowed, or moved to exports.mbt with its reason). Name each command and its result in verification.
+          #|  let started = tool("subagent", {
+          #|    "kind": "worker",
+          #|    "input": { "task": task, "context": Guidance },
+          #|    "label": "shrink:\{dir}",
+          #|    "worktree": {
+          #|      "name": work.name,
+          #|      "allowed_paths": Json::array(paths.map(Json::string)),
+          #|    },
+          #|  })
+          #|  match started.data {
+          #|    Some({ "job_id": String(id), .. }) => Running(id)
+          #|    _ => Refused(started.content)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Whether a worker's change may go on to review: committed, on the round's
+          #|/// base, by a worker that reported `done`. The engine commits a worker's
+          #|/// change whatever its outcome, so a commit alone proves nothing.
+          #|fn gate(end : End, head : String) -> Result[Change, String] {
+          #|  guard end.subagent
+          #|    is { "workspace": { "kind": "worktree", "worktree": worktree, .. }, .. } else {
+          #|    return Err("no worktree (\{end.outcome})")
+          #|  }
+          #|  let commit = match worktree {
+          #|    { "state": { "kind": "committed", "commit": String(commit), .. }, .. } =>
+          #|      commit
+          #|    { "state": { "kind": "no_changes", .. }, .. } =>
+          #|      return Err("nothing changed")
+          #|    { "state": { "kind": "unmergeable", "defects": defects, .. }, .. } =>
+          #|      return Err("not mergeable: \{listed(defects)}")
+          #|    { "state": { "kind": "capture_failed", "reasons": reasons, .. }, .. } =>
+          #|      return Err("not captured: \{listed(reasons)}")
+          #|    _ => return Err("not captured (\{end.outcome})")
+          #|  }
+          #|  guard worktree is { "base": String(base), "branch": String(branch), .. } else {
+          #|    return Err("the worktree has no base or branch")
+          #|  }
+          #|  guard base == head else {
+          #|    return Err("started from \{short(base)}, not \{short(head)}")
+          #|  }
+          #|  guard end.report is Some(report) else {
+          #|    return Err("no report (\{end.outcome})")
+          #|  }
+          #|  guard report is { "status": "done", .. } else {
+          #|    return Err(
+          #|      "reported \{text_field(report, "status")}: \{first_line(text_field(report, "summary"))}",
+          #|    )
+          #|  }
+          #|  Ok({
+          #|    base,
+          #|    commit,
+          #|    branch,
+          #|    summary: text_field(report, "summary"),
+          #|    verification: text_field(report, "verification"),
+          #|  })
+          #|}
+          #|
+          #|///|
+          #|/// The reviewer's brief: the change by reference, the candidates it had to
+          #|/// resolve, the author's claim kept apart from the criteria, and how to
+          #|/// answer.
+          #|fn review_input(work : Work, change : Change) -> Json {
+          #|  let rows = rendered(work.pkg.candidates)
+          #|  let query =
+          #|    $|Review ONE change another agent made to shrink the public API of a MoonBit package, and decide whether it should be published. Review nothing else.
+          #|    $|
+          #|    $|## The change
+          #|    $|Package: \{shown(work.pkg.dir)}
+          #|    $|Base: \{change.base}
+          #|    $|Commit: \{change.commit}
+          #|    $|It is not checked out. Read it as git objects: `git diff \{change.base} \{change.commit}` for the patch, `git show \{change.commit}:<file>` for a file after it and `git show \{change.base}:<file>` before it. `git grep <name> \{change.base}` searches the whole repository as it was. To build it, check it out with `git worktree add --detach <a directory in your scratch lab> \{change.commit}`; never create a branch.
+          #|    $|
+          #|    $|## The candidates it had to resolve
+          #|    $|\{rows}
+          #|    $|
+          #|    $|## The author's summary (a claim, not evidence)
+          #|    $|\{change.summary}
+          #|    $|
+          #|    $|## The criteria
+          #|    $|- Every item made private, deleted or narrowed has no production use elsewhere that the change breaks: `git grep -w` other packages, `.mbtx` scripts, js-only packages and modules outside the workspace, not only what the analyzer counts. For a narrowed type, look for struct literals and constructors used outside its package.
+          #|    $|- Every item moved to exports.mbt carries a comment naming one of the guidance's reasons, and the reason is true. "Might be useful" is not a reason; moving items there just to clear the list is grounds to reject.
+          #|    $|- A deletion removes vestigial code, not one half of an API whose other half stays.
+          #|    $|- Behavior is unchanged; tests were moved or converted, not lost (unless they only tested deleted code).
+          #|    $|- Only the package's own files changed, and its pkg.generated.mbti only lost lines (or changed `pub(all)` to `pub`).
+          #|    $|
+          #|    $|## How to answer
+          #|    $|Look for a reason to reject first. The first line of your answer must be exactly one of
+          #|    $|VERDICT: ACCEPT
+          #|    $|VERDICT: REJECT
+          #|    $|followed by your reasoning. Cite each problem with its file, line and a short note.
+          #|  { "query": query, "hints": Guidance }
+          #|}
+          #|
+          #|///|
+          #|/// The reviewer's verdict, read strictly: the answer's first line must be
+          #|/// the verdict token alone (trailing periods aside). A literal `\n` also ends
+          #|/// the line, as live children sometimes write one instead of a newline.
+          #|fn verdict(report : Json) -> Review {
+          #|  let answer = text_field(report, "answer").replace_all(old="\\n", new="\n")
+          #|  let (head, reasoning) = match answer.trim().split("\n").to_array() {
+          #|    [] => ("", "")
+          #|    [head, .. rest] =>
+          #|      (
+          #|        head.trim().trim_end(chars=".").to_owned(),
+          #|        rest.join("\n").trim().to_owned(),
+          #|      )
+          #|  }
+          #|  match head {
+          #|    "VERDICT: ACCEPT" => Accepted(reasoning)
+          #|    "VERDICT: REJECT" => {
+          #|      let problems = match report {
+          #|        { "citations": Array(citations), .. } =>
+          #|          citations.map(citation => {
+          #|            let at = match citation {
+          #|              { "line": Number(line, ..), .. } =>
+          #|                "\{text_field(citation, "file")}:\{line.to_int()}"
+          #|              _ => text_field(citation, "file")
+          #|            }
+          #|            "\n  - \{at}: \{text_field(citation, "note")}"
+          #|          })
+          #|        _ => []
+          #|      }
+          #|      Rejected("\{reasoning}\{problems.join("")}")
+          #|    }
+          #|    _ => Unreviewed("no verdict line")
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Candidate rows as a list for a brief.
+          #|fn rendered(rows : Array[Row]) -> String {
+          #|  rows.map(row => "- `\{row.code}  // \{row.comment}`").join("\n")
+          #|}
+          #|
+          #|///|
+          #|/// Check the combined round: `moon check --deny-warn --no-mbti` once per
+          #|/// target (or once with no target), then once in each separate workspace in
+          #|/// `dirs`. `--no-mbti` keeps the check from rewriting interface files in the
+          #|/// checkout. The first failure's first lines, if any.
+          #|async fn combined_check(
+          #|  targets : Array[String],
+          #|  dirs : Array[String],
+          #|) -> String? {
+          #|  let runs : Array[(Array[String], String)] = if targets is [] {
+          #|    [([], ".")]
+          #|  } else {
+          #|    [
+          #|      for target in targets => (["--target", target], ".")
+          #|    ]
+          #|  }
+          #|  for dir in dirs {
+          #|    runs.push(([], shown(dir)))
+          #|  }
+          #|  for entry in runs {
+          #|    let (target, cwd) = entry
+          #|    let args = ["check", "--deny-warn", "--no-mbti", ..target]
+          #|    let command = if cwd == "." {
+          #|      "moon \{args.join(" ")}"
+          #|    } else {
+          #|      "moon \{args.join(" ")} (in \{cwd})"
+          #|    }
+          #|    let checked = @shell.Cmd("moon", args, cwd~).output(
+          #|      timeout_ms=1800000,
+          #|      max_output_bytes=16777216,
+          #|    ) catch {
+          #|      error => return Some("\{command}: \{error}")
+          #|    }
+          #|    guard checked.exit_code() == 0 else {
+          #|      let output = "\{checked.stdout()}\n\{checked.stderr()}".trim()
+          #|      let lines = output.split("\n").take(20).collect().join("\n")
+          #|      return Some("\{command}:\n\{lines}")
+          #|    }
+          #|  }
+          #|  None
+          #|}
+          #|
+          #|///|
+          #|/// Push the round's tip and open its pull request on top of `parent`; the
+          #|/// URL on success.
+          #|async fn open_pr(
+          #|  round : Int,
+          #|  branch : String,
+          #|  tip : String,
+          #|  parent : String,
+          #|  accepted : Array[Work],
+          #|  api : String,
+          #|  target : Target,
+          #|) -> Result[String, String] {
+          #|  let pushed = @shell.Cmd("git", [
+          #|    "push",
+          #|    "origin",
+          #|    "\{tip}:refs/heads/\{branch}",
+          #|  ]).output(timeout_ms=300000) catch {
+          #|    error => return Err("push failed: \{error}")
+          #|  }
+          #|  guard pushed.exit_code() == 0 else {
+          #|    return Err("push failed: \{first_line(pushed.stderr())}")
+          #|  }
+          #|  let sections = accepted.map(work => {
+          #|    let (change, reasoning) = match (work.change, work.review) {
+          #|      (Some(change), Accepted(reasoning)) => (change, reasoning)
+          #|      _ => abort("only accepted changes are published")
+          #|    }
+          #|    (
+          #|      $|### `\{shown(work.pkg.dir)}`
+          #|      $|\{change.summary}
+          #|      $|
+          #|      $|Verification (by the worker): \{change.verification}
+          #|      $|
+          #|      $|Review: \{reasoning}
+          #|    )
+          #|  })
+          #|  let body =
+          #|    $|Round \{round} of shrinking the public API toward the fixed point where `moon ide analyze` reports no exported item without a production use in another package. One commit per package; each was checked alone by its worker and reviewed by a separate agent, and the round was checked as a whole.
+          #|    $|
+          #|    $|Interface: \{api}.
+          #|    $|
+          #|    $|\{sections.join("\n\n")}
+          #|    $|
+          #|    $|Generated by `@builtin/shrink.mbtx`. Stacked on `\{parent}`. Not merged automatically.
+          #|  let created = @shell.Cmd("gh", [
+          #|    "pr",
+          #|    "create",
+          #|    "--repo",
+          #|    target.repo,
+          #|    "--base",
+          #|    parent,
+          #|    "--head",
+          #|    branch,
+          #|    "--title",
+          #|    "refactor: shrink public API (round \{round})",
+          #|    "--body",
+          #|    body,
+          #|  ]).output(timeout_ms=120000) catch {
+          #|    error =>
+          #|      return Err("pushed to \{branch}, but gh pr create failed: \{error}")
+          #|  }
+          #|  guard created.exit_code() == 0 else {
+          #|    return Err(
+          #|      "pushed to \{branch}, but gh pr create failed: \{first_line(created.stderr())}",
+          #|    )
+          #|  }
+          #|  match created.stdout().trim().split("\n").to_array() {
+          #|    [.., last] => Ok(last.trim().to_owned())
+          #|    [] => Ok(branch)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// One line for a chosen package, and a rejected change's reasons.
+          #|fn print_work(work : Work) -> Unit {
+          #|  let review = match work.review {
+          #|    Pending => "-"
+          #|    Accepted(_) => "accepted"
+          #|    Rejected(_) => "rejected"
+          #|    Unreviewed(why) => "unreviewed: \{why}"
+          #|  }
+          #|  println(
+          #|    "  \{shown(work.pkg.dir)}: candidates=\{work.pkg.candidates.length()} worker=\{work.worker} review=\{review}",
+          #|  )
+          #|  if work.review is Rejected(why) {
+          #|    println("    rejected: \{why}")
+          #|  }
+          #|  if work.change is Some(change) && !(work.review is Accepted(_)) {
+          #|    println(
+          #|      "    kept locally: \{change.branch} (git branch -D \{change.branch})",
+          #|    )
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// One child's launch: running as a job, or refused with the reason.
+          #|priv enum Launch {
+          #|  Running(String)
+          #|  Refused(String)
+          #|}
+          #|
+          #|///|
+          #|/// What a running child is to the work loop.
+          #|priv enum Role {
+          #|  Worker(Int)
+          #|  Reviewer(Int)
+          #|}
+          #|
+          #|///|
+          #|/// Start one child through the host.
+          #|async fn start(
+          #|  kind : String,
+          #|  input : Json,
+          #|  label : String,
+          #|  max_steps : Int,
+          #|) -> Launch {
+          #|  let started = tool("subagent", {
+          #|    "kind": kind,
+          #|    "input": input,
+          #|    "label": label,
+          #|    "max_steps": max_steps,
+          #|  })
+          #|  match started.data {
+          #|    Some({ "job_id": String(id), .. }) => Running(id)
+          #|    _ => Refused(started.content)
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// Wait until at least one of `ids` has ended, or a minute has passed, and
+          #|/// return the ones that ended.
+          #|async fn wait_any(ids : Array[String]) -> Array[String] {
+          #|  let waited = tool("job_wait", {
+          #|    "job_ids": Json::array(ids.map(Json::string)),
+          #|  })
+          #|  guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
+          #|    fail(waited.content)
+          #|  }
+          #|  [
+          #|    for job in jobs if !(job is { "state": "running", .. }) &&
+          #|    job is { "job_id": String(id), .. } => id
+          #|  ]
+          #|}
+          #|
+          #|///|
+          #|/// What an ended child left: its report if it made one, its subagent record
+          #|/// (where a worker's change is), how it ended, and what it spent.
+          #|priv struct End {
+          #|  report : Json?
+          #|  subagent : Json
+          #|  outcome : String
+          #|  tokens : Int
+          #|}
+          #|
+          #|///|
+          #|/// Read an ended child, its report in chunks that each fit one reply.
+          #|async fn finish(id : String) -> End {
+          #|  let text = StringBuilder()
+          #|  for ;; {
+          #|    let read = tool("job_output", {
+          #|      "job_id": id,
+          #|      "offset": text.to_string().char_length(),
+          #|    })
+          #|    guard read.data is Some(data) else {
+          #|      return {
+          #|        report: None,
+          #|        subagent: Json::null(),
+          #|        outcome: read.content,
+          #|        tokens: 0,
+          #|      }
+          #|    }
+          #|    let subagent = match data {
+          #|      { "subagent": subagent, .. } => subagent
+          #|      _ => Json::null()
+          #|    }
+          #|    let tokens = match subagent {
+          #|      {
+          #|        "usage": {
+          #|          "prompt_tokens": Number(prompt, ..),
+          #|          "completion_tokens": Number(completion, ..),
+          #|          ..
+          #|        },
+          #|        ..
+          #|      } => prompt.to_int() + completion.to_int()
+          #|      _ => 0
+          #|    }
+          #|    let outcome = match data {
+          #|      { "state": { "outcome": String(outcome), .. }, .. } => outcome
+          #|      _ => "ended"
+          #|    }
+          #|    match data {
+          #|      { "report": { "chunk": String(chunk), "complete": complete, .. }, .. } => {
+          #|        text.write_string(chunk)
+          #|        if complete is True {
+          #|          let report = @json.parse(text.to_string())
+          #|          return { report: Some(report), subagent, outcome, tokens, }
+          #|        }
+          #|      }
+          #|      _ => return { report: None, subagent, outcome, tokens, }
+          #|    }
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// A count argument from 1 to `maximum`.
+          #|fn count(flag : String, value : String, maximum : Int) -> Int raise {
+          #|  let mut result = 0
+          #|  guard !value.is_empty() && value.length() <= 2 else {
+          #|    fail("\{flag} takes a number from 1 to \{maximum}\n\{Usage}")
+          #|  }
+          #|  for char in value {
+          #|    guard char >= '0' && char <= '9' else {
+          #|      fail("\{flag} takes a number from 1 to \{maximum}\n\{Usage}")
+          #|    }
+          #|    result = result * 10 + char.to_int() - '0'.to_int()
+          #|  }
+          #|  guard result >= 1 && result <= maximum else {
+          #|    fail("\{flag} takes a number from 1 to \{maximum}\n\{Usage}")
+          #|  }
+          #|  result
+          #|}
+          #|
+          #|///|
+          #|fn text_field(json : Json, name : String) -> String {
+          #|  match json {
+          #|    Object(fields) =>
+          #|      match fields.get(name) {
+          #|        Some(String(text)) => text
+          #|        _ => ""
+          #|      }
+          #|    _ => ""
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|fn first_line(text : String) -> String {
+          #|  match text.trim().split("\n").next() {
+          #|    Some(line) => line.trim().to_owned()
+          #|    None => ""
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// A JSON array of strings as one line.
+          #|fn listed(json : Json) -> String {
+          #|  match json {
+          #|    Array(items) =>
+          #|      items.map(item => text_field({ "text": item }, "text")).join("; ")
+          #|    _ => ""
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|fn short(commit : String) -> String {
+          #|  String::from_iter(commit.iter().take(10))
           #|}
           #|
         ),

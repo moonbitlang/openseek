@@ -16,8 +16,9 @@ const MaxLive : Int32 = 16
 const MaxWorkers : Int32 = 8
 
 ///|
-/// How many subagents one script may start in all.
-const ScriptQuota : Int32 = 64
+/// How many subagents one script may start in all: 64 packages of a
+/// worker and a reviewer each, for sweeps such as `@builtin/shrink.mbtx`.
+const ScriptQuota : Int32 = 128
 
 ///|
 /// How long a script stays pinned past the wall-clock cap after its last

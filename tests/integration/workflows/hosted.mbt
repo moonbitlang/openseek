@@ -74,7 +74,7 @@ fn FakeHost::answer(
         return reply("error: 16 subagents are already running", is_error=true)
       }
       // The engine runs at most 8 workers at once and refuses a ninth.
-      if self.name == "simplify" &&
+      if self.name is ("simplify" | "shrink") &&
         arguments is { "kind": "worker", .. } &&
         self.workers.filter(id => self.running.contains(id)).length() >= 8 {
         return reply("error: 8 workers are already running", is_error=true)
@@ -89,6 +89,8 @@ fn FakeHost::answer(
         self.simplify_child(job, arguments)
       } else if self.name == "dream" {
         dream_child(self.mode, arguments)
+      } else if self.name == "shrink" {
+        self.shrink_child(job, arguments)
       } else {
         child_report(self.name, self.mode, job, arguments)
       }
@@ -97,6 +99,14 @@ fn FakeHost::answer(
     "job_wait" => {
       guard arguments is { "job_ids": Array(ids), .. } else {
         return reply("error: job_ids", is_error=true)
+      }
+      // A host whose per-script trace budget ran out refuses the next call,
+      // as agent_tool/ptc does, without running it.
+      if self.mode == "shrink-host-limit" {
+        return reply(
+          "PTC trace budget exhausted; no tool executed",
+          is_error=true,
+        )
       }
       // The sweep's host ends one job per wait, as a real session does
       // when its children finish at different times; the others end all.
@@ -113,7 +123,7 @@ fn FakeHost::answer(
           self.workspaces[id] = @json.parse(captured)
         }
       }
-      if self.name != "simplify" {
+      if !(self.name is ("simplify" | "shrink")) {
         self.running.clear()
       } else if waiting is [first, ..] &&
         self.running.search(first) is Some(index) {

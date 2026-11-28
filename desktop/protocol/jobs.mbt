@@ -296,6 +296,9 @@ pub extend JobView with FromJson::{from_json}
 /// 100 positions of the history, and `next_offset` is present while more
 /// positions follow. Positions follow creation order alone.
 ///
+/// Listed jobs leave out their `data` (a script's trace, up to 4 MiB);
+/// `selected` carries it.
+///
 /// Jobs the live engine still runs are listed on the first page (offset 0),
 /// all of them ahead of its history, instead of at their positions. A client
 /// that reads only the first page therefore sees all running work. A page can

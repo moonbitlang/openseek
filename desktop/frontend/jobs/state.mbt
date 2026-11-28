@@ -301,9 +301,6 @@ pub fn update(
           for view in reply.jobs {
             upsert_job(jobs, view)
           }
-          if reply.selected is Some(view) {
-            upsert_job(jobs, view)
-          }
           // Put the refreshed first page first while retaining loaded history.
           if offset == 0 {
             let ordered = reply.jobs.copy()
@@ -314,6 +311,11 @@ pub fn update(
             }
             jobs.clear()
             jobs.append(ordered)
+          }
+          // Last, so it wins: listed rows leave out a job's trace (`data`),
+          // and the selected job's view carries it.
+          if reply.selected is Some(view) {
+            upsert_job(jobs, view)
           }
           let selected = match state.selected {
             Some(_) => state.selected

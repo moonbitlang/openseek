@@ -146,7 +146,8 @@ async test "retained trace stays within job record bounds without truncating cli
     let tool = leaf(name="large", execute=Sync(_ => @agent_tool.respond(text)))
     let service = Service::start(group, Tools([tool]))
     let program = service.register()
-    for _ in 0..<16 {
+    // 100 replies of 50,000 bytes are well past the 4 MiB budget.
+    for _ in 0..<100 {
       assert_true(
         request(program.env(), "large", {})
         is { "content": String(content), .. } &&
@@ -154,11 +155,11 @@ async test "retained trace stays within job record bounds without truncating cli
       )
     }
     let trace = program.trace()
-    assert_true(@utf8.encode(trace.stringify()).length() < 530000)
+    assert_true(@utf8.encode(trace.stringify()).length() < 4200000)
     guard trace is { "ptc_calls": Array(calls), .. } else {
       fail("missing calls")
     }
-    assert_eq(calls.length(), 16)
+    assert_eq(calls.length(), 100)
     assert_true(
       calls.any(call => {
         call is { "result": { "trace_truncated": true, .. }, .. }

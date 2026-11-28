@@ -23,7 +23,7 @@ exactly what ran. The host already provides everything the script needs:
   usage. `review.mbtx` already has `start`, `wait_all` and `outcome` built on
   these; `wait_all` already takes an array.
 - Up to 16 children run at once per session (`MaxLive`), and a script may
-  start at most 64 (`ScriptQuota`). A start past either limit is refused with a
+  start at most 128 (`ScriptQuota`). A start past either limit is refused with a
   reason, never queued.
 - A `review` child is read-only. It gets its own scratch lab, and on macOS a
   kernel profile that blocks source writes. Many children can share the

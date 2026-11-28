@@ -359,7 +359,7 @@ const DefaultVerifiers : Int32 = 6
 
 ///|
 /// The most verifiers one run starts. With five lenses that is 13 children,
-/// inside the session's 16 at once and a script's 64 in all.
+/// inside the session's 16 at once and a script's 128 in all.
 const MaxVerifiers : Int32 = 8
 
 ///|

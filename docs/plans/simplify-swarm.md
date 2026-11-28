@@ -38,7 +38,7 @@ reviewing it. The host already provides everything the script needs:
   `verification`). See [subagents](subagents.md), "As built", PR 7.
 - At most 16 children run at once per session, 8 of them workers (raised from
   4 by this change, so a sweep's workers and their reviewers fit together),
-  and a script may start at most 64. A start past a limit is refused with a reason, never
+  and a script may start at most 128. A start past a limit is refused with a reason, never
   queued.
 - The mbtx policy admits every command the script runs: `git rev-parse`,
   `git status`, `git ls-files`, `git merge-base`, `git push`, `gh repo view`,

@@ -88,6 +88,11 @@ async fn ServeEngine::job_request(
 }
 
 ///|
+/// The largest job record read: above the engine's PTC trace budget, which
+/// a record carries whole (`MaxTraceBytes` in agent_tool/ptc).
+const MaxJobRecordBytes : Int64 = 8388608L
+
+///|
 async fn read_job_record(
   directory : String,
   generation : String,
@@ -105,8 +110,8 @@ async fn read_job_record(
     raise EngineError("job metadata is not a regular file")
   }
   let size = file.size()
-  guard size <= 1048576L else {
-    raise EngineError("job metadata exceeds 1 MiB")
+  guard size <= MaxJobRecordBytes else {
+    raise EngineError("job metadata exceeds 8 MiB")
   }
   let bytes = file.at(0L).read_exactly(size.to_int())
   let record : @wire.JobRecord = @json.from_json(
@@ -226,6 +231,15 @@ pub async fn list_jobs(
 }
 
 ///|
+/// A job as a history page lists it: without its `data`, a script's trace of
+/// up to 4 MiB (`MaxTraceBytes` in agent_tool/ptc). A hundred full rows, or
+/// every running script's on the first page, could pass the 128 MiB reply
+/// limit of an SSH host; the selected job's view carries its data.
+fn list_row(record : @wire.JobRecord) -> @wire.JobRecord {
+  { ..record, data: None, }
+}
+
+///|
 /// Enumerate lightweight names, then decode only the requested page. Runtime
 /// creation stamps and monotonic UUIDv7 ids (or legacy bg-N ids) keep completed records in stable
 /// order; output writes and terminal metadata updates cannot reshuffle pages.
@@ -303,7 +317,7 @@ async fn job_history_page(
   let jobs : Array[@protocol.JobView] = []
   if offset == 0 {
     for record in running {
-      jobs.push(job_view(directory, record, true, refresh_failed~))
+      jobs.push(job_view(directory, list_row(record), true, refresh_failed~))
     }
   }
   let mut position = 0
@@ -347,7 +361,12 @@ async fn job_history_page(
           }
       }
       jobs.push(
-        job_view(directory, record, live.contains(key), refresh_failed~),
+        job_view(
+          directory,
+          list_row(record),
+          live.contains(key),
+          refresh_failed~,
+        ),
       )
     }
   }
