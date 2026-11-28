@@ -6,6 +6,8 @@ import {
 
 import {
   "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/log" @session_log,
+  "moonbitlang/openseek/trajectory",
   "moonbitlang/openseek/viz_export",
   "moonbitlang/core/async",
   "moonbitlang/core/async/http",
@@ -13,6 +15,8 @@ import {
   "moonbitlang/core/async/fs",
   "moonbitlang/core/async/os_error",
   "moonbitlang/core/argparse",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/hex",
   "moonbitlang/core/encoding/percent",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",

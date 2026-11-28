@@ -5,6 +5,7 @@
 using @icons {
   icon,
   icon_chat_export,
+  icon_clockface,
   icon_extensions,
   icon_folder,
   icon_key,

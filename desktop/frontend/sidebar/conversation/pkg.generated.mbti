@@ -27,6 +27,7 @@ pub(all) struct Actions {
   delete : (Id) -> @cmd.Cmd
   rename : (Id, String) -> @cmd.Cmd
   rename_edit : (Id, RenameEdit) -> @cmd.Cmd
+  trajectory : (Id) -> @cmd.Cmd
 }
 
 #derive(Eq, Hash, @debug.Debug)

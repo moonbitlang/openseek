@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/trajectory",
   "moonbitlang/core/encoding/utf8",
 }
 

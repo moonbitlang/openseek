@@ -494,6 +494,9 @@ pub fn openseek_capability(
     WindowEndpoint(@commands.session_export, (context, payload) => {
       export_session(context, state, payload)
     }),
+    WindowEndpoint(@commands.session_trajectory, (_, payload) => {
+      open_session_trajectory(state, payload)
+    }),
     WindowEndpoint(@commands.host_pick_attachment, (context, _) => {
       pick_attachment(context)
     }),

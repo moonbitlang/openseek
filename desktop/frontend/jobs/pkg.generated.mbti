@@ -37,6 +37,8 @@ pub(all) enum Msg {
   Read(Int32, Int32, Result[@protocol.JobReadReply, String])
   Stopped(Int32, (String, String), Result[@protocol.JobStopReply, String])
   OpenSession(String)
+  OpenTrajectory(String?, Int64?)
+  TrajectoryFailed(String)
 }
 
 #derive(Eq)
@@ -73,6 +75,7 @@ pub(all) struct State {
   follow : Bool
   clipped : Bool
   control_error : String?
+  trajectory_error : String?
   stopping : Bool
 }
 pub fn State::empty() -> Self

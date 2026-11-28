@@ -154,12 +154,30 @@ pub fn panel(
         @html.span("\{state.jobs.length() - running} in history"),
       ]),
     ]),
-    @html.button(
-      class="jobs-action",
-      on_click=emit(Poll),
-      disabled=state.listing,
-      ui(locale, RefreshLabel),
-    ),
+    @html.div(class="jobs-toolbar", [
+      match state.owner {
+        Some(Host(Local, _)) =>
+          @html.button(
+            class="jobs-action",
+            on_click=emit(OpenTrajectory(None, None)),
+            ui(locale, ViewTimeline),
+          )
+        Some(Host(Remote(_), _)) =>
+          @html.button(
+            class="jobs-action",
+            disabled=true,
+            title=ui(locale, TimelineUnavailableRemote),
+            ui(locale, ViewTimeline),
+          )
+        Some(Cloud(_, _)) | None => @html.nothing
+      },
+      @html.button(
+        class="jobs-action",
+        on_click=emit(Poll),
+        disabled=state.listing,
+        ui(locale, RefreshLabel),
+      ),
+    ]),
   ])
   let body : Array[@html.Html] = [header]
   let cloud = state.owner is Some(Cloud(_, _))
@@ -180,6 +198,15 @@ pub fn panel(
     )
   }
   if state.error is Some(error) {
+    body.push(
+      @html.div(
+        class="jobs-error",
+        attrs=@html.Attrs::build().role("alert"),
+        error,
+      ),
+    )
+  }
+  if state.trajectory_error is Some(error) {
     body.push(
       @html.div(
         class="jobs-error",
@@ -396,6 +423,28 @@ pub fn panel(
           ui(locale, CopyId),
         ),
       ]
+      match state.owner {
+        Some(Host(Local, _)) =>
+          actions.push(
+            @html.button(
+              class="jobs-action",
+              on_click=emit(
+                OpenTrajectory(Some(job.id), Some(job.started_at_ms)),
+              ),
+              ui(locale, ViewTimeline),
+            ),
+          )
+        Some(Host(Remote(_), _)) =>
+          actions.push(
+            @html.button(
+              class="jobs-action",
+              disabled=true,
+              title=ui(locale, TimelineUnavailableRemote),
+              ui(locale, ViewTimeline),
+            ),
+          )
+        Some(Cloud(_, _)) | None => ()
+      }
       if !cloud && job.subagent is Some(info) {
         actions.push(
           @html.button(

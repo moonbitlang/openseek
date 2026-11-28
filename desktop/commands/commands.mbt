@@ -101,6 +101,14 @@ pub let session_export : Command[
 ] = Command("session.export")
 
 ///|
+/// Render a conversation's trajectory snapshot to a temp HTML file and open it
+/// in the system browser, optionally focused on one job.
+pub let session_trajectory : Command[
+  @protocol.SessionTrajectoryPayload,
+  @protocol.SessionExportReply,
+] = Command("session.trajectory")
+
+///|
 /// Publish the owning host's snapshot using window account or remote grant authority.
 pub let session_share : Command[
   @protocol.SessionSharePayload,

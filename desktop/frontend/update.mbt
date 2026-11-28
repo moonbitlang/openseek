@@ -7335,6 +7335,56 @@ fn update_msg(
           )
         _ => update(dispatch, OpenSessionHere(session_id), model)
       }
+    Jobs(OpenTrajectory(job_id, job_started_at_ms)) => {
+      let cleared = {
+        ..model,
+        jobs: { ..model.jobs, trajectory_error: None, },
+      }
+      match (cleared.jobs.owner, cleared.host_selection()) {
+        (Some(Host(Local, scope)), Some(selected)) => {
+          let workspace = scope.workspace.unwrap_or(
+            selected.workspace.to_string(),
+          )
+          let raw_title = cleared.selected_conversation_title()
+          let title = if raw_title.is_empty() {
+            scope.session
+          } else {
+            raw_title
+          }
+          let cmd = open_trajectory_request(dispatch, Local, {
+            session: scope.session,
+            workspace,
+            title,
+            archived: scope.archived,
+            job_id,
+            job_started_at_ms,
+          })
+          (cmd, cleared)
+        }
+        _ => (@cmd.none, cleared)
+      }
+    }
+    OpenSessionTrajectory(channel, payload) => {
+      guard channel is Local else { return (@cmd.none, model) }
+      let cleared = {
+        ..model,
+        jobs: { ..model.jobs, trajectory_error: None, },
+      }
+      let title = if payload.title.is_empty() {
+        let selected_title = cleared.selected_conversation_title()
+        if selected_title.is_empty() {
+          payload.session
+        } else {
+          selected_title
+        }
+      } else {
+        payload.title
+      }
+      (
+        open_trajectory_request(dispatch, channel, { ..payload, title, }),
+        cleared,
+      )
+    }
     Jobs(msg) => {
       let (cmd, jobs) = @jobs.update(
         locale=model.locale,
@@ -25557,6 +25607,46 @@ fn open_host_import(
     {
       ..model,
       navigation: { ..model.navigation, phase: Waiting, sessions: None, },
+    },
+  )
+}
+
+///|
+fn open_trajectory_request(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  payload : @protocol.SessionTrajectoryPayload,
+) -> @cmd.Cmd {
+  @cmd.attempt(
+    (result : Result[@protocol.SessionExportReply, Error]) => {
+      match result {
+        Ok(reply) =>
+          if reply.opened && reply.path is Some(_) {
+            @cmd.none
+          } else {
+            dispatch(
+              Jobs(
+                TrajectoryFailed(
+                  "Could not open the trajectory snapshot in the browser.",
+                ),
+              ),
+            )
+          }
+        Err(error) =>
+          dispatch(
+            Jobs(
+              TrajectoryFailed(
+                "Could not open trajectory: \{@interop.bridge_error_text(error)}",
+              ),
+            ),
+          )
+      }
+    },
+    () => {
+      let reply : @protocol.SessionExportReply = @interop.bridge_request(
+        channel, @commands.session_trajectory, payload,
+      )
+      reply
     },
   )
 }

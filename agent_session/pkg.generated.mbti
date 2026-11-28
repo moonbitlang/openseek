@@ -43,10 +43,11 @@ pub fn to_deepseek_parts(@openseek_protocol.Content) -> Array[@deepseek.ContentP
 // Types and methods
 #derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
 type AssistantMessage
-pub fn AssistantMessage::AssistantMessage(String, tool_calls? : Array[@deepseek.ToolCall], reasoning_content? : String, is_replay? : Bool) -> Self
+pub fn AssistantMessage::AssistantMessage(String, tool_calls? : Array[@deepseek.ToolCall], reasoning_content? : String, is_replay? : Bool, started_at_ms? : Int64) -> Self
 pub fn AssistantMessage::content(Self) -> String
 pub fn AssistantMessage::is_replay(Self) -> Bool
 pub fn AssistantMessage::reasoning_content(Self) -> String?
+pub fn AssistantMessage::started_at_ms(Self) -> Int64?
 pub fn AssistantMessage::tool_calls(Self) -> Array[@deepseek.ToolCall]
 pub fn AssistantMessage::usage(Self) -> TokenUsage?
 pub fn AssistantMessage::with_usage(Self, @deepseek.Usage) -> Self

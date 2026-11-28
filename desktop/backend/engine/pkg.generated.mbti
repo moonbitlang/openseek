@@ -101,7 +101,7 @@ pub struct ConversationExport {
   html : String
   json : String
 }
-pub fn ConversationExport::ConversationExport(@viz_export.StandaloneExport, Array[@viz_export.Session]) -> Self raise
+pub fn ConversationExport::ConversationExport(@viz_export.StandaloneExport, Array[@viz_export.Session], runs? : Array[@viz_export.TrajectoryDocument]) -> Self raise
 pub async fn ConversationExport::capture(EngineManager, @protocol.SessionExportPayload, String, String) -> Self
 
 type EditReplacement

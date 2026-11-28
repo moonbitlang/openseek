@@ -6,17 +6,37 @@ fn main {
   let app = @rabbita.new(() => {
     let (state, emit) = @rabbita.create_state_with_init(
       init=emit => {
+        let model = init_model()
+        // `#t=<root>` opens the waterfall directly, the same way `#s=` reopens
+        // a session, so a link to a run survives a refresh.
+        let trajectory_start = match model.trajectory_root {
+          Some(root) =>
+            [
+              trajectory_fetch(
+                emit,
+                root,
+                model.trajectory_ticket,
+                resolve_root=model.trajectory_resolve_root,
+              ),
+            ]
+          None => []
+        }
         (
-          init_model(),
+          model,
           // Route the initial listing through fetch_text so a standalone export
           // answers it from the embedded data map instead of the absent server.
-          @cmd.batch([
-            fetch_text(emit, "/api/sessions", result => SessionsFetched(result)),
-            install_shortcuts(emit),
-            // Keep `seq=` in the URL hash while scrolling and make scrubber
-            // segments jump, so a refresh restores the position.
-            @cmd.effect(() => install_position_tracker()),
-          ]),
+          @cmd.batch(
+            [
+              fetch_text(emit, "/api/sessions", result => {
+                SessionsFetched(result)
+              }),
+              install_shortcuts(emit),
+              // Keep `seq=` in the URL hash while scrolling and make scrubber
+              // segments jump, so a refresh restores the position.
+              @cmd.effect(() => install_position_tracker()),
+              ..trajectory_start,
+            ],
+          ),
         )
       },
       update=(state, msg, emit) => {

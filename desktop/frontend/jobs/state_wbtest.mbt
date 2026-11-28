@@ -627,3 +627,20 @@ test "first-page polling drops loaded history once a live row leaves it" {
   assert_eq(reset.jobs.map(view => view.job.id), ["newest"])
   assert_eq(reset.next_offset, Some(100))
 }
+
+///|
+test "trajectory launch errors surface on state and clear on next open or poll" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let (_, failed) = update(
+    emit,
+    TrajectoryFailed("open failed"),
+    State::empty(),
+  )
+  assert_eq(failed.trajectory_error, Some("open failed"))
+  let (_, reopened) = update(
+    emit,
+    OpenTrajectory(Some("bg-1"), Some(100L)),
+    failed,
+  )
+  assert_eq(reopened.trajectory_error, None)
+}

@@ -50,6 +50,8 @@ priv enum UiMessage {
   ContextFullLabel
   TimedOutLabel
   OpenTranscript
+  ViewTimeline
+  TimelineUnavailableRemote
   WorktreeWorking
   WorktreeUnrecorded
   WorktreeNoChanges
@@ -336,6 +338,21 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, OpenTranscript) => "打开记录"
     (TraditionalChinese, OpenTranscript) => "開啟記錄"
     (Japanese, OpenTranscript) => "記録を開く"
+    (English, ViewTimeline) => "View timeline"
+    (Spanish, ViewTimeline) => "Ver línea de tiempo"
+    (SimplifiedChinese, ViewTimeline) => "查看时间线"
+    (TraditionalChinese, ViewTimeline) => "查看時間線"
+    (Japanese, ViewTimeline) => "タイムラインを表示"
+    (English, TimelineUnavailableRemote) =>
+      "Timeline view is unavailable for remote SSH sessions"
+    (Spanish, TimelineUnavailableRemote) =>
+      "La línea de tiempo no está disponible para sesiones SSH remotas"
+    (SimplifiedChinese, TimelineUnavailableRemote) =>
+      "远程 SSH 会话暂不支持查看轨迹"
+    (TraditionalChinese, TimelineUnavailableRemote) =>
+      "遠端 SSH 工作階段暫不支援查看軌跡"
+    (Japanese, TimelineUnavailableRemote) =>
+      "リモート SSH セッションではタイムラインを表示できません"
     (English, WorktreeUnrecorded) =>
       "Worktree: no result recorded (its engine stopped); handed over when a worker next starts"
     (Spanish, WorktreeUnrecorded) =>

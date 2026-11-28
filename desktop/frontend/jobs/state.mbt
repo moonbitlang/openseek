@@ -49,6 +49,7 @@ pub(all) struct State {
   follow : Bool
   clipped : Bool
   control_error : String?
+  trajectory_error : String?
   stopping : Bool
 }
 
@@ -79,6 +80,7 @@ pub fn State::empty() -> State {
     follow: true,
     clipped: false,
     control_error: None,
+    trajectory_error: None,
     stopping: false,
   }
 }
@@ -98,6 +100,11 @@ pub(all) enum Msg {
   Stopped(Int32, (String, String), Result[@protocol.JobStopReply, String])
   /// Open a subagent job's own session; the shell handles it.
   OpenSession(String)
+  /// Open the run's trajectory waterfall in the browser, optionally focused on
+  /// one job id and start timestamp; the shell handles it.
+  OpenTrajectory(String?, Int64?)
+  /// Record a failure opening the trajectory snapshot so the user sees it.
+  TrajectoryFailed(String)
 }
 
 ///|
@@ -259,10 +266,13 @@ pub fn update(
   state : State,
 ) -> (@cmd.Cmd, State) {
   match msg {
-    // The shell opens the session; nothing changes here.
-    OpenSession(_) => (@cmd.none, state)
+    // The shell opens the session or trajectory; clear any prior launch error.
+    OpenSession(_) | OpenTrajectory(_, _) =>
+      (@cmd.none, { ..state, trajectory_error: None, })
+    TrajectoryFailed(error) =>
+      (@cmd.none, { ..state, trajectory_error: Some(error), })
     Poll => {
-      let state = { ..state, read_budget: 4, }
+      let state = { ..state, read_budget: 4, trajectory_error: None, }
       let (list, state) = request_list(emit, state, 0)
       let (read, state) = if (state.follow || selected_terminal(state)) &&
         state.read_error is None {

@@ -14,6 +14,9 @@ async test "import loads through the normal session API and joins the selected w
       "<script src=\"/viz_app.js\"></script>",
       "",
     )
+    // The frozen page carries the run's timeline too: without it an exported
+    // conversation could not show the waterfall its readers choose.
+    assert_true(exported.html.contains("/api/trajectory/s-src"))
     let created : Array[String] = []
     let session_id = import_session(
       manager,
@@ -97,5 +100,100 @@ async test "import loads through the normal session API and joins the selected w
     assert_true(fork_checkout != checkout)
     assert_true(@fsx.is_dir(fork_checkout.to_path()))
     assert_true(fresh.record_guards.is_empty())
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "an export's timeline covers the whole run, not just the level it lists" {
+  with_worktree_fork_fixture((manager, _repo, store, _checkout) => {
+    // A child and a grandchild: the session list stops at the child (each level
+    // belongs to its own export), but the run is the whole tree.
+    store.create(
+      @agent_session.Session(SessionId("s-src-sr-1"), system_prompt="system")
+      .append(User(UserMessage(Content([Text("scout")]))))
+      .append(Terminal(Finished("done"))),
+    )
+    store.create(
+      @agent_session.Session(
+        SessionId("s-src-sr-1-sr-2"),
+        system_prompt="system",
+      )
+      .append(User(UserMessage(Content([Text("nested scout")]))))
+      .append(Terminal(Finished("done"))),
+    )
+    let workspace = _repo.resource_path()
+    let exported = ConversationExport::capture(
+      manager,
+      { session: "s-src", workspace, title: "Run source", archived: false, },
+      "<script src=\"/viz_app.js\"></script>",
+      "",
+    )
+    let dataset = @json.parse(exported.json) catch {
+      _ => fail("the export dataset must be JSON")
+    }
+    guard dataset is Object(fields) else { fail("the export must be a map") }
+    let listed = match fields.get("/api/sessions") {
+      Some(String(listing)) => listing
+      _ => fail("the export must list its sessions")
+    }
+    assert_true(listed.contains("s-src-sr-1"))
+    assert_false(listed.contains("s-src-sr-1-sr-2"))
+    guard fields.get("/api/trajectory/s-src") is Some(String(timeline)) else {
+      fail("the export must bake the run's timeline")
+    }
+    assert_true(timeline.contains("s-src-sr-1-sr-2"))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "an export's timeline also covers non-sr children discovered via tool results" {
+  with_worktree_fork_fixture((manager, _repo, store, _checkout) => {
+    store.create(
+      @agent_session.Session(SessionId("s-parent"), system_prompt="system")
+      .append(User(UserMessage(Content([Text("delegate")]))))
+      .append(
+        Assistant(
+          AssistantMessage("", tool_calls=[
+            ToolCall(id="c1", name="subagent", arguments="{}"),
+          ]),
+        ),
+      )
+      .append(
+        Tool(
+          ToolResult(
+            tool_call_id="c1",
+            tool_name="subagent",
+            content=[Text("ok")],
+            data=Json::object({ "session": Json("custom-worker-1") }),
+          ),
+        ),
+      )
+      .append(Terminal(Finished("done"))),
+    )
+    store.create(
+      @agent_session.Session(
+        SessionId("custom-worker-1"),
+        system_prompt="system",
+      )
+      .append(User(UserMessage(Content([Text("custom worker task")]))))
+      .append(Terminal(Finished("ok"))),
+    )
+    let workspace = _repo.resource_path()
+    let exported = ConversationExport::capture(
+      manager,
+      { session: "s-parent", workspace, title: "Parent run", archived: false, },
+      "<script src=\"/viz_app.js\"></script>",
+      "",
+    )
+    let dataset = @json.parse(exported.json) catch {
+      _ => fail("the export dataset must be JSON")
+    }
+    guard dataset is Object(fields) else { fail("the export must be a map") }
+    guard fields.get("/api/trajectory/s-parent") is Some(String(timeline)) else {
+      fail("the export must bake the run's timeline")
+    }
+    assert_true(timeline.contains("custom-worker-1"))
   })
 }

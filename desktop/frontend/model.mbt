@@ -2014,6 +2014,7 @@ priv enum Msg {
   CloudSubagentMarkdown(Int32)
   CloudSubagentLink(String)
   CloseCloudSubagents
+  OpenSessionTrajectory(@interop.ChannelId, @protocol.SessionTrajectoryPayload)
   OpenCloudExport
   OpenSessionImport(@interop.ChannelId, @common.Uri)
   OpenCloudImport

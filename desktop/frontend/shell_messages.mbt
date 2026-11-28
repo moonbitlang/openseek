@@ -24,6 +24,8 @@ priv enum ShellMessage {
   SubagentTranscripts
   NoSavedSubagents
   EmptySubagentTranscript
+  ViewTimeline
+  TimelineUnavailableRemote
   HideTerminal
   ShowTerminal
   ShowPanel
@@ -251,6 +253,21 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, ExportConversation) => "导出"
     (TraditionalChinese, ExportConversation) => "匯出"
     (Japanese, ExportConversation) => "エクスポート"
+    (English, ViewTimeline) => "View timeline"
+    (Spanish, ViewTimeline) => "Ver línea de tiempo"
+    (SimplifiedChinese, ViewTimeline) => "查看轨迹"
+    (TraditionalChinese, ViewTimeline) => "查看軌跡"
+    (Japanese, ViewTimeline) => "タイムラインを表示"
+    (English, TimelineUnavailableRemote) =>
+      "Timeline view is unavailable for remote SSH sessions"
+    (Spanish, TimelineUnavailableRemote) =>
+      "La línea de tiempo no está disponible para sesiones SSH remotas"
+    (SimplifiedChinese, TimelineUnavailableRemote) =>
+      "远程 SSH 会话暂不支持查看轨迹"
+    (TraditionalChinese, TimelineUnavailableRemote) =>
+      "遠端 SSH 工作階段暫不支援查看軌跡"
+    (Japanese, TimelineUnavailableRemote) =>
+      "リモート SSH セッションではタイムラインを表示できません"
     (English, HideTerminal) => "Hide terminal (Ctrl+`)"
     (Spanish, HideTerminal) => "Ocultar terminal (Ctrl+`)"
     (SimplifiedChinese, HideTerminal) => "隐藏终端（Ctrl+`）"

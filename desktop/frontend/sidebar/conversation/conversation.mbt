@@ -205,6 +205,7 @@ pub(all) struct Actions {
   delete : (Id) -> @cmd.Cmd
   rename : (Id, String) -> @cmd.Cmd
   rename_edit : (Id, RenameEdit) -> @cmd.Cmd
+  trajectory : (Id) -> @cmd.Cmd
 }
 
 ///|
@@ -286,7 +287,33 @@ fn Input::menu_entries_for_kind(
           destructive: false,
           command: (actions.rename)(self.id, self.label),
         }),
-        Separator,
+      ]
+      if self.id.source() is OpenSeekLive {
+        let local_host = self.id.channel() == "local"
+        entries.push(
+          Action({
+            label: ui(locale, ViewTimelineLabel),
+            title: ui(
+              locale,
+              if local_host {
+                ViewTimeline
+              } else {
+                TimelineUnavailableRemote
+              },
+            ),
+            icon: Some(@icons.icon(@icons.icon_clockface)),
+            enabled: local_host,
+            destructive: false,
+            command: if local_host {
+              (actions.trajectory)(self.id)
+            } else {
+              @cmd.none
+            },
+          }),
+        )
+      }
+      entries.push(Separator)
+      entries.push(
         Action({
           label: ui(locale, ArchiveLabel),
           // The menu is the row's only Archive control, so it carries the
@@ -303,7 +330,7 @@ fn Input::menu_entries_for_kind(
           destructive: false,
           command: (actions.archive)(self.id),
         }),
-      ]
+      )
       // Only a source with a permanent delete lists it, under its own hint.
       if self.trailing.iter().find_first(action => action is Delete(..))
         is Some(Delete(title~)) {
@@ -320,8 +347,8 @@ fn Input::menu_entries_for_kind(
       }
       entries
     }
-    OpenSeekArchivedMenu =>
-      [
+    OpenSeekArchivedMenu => {
+      let entries : Array[@action_menu.Entry] = [
         Action({
           label: ui(locale, RestoreLabel),
           title: ui(locale, RestoreConversation),
@@ -330,7 +357,33 @@ fn Input::menu_entries_for_kind(
           destructive: false,
           command: (actions.restore)(self.id),
         }),
-        Separator,
+      ]
+      if self.id.source() is OpenSeekArchived {
+        let local_host = self.id.channel() == "local"
+        entries.push(
+          Action({
+            label: ui(locale, ViewTimelineLabel),
+            title: ui(
+              locale,
+              if local_host {
+                ViewTimeline
+              } else {
+                TimelineUnavailableRemote
+              },
+            ),
+            icon: Some(@icons.icon(@icons.icon_clockface)),
+            enabled: local_host,
+            destructive: false,
+            command: if local_host {
+              (actions.trajectory)(self.id)
+            } else {
+              @cmd.none
+            },
+          }),
+        )
+      }
+      entries.push(Separator)
+      entries.push(
         Action({
           label: ui(locale, DeleteLabel),
           title: if delete_enabled {
@@ -343,7 +396,9 @@ fn Input::menu_entries_for_kind(
           destructive: true,
           command: (actions.delete)(self.id),
         }),
-      ]
+      )
+      entries
+    }
     CodexArchivedMenu =>
       [
         Action({

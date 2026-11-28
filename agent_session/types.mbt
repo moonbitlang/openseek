@@ -162,6 +162,11 @@ struct AssistantMessage {
   // The provider response's token usage, on the first durable record of that
   // response only. Absent on replays and on logs written before it existed.
   usage : TokenUsage?
+  // When the request that produced this answer was issued, in the same unix
+  // milliseconds as the event's own `ts`. Absent on replays and on logs
+  // written before the request clock existed; a reader that finds it can
+  // draw the wait, not just the answer.
+  started_at_ms : Int64?
 }
 
 ///|
@@ -203,6 +208,7 @@ pub fn AssistantMessage::AssistantMessage(
   tool_calls~ : Array[@deepseek.ToolCall] = [],
   reasoning_content? : String,
   is_replay~ : Bool = false,
+  started_at_ms? : Int64,
 ) -> AssistantMessage {
   {
     content,
@@ -216,6 +222,7 @@ pub fn AssistantMessage::AssistantMessage(
       None
     },
     usage: None,
+    started_at_ms,
   }
 }
 
@@ -234,6 +241,14 @@ pub fn AssistantMessage::with_usage(
 /// durable record. `None` on replays and on messages from older logs.
 pub fn AssistantMessage::usage(self : AssistantMessage) -> TokenUsage? {
   self.usage
+}
+
+///|
+/// When the request that produced this answer was issued, in unix
+/// milliseconds. `None` on replays, on messages built by a checkpoint, and on
+/// logs written before the request clock existed.
+pub fn AssistantMessage::started_at_ms(self : AssistantMessage) -> Int64? {
+  self.started_at_ms
 }
 
 ///|

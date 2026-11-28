@@ -230,6 +230,52 @@ pub impl ToJson for SessionExportPayload with fn to_json(self) {
 }
 
 ///|
+/// Open a temporary trajectory snapshot in the browser, optionally focused on
+/// one background job (`#t=<session>&job=<job_id>`).
+#derive(Debug, Eq)
+pub(all) struct SessionTrajectoryPayload {
+  session : String
+  workspace : String
+  title : String
+  archived : Bool
+  job_id : String?
+  job_started_at_ms : Int64?
+}
+
+///|
+pub impl FromJson for SessionTrajectoryPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session trajectory payload")
+  {
+    session: object.required_string("session"),
+    workspace: object.required_string("workspace"),
+    title: object.required_string("title"),
+    archived: object.required_bool("archived"),
+    job_id: object.optional_string("job_id"),
+    job_started_at_ms: match object.optional_json("job_started_at_ms") {
+      None => None
+      Some(value) => Some(jobs_uint(value, path.add_key("job_started_at_ms")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for SessionTrajectoryPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "session": self.session,
+    "workspace": self.workspace,
+    "title": self.title,
+    "archived": self.archived,
+  }
+  if self.job_id is Some(job_id) {
+    fields["job_id"] = Json(job_id)
+  }
+  if self.job_started_at_ms is Some(ms) {
+    fields["job_started_at_ms"] = Json(ms.to_double())
+  }
+  Json::object(fields)
+}
+
+///|
 /// `session.archive` / `session.unarchive` address a conversation by its
 /// durable session id. Archiving takes the conversation's worktree with
 /// it; `force` (archive only) discards that checkout's uncommitted

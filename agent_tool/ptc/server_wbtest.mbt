@@ -469,3 +469,39 @@ async test "approval-capable calls outlive the ordinary deadline and advertise t
     })
   })
 }
+
+///|
+async test "a completed PTC call records when it opened and when it ended" {
+  let probe = leaf(
+    name="probe",
+    execute=Sync(_ => @agent_tool.respond("applied")),
+  )
+  let action = run(Tools([probe]), env => {
+    request(env, "probe", {}) |> ignore
+    @agent_tool.respond("done")
+  })
+  guard action
+    is Respond(
+      {
+        data: Some(
+          {
+            "ptc_calls": [
+              {
+                "started_at_ms": Number(start, ..),
+                "ended_at_ms": Number(end, ..),
+                ..
+              },
+            ],
+            ..
+          },
+        ),
+        ..
+      },
+    ) else {
+    fail("the trace must carry both stamps")
+  }
+  // The host wall clock in unix milliseconds, so a viewer can place the call
+  // on the run's axis instead of at the script's end.
+  assert_true(start > 1_000_000_000_000.0)
+  assert_true(end >= start)
+}

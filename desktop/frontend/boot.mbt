@@ -399,6 +399,28 @@ fn SidebarDispatcher::conversation_delete(
 }
 
 ///|
+fn SidebarDispatcher::conversation_trajectory(
+  self : SidebarDispatcher,
+  id : @conversation.Id,
+) -> @cmd.Cmd {
+  guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(Local) &&
+    id.root() is Some(root) &&
+    @resource.of_path(Local, root) is Some(workspace) else {
+    return @cmd.none
+  }
+  self.emit(
+    OpenSessionTrajectory(Local, {
+      session: id.conversation(),
+      workspace: workspace.to_string(),
+      title: "",
+      archived: id.source() is @conversation.OpenSeekArchived,
+      job_id: None,
+      job_started_at_ms: None,
+    }),
+  )
+}
+
+///|
 fn SidebarDispatcher::project_new(
   self : SidebarDispatcher,
   id : @project.Id,
@@ -514,6 +536,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     delete: id => self.conversation_delete(id),
     rename: (id, label) => self.emit(ConversationRenameRequested(id~, label~)),
     rename_edit: (id, edit) => self.emit(ConversationRenameEdited(id~, edit~)),
+    trajectory: id => self.conversation_trajectory(id),
   }
   let project : @project.Actions = {
     new_conversation: id => self.project_new(id),

@@ -31,6 +31,7 @@ fn menu_actions(input : @conversation.Input) -> Array[(String, Bool, Bool)] {
     delete: _ => @cmd.none,
     rename: (_, _) => @cmd.none,
     rename_edit: (_, _) => @cmd.none,
+    trajectory: _ => @cmd.none,
   }
   let items : Array[(String, Bool, Bool)] = []
   for entry in input.menu_entries(actions).unwrap_or([]) {
@@ -49,6 +50,21 @@ test "a live row lists Delete only where its source offers one" {
   ])
   assert_eq(menu_actions(deletable), [
     ("Rename…", true, false),
+    ("View timeline", true, false),
+    ("Archive", true, false),
+    ("Delete…", true, true),
+  ])
+  let remote_open = {
+    ..deletable,
+    id: @conversation.Id(
+      source=OpenSeekLive,
+      channel="ssh-box",
+      conversation="chat-1",
+    ),
+  }
+  assert_eq(menu_actions(remote_open), [
+    ("Rename…", true, false),
+    ("View timeline", false, false),
     ("Archive", true, false),
     ("Delete…", true, true),
   ])
@@ -70,7 +86,11 @@ test "a live row lists Delete only where its source offers one" {
         conversation="cloud",
       ),
     }),
-    menu_actions(deletable),
+    [
+      ("Rename…", true, false),
+      ("Archive", true, false),
+      ("Delete…", true, true),
+    ],
   )
   let archived = live_row(CloudArchived, [
     Restore(title="Restore"),

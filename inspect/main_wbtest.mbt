@@ -307,7 +307,11 @@ async test "session listing uses jsonl files and ignores junk entries" {
     assert_true(text.contains("\"first_prompt\":\"[Image]\""))
     assert_true(!text.contains(".DS_Store"))
     assert_true(!text.contains("tui-20260705-131715-289"))
-    let load = session_path_reply(catalog, "flat-a")
+    let load = session_path_reply(
+      catalog,
+      "flat-a",
+      request_path="/api/sessions/flat-a",
+    )
     inspect(load.code, content="200")
     guard @json.parse(load.body) is Object(fields) else {
       fail("expected envelope JSON")
@@ -338,7 +342,11 @@ async test "session_catalog serves a direct directory of copied jsonl files" {
     assert_true(text.contains("\"is_marker\":false"))
     let rows = catalog.rows()
     guard rows is [row] else { fail("expected one copied row") }
-    let load = session_path_reply(catalog, row.key)
+    let load = session_path_reply(
+      catalog,
+      row.key,
+      request_path="/api/sessions/\{row.key}",
+    )
     inspect(load.code, content="200")
   })
 }
@@ -443,7 +451,9 @@ async test "raw session file route decodes the file segment like the key" {
     store.create(session)
     let catalog : SessionCatalog = { roots: [marker_root(root, ".openseek")], }
     let reply = session_path_reply(
-      catalog, "run%201/openseek_session-run%201.jsonl",
+      catalog,
+      "run%201/openseek_session-run%201.jsonl",
+      request_path="/api/sessions/run%201/openseek_session-run%201.jsonl",
     )
     inspect(reply.code, content="200")
     assert_true(reply.body.contains("\"id\":\"run 1\""))
@@ -671,5 +681,323 @@ async test "a server exits once its session root is deleted" {
       })
     })
     assert_true(finished is Some(_))
+  })
+}
+
+///|
+async test "trajectory route folds a root session and its sub-run into one tree" {
+  @vfs.with_tmpdir(prefix="openseek-viz-trajectory-", root => {
+    let store = @store.SessionStore("\{root}/.openseek")
+    let parent = @agent_session.Session(SessionId("run"), system_prompt="")
+      .append(User(UserMessage(Content([Text("delegate")]))))
+      .append(
+        Assistant(
+          AssistantMessage("", tool_calls=[
+            ToolCall(id="c1", name="subagent", arguments="{}"),
+          ]),
+        ),
+      )
+      .append(
+        Tool(
+          ToolResult(tool_call_id="c1", tool_name="subagent", content=[
+            Text("done"),
+          ]),
+        ),
+      )
+      .append(Terminal(Finished("done")))
+    store.create(parent)
+    let child = @agent_session.Session(SessionId("run-sr-1"), system_prompt="")
+      .append(User(UserMessage(Content([Text("scout\nthen report")]))))
+      .append(Assistant(AssistantMessage("found")))
+      .append(Terminal(Finished("found")))
+    store.create(child)
+    // An unrelated session must not be folded in.
+    store.create(
+      @agent_session.Session(SessionId("other"), system_prompt="").append(
+        User(UserMessage(Content([Text("x")]))),
+      ),
+    )
+    let catalog : SessionCatalog = { roots: [marker_root(root, ".openseek")], }
+    let reply = trajectory_reply(catalog, "run")
+    inspect(reply.code, content="200")
+    assert_true(reply.body.contains("\"root_session_id\":\"run\""))
+    assert_true(reply.body.contains("\"session_id\":\"run-sr-1\""))
+    assert_false(reply.body.contains("\"session_id\":\"other\""))
+    assert_true(reply.body.contains("\"kind\":\"run\""))
+    assert_true(reply.body.contains("\"kind\":\"turn\""))
+    // The child's turn hangs under the parent's subagent span.
+    let json = @json.parse(reply.body)
+    guard json is { "spans": Array(spans), .. } else {
+      fail("unexpected trajectory body")
+    }
+    let calls = [
+      for span in spans if span
+      is { "label": String(label), "id": String(id), .. } &&
+      label.has_prefix("subagent") => id
+    ]
+    assert_eq(calls.length(), 1)
+    let child_turns = [
+      for span in spans if span
+      is {
+        "session_id": String("run-sr-1"),
+        "kind": String("turn"),
+        "parent_id": String(parent),
+        ..
+      } => parent
+    ]
+    assert_eq(child_turns.length(), 1)
+    assert_eq(child_turns[0], calls[0])
+    // A lane is labelled with the first line of its first prompt only: the
+    // catalog carries the whole prompt, and a pasted brief must not fill it.
+    let lane_titles = [
+      for span in spans if span
+      is {
+        "session_id": String("run-sr-1"),
+        "kind": String("turn"),
+        "title": String(title),
+        ..
+      } => title
+    ]
+    assert_eq(lane_titles, ["scout"])
+  })
+}
+
+///|
+async test "trajectory route refuses an unknown or invalid run" {
+  @vfs.with_tmpdir(prefix="openseek-viz-trajectory-miss-", root => {
+    let catalog : SessionCatalog = { roots: [marker_root(root, ".openseek")], }
+    let missing = trajectory_reply(catalog, "nope")
+    inspect(missing.code, content="404")
+    let invalid = trajectory_reply(catalog, "../etc")
+    inspect(invalid.code, content="400")
+  })
+}
+
+///|
+async test "a poll with the previous cursor answers unchanged, and a write invalidates it" {
+  @vfs.with_tmpdir(prefix="openseek-viz-cursor-", root => {
+    let store = @store.SessionStore("\{root}/.openseek")
+    store.create(
+      @agent_session.Session(SessionId("run"), system_prompt="")
+      .append(User(UserMessage(Content([Text("delegate")]))))
+      .append(Assistant(AssistantMessage("done")))
+      .append(Terminal(Finished("done"))),
+    )
+    let catalog : SessionCatalog = { roots: [marker_root(root, ".openseek")], }
+    let first = trajectory_reply(catalog, "run")
+    inspect(first.code, content="200")
+    let cursor = match @json.parse(first.body) {
+      { "cursor": String(token), .. } => token
+      _ => fail("the first reply must carry a cursor")
+    }
+    // The same files: no document, just the acknowledgement.
+    let again = trajectory_reply(catalog, "run", cursor~)
+    inspect(again.code, content="200")
+    assert_true(again.body.contains("\"unchanged\":true"))
+    assert_false(again.body.contains("\"spans\""))
+    // A write moves the stamp, so the old cursor no longer matches.
+    @fs.write_text(
+      store.session_file(SessionId("run")),
+      "\n",
+      create_mode=OpenOrCreate,
+      append=true,
+    )
+    let changed = trajectory_reply(catalog, "run", cursor~)
+    inspect(changed.code, content="200")
+    assert_true(changed.body.contains("\"spans\""))
+    let next = match @json.parse(changed.body) {
+      { "cursor": String(token), .. } => token
+      _ => fail("a fresh reply must carry a cursor")
+    }
+    assert_true(next != cursor)
+    // And the new cursor is honoured in turn.
+    let settled = trajectory_reply(catalog, "run", cursor=next)
+    assert_true(settled.body.contains("\"unchanged\":true"))
+  })
+}
+
+///|
+async test "a run is folded from its own store only" {
+  @vfs.with_tmpdir(prefix="openseek-viz-store-", root => {
+    let mine = @store.SessionStore("\{root}/a")
+    mine.create(
+      @agent_session.Session(SessionId("run"), system_prompt="")
+      .append(User(UserMessage(Content([Text("mine")]))))
+      .append(Terminal(Finished("done"))),
+    )
+    // The same run id in a second store, with a child of its own: `<root>-sr-N`
+    // ids are only unique per store, so none of this may join the timeline.
+    let other = @store.SessionStore("\{root}/b")
+    other.create(
+      @agent_session.Session(SessionId("run"), system_prompt="")
+      .append(User(UserMessage(Content([Text("theirs")]))))
+      .append(
+        Assistant(
+          AssistantMessage("", tool_calls=[
+            ToolCall(id="c1", name="subagent", arguments="{}"),
+          ]),
+        ),
+      )
+      .append(
+        Tool(
+          ToolResult(tool_call_id="c1", tool_name="subagent", content=[
+            Text("done"),
+          ]),
+        ),
+      )
+      .append(Terminal(Finished("done"))),
+    )
+    other.create(
+      @agent_session.Session(SessionId("run-sr-1"), system_prompt="")
+      .append(User(UserMessage(Content([Text("theirs too")]))))
+      .append(Terminal(Finished("done"))),
+    )
+    let catalog : SessionCatalog = {
+      roots: [marker_root(root, "a"), marker_root(root, "b")],
+    }
+    let reply = trajectory_reply(catalog, "run")
+    inspect(reply.code, content="200")
+    assert_false(reply.body.contains("run-sr-1"))
+    let trace = @trajectory.parse_trajectory(@json.parse(reply.body)) catch {
+      _ => fail("the reply must be a trajectory document")
+    }
+    assert_eq(trace.stats.session_count, 1)
+    assert_eq(trace.sessions[0].session_id, "run")
+  })
+}
+
+///|
+async test "a child session appearing invalidates the cursor" {
+  @vfs.with_tmpdir(prefix="openseek-viz-cursor-child-", root => {
+    let store = @store.SessionStore("\{root}/.openseek")
+    store.create(
+      @agent_session.Session(SessionId("run"), system_prompt="")
+      .append(User(UserMessage(Content([Text("delegate")]))))
+      .append(Terminal(Finished("done"))),
+    )
+    let catalog : SessionCatalog = { roots: [marker_root(root, ".openseek")], }
+    let first = trajectory_reply(catalog, "run")
+    let cursor = match @json.parse(first.body) {
+      { "cursor": String(token), .. } => token
+      _ => fail("the first reply must carry a cursor")
+    }
+    // A run that spawns its first child while the root sits still: the new file
+    // is a lane the old cursor cannot know about.
+    store.create(
+      @agent_session.Session(SessionId("run-sr-1"), system_prompt="")
+      .append(User(UserMessage(Content([Text("scout")]))))
+      .append(Terminal(Finished("done"))),
+    )
+    let changed = trajectory_reply(catalog, "run", cursor~)
+    inspect(changed.code, content="200")
+    assert_false(changed.body.contains("\"unchanged\""))
+    let trace = @trajectory.parse_trajectory(@json.parse(changed.body)) catch {
+      _ => fail("a changed run must send a document")
+    }
+    assert_eq(trace.stats.session_count, 2)
+  })
+}
+
+///|
+async test "an export bakes one timeline per run it holds" {
+  @vfs.with_tmpdir(prefix="openseek-viz-export-", root => {
+    let store = @store.SessionStore("\{root}/.openseek")
+    store.create(
+      @agent_session.Session(SessionId("run"), system_prompt="")
+      .append(User(UserMessage(Content([Text("delegate")]))))
+      .append(Terminal(Finished("done"))),
+    )
+    store.create(
+      @agent_session.Session(SessionId("run-sr-1"), system_prompt="")
+      .append(User(UserMessage(Content([Text("scout the parser")]))))
+      .append(Terminal(Finished("done"))),
+    )
+    let catalog : SessionCatalog = { roots: [marker_root(root, ".openseek")], }
+    let rows = catalog.rows()
+    let runs = @viz_export.bake_runs(
+      [
+        for row in rows => {
+          @viz_export.RunSource(
+            id=row.id,
+            store=row.root,
+            first_prompt=row.first_prompt,
+            text=read_text_lossy(row.path),
+          )
+        }
+      ],
+    )
+    // Two files, one run: the document is keyed by the root the viewer asks for.
+    assert_eq(runs.length(), 1)
+    assert_eq(runs[0].root_id, "run")
+    let trace = @trajectory.parse_trajectory(@json.parse(runs[0].body)) catch {
+      _ => fail("the baked document must parse as a trajectory")
+    }
+    assert_eq(trace.stats.session_count, 2)
+    // Lane labels come from the prompt, exactly as the served route labels them.
+    assert_true(runs[0].body.contains("scout the parser"))
+  })
+}
+
+///|
+test "files_token changes when file size changes at identical mtime" {
+  let a = files_token([("/tmp/a.jsonl", 100L, 0, 10L)])
+  let b = files_token([("/tmp/a.jsonl", 100L, 0, 20L)])
+  assert_not_eq(a, b)
+}
+
+///|
+async test "trajectory_reply discovers non-sr child sessions via tool result" {
+  @vfs.with_tmpdir(prefix="openseek-viz-custom-child-", root => {
+    let store = @store.SessionStore("\{root}/.openseek")
+    store.create(
+      @agent_session.Session(SessionId("run"), system_prompt="")
+      .append(User(UserMessage(Content([Text("delegate")]))))
+      .append(
+        Assistant(
+          AssistantMessage("", tool_calls=[
+            ToolCall(id="c1", name="subagent", arguments="{}"),
+          ]),
+        ),
+      )
+      .append(
+        Tool(
+          ToolResult(
+            tool_call_id="c1",
+            tool_name="subagent",
+            content=[Text("ok")],
+            data=Json::object({ "session": Json("worker-custom") }),
+          ),
+        ),
+      )
+      .append(Terminal(Finished("done"))),
+    )
+    store.create(
+      @agent_session.Session(SessionId("worker-custom"), system_prompt="")
+      .append(User(UserMessage(Content([Text("custom worker prompt")]))))
+      .append(Terminal(Finished("ok"))),
+    )
+    let catalog : SessionCatalog = { roots: [marker_root(root, ".openseek")], }
+    let reply = trajectory_reply(catalog, "run")
+    inspect(reply.code, content="200")
+    let trace = @trajectory.parse_trajectory(@json.parse(reply.body)) catch {
+      _ => fail("expected trajectory document")
+    }
+    assert_eq(trace.stats.session_count, 2)
+    assert_true(reply.body.contains("custom worker prompt"))
+    let cursor = match @json.parse(reply.body) {
+      { "cursor": String(token), .. } => token
+      _ => fail("expected cursor")
+    }
+    let unchanged = trajectory_reply(catalog, "run", cursor~)
+    assert_true(unchanged.body.contains("\"unchanged\":true"))
+    let resolved = trajectory_reply(catalog, "worker-custom", resolve_root=true)
+    inspect(resolved.code, content="200")
+    let resolved_trace = @trajectory.parse_trajectory(
+      @json.parse(resolved.body),
+    ) catch {
+      _ => fail("expected resolved trajectory document")
+    }
+    assert_eq(resolved_trace.root_session_id, "run")
+    assert_eq(resolved_trace.stats.session_count, 2)
   })
 }

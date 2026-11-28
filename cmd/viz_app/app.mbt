@@ -7,6 +7,7 @@ struct SessionRow {
   key : String
   id : String
   root_label : String
+  run_root : String?
   last_active : Int64?
   // Whether the server discovered this root as a marker store (a `.openseek`-like
   // directory) rather than a direct `--session-root` store. Drives whether the
@@ -68,6 +69,52 @@ struct Model {
   // Ticks since startup, to refresh the session list less often than the
   // open session.
   watch_ticks : Int32
+  // The run whose waterfall is open (`#t=<session id>`), the trace itself, and
+  // a ticket guarding against a slow response for a run the reader left. All
+  // three are independent of `selected`: the trajectory page outlives the
+  // session selection it was opened from.
+  trajectory_root : String?
+  trajectory : @trajectory.Trajectory?
+  trajectory_ticket : Int32
+  trajectory_pending : Bool
+  trajectory_error : String?
+  // The cursor the last trajectory reply carried. A poll sends it back, and a
+  // run that has not moved answers `unchanged` instead of the whole document.
+  trajectory_cursor : String?
+  // Span ids whose subtree the reader folded away. A long run has hundreds of
+  // steps, and folding a finished turn is how a reader gets to the part that
+  // matters.
+  trajectory_collapsed : Array[String]
+  // Draw the waterfall with idle stretches folded (the default) or at true
+  // scale. A run saved across a night is almost entirely idle.
+  trajectory_compact : Bool
+  // Keep only the failed steps and the ancestors that place them. A run of
+  // thousands of spans needs the same cut the log view already offers.
+  trajectory_failed_only : Bool
+  // Background jobs whose log the reader opened in place, by
+  // `session/job` key, and the log itself once it arrives. Kept across a poll:
+  // a live run re-folds every second, and a job the reader is reading must not
+  // close under them.
+  trajectory_job_open : Array[String]
+  trajectory_jobs : Map[String, JobPanel]
+  // Keys with a job-log request currently in flight, preventing overlapping
+  // watch polls from issuing duplicate cursor reads.
+  trajectory_job_pending : Array[String]
+  // Job id and optional start hint requested via `#t=<root>&job=<id>[&start=<ms>]`
+  // waiting to be focused once the trace loads, plus resolved span id.
+  trajectory_focus_job : String?
+  trajectory_focus_job_start : Int64?
+  trajectory_focus_span : String?
+  // Whether the open trajectory fetch asked `inspect` to resolve a child
+  // session id up to its store root (`?resolve_root=1`).
+  trajectory_resolve_root : Bool
+  // Virtual-scroll window state for large waterfalls.
+  trajectory_scroll_top : Int32
+  trajectory_viewport_h : Int32
+  // A frozen `--export` archive: API answers are baked into
+  // `window.__OPENSEEK_DATA__`, so the waterfall opens only runs that were
+  // baked and omits live `.out` job logs.
+  standalone : Bool
 }
 
 ///|
@@ -128,6 +175,26 @@ enum Msg {
   // A watch refresh of the session list. Unlike `SessionsFetched` it leaves
   // the status line and the selection alone.
   WatchSessionsFetched(Result[String, Error])
+  // Open one run's waterfall. The id is a session id, not a catalog key: a run
+  // spans several files.
+  OpenTrajectory(String)
+  CloseTrajectory
+  /// Fold or unfold the subtree of one span.
+  ToggleTrajectorySpan(String)
+  /// Scroll to the first failed step of the open waterfall.
+  JumpToFirstFailure
+  /// Switch the waterfall's time axis between folded and true-scale idle.
+  ToggleTrajectoryAxis
+  /// Keep only the failed steps (and the rows that place them), or show them all.
+  ToggleTrajectoryFailures
+  /// Open or close one background job's log, in place under its row.
+  ToggleJobLog(String)
+  // One job-log fetch: (key, the cursor it continued from, response).
+  JobLogFetched(String, Int64?, Result[String, Error])
+  // One trace fetch: (root id, ticket, response).
+  TrajectoryFetched(String, Int32, Result[String, Error])
+  /// Virtual-scroll viewport update for `.waterfall-body`.
+  TrajectoryScroll(Int32, Int32)
 }
 
 ///|
@@ -188,7 +255,36 @@ fn view_mode_value(mode : @viz.ViewMode) -> String {
 }
 
 ///|
+fn parse_optional_int64(value : String?) -> Int64? {
+  guard value is Some(text) && !text.is_empty() else { return None }
+  let chars = text.to_array()
+  let mut idx = 0
+  let mut negative = false
+  if chars[0] == '-' {
+    negative = true
+    idx = 1
+  }
+  guard idx < chars.length() else { return None }
+  let max_int64 = 9223372036854775807L
+  let mut acc = 0L
+  while idx < chars.length() {
+    let ch = chars[idx]
+    guard ch.is_ascii_digit() else { return None }
+    let digit = (ch.to_int() - '0'.to_int()).to_int64()
+    if acc > (max_int64 - digit) / 10L {
+      return None
+    }
+    acc = acc * 10L + digit
+    idx += 1
+  }
+  Some(if negative { -acc } else { acc })
+}
+
+///|
 fn init_model() -> Model {
+  let initial_trajectory_root = hash_param("t")
+  let initial_focus_start = parse_optional_int64(hash_param("start"))
+  let initial_resolve_root = hash_param("resolve") is Some("1")
   {
     sessions: [],
     selected: None,
@@ -216,6 +312,22 @@ fn init_model() -> Model {
     escalated_only: false,
     show_original_args: false,
     subrun_children: Map([]),
+    trajectory_collapsed: [],
+    trajectory_compact: true,
+    trajectory_failed_only: false,
+    trajectory_job_open: [],
+    trajectory_jobs: Map([]),
+    trajectory_job_pending: [],
+    trajectory_focus_job: match hash_param("job") {
+      Some("") | None => None
+      Some(id) => Some(id)
+    },
+    trajectory_focus_job_start: initial_focus_start,
+    trajectory_focus_span: None,
+    trajectory_resolve_root: initial_resolve_root,
+    trajectory_scroll_top: 0,
+    trajectory_viewport_h: 900,
+    standalone: embedded_has("/api/sessions"),
     // An export is a frozen archive; only a served viewer can watch.
     watch_ms: if embedded_has("/api/sessions") {
       0
@@ -224,6 +336,17 @@ fn init_model() -> Model {
     },
     watch_pending: false,
     watch_ticks: 0,
+    // A refresh of `#t=<root>` reopens the waterfall straight away.
+    trajectory_root: initial_trajectory_root,
+    trajectory: None,
+    trajectory_ticket: if initial_trajectory_root is Some(_) {
+      1
+    } else {
+      0
+    },
+    trajectory_pending: initial_trajectory_root is Some(_),
+    trajectory_error: None,
+    trajectory_cursor: None,
   }
 }
 
@@ -231,6 +354,60 @@ fn init_model() -> Model {
 /// How many watch ticks pass between session-list refreshes. The list scan
 /// reads every log's first prompt, so it runs less often than the open
 /// session's cheap size check.
+fn clear_trajectory_hash() -> Unit {
+  remove_hash_value("t")
+  remove_hash_value("job")
+  remove_hash_value("start")
+  remove_hash_value("resolve")
+}
+
+///|
+fn clear_trajectory_state(model : Model) -> Model {
+  {
+    ..model,
+    trajectory_root: None,
+    trajectory: None,
+    trajectory_pending: false,
+    trajectory_error: None,
+    trajectory_cursor: None,
+    trajectory_collapsed: [],
+    trajectory_failed_only: false,
+    trajectory_job_open: [],
+    trajectory_jobs: Map([]),
+    trajectory_job_pending: [],
+    trajectory_focus_job: None,
+    trajectory_focus_job_start: None,
+    trajectory_focus_span: None,
+    trajectory_resolve_root: false,
+  }
+}
+
+///|
+fn open_trajectory_from_fragment(
+  emit : @cmd.Emit[Msg],
+  model : Model,
+  fragment : String,
+) -> (@cmd.Cmd, Model)? {
+  guard HashTrajectoryRoot::from_fragment(fragment) is Some(root) else {
+    return None
+  }
+  let focus_job = hash_fragment_param(fragment, "job")
+  let focus_start = parse_optional_int64(hash_fragment_param(fragment, "start"))
+  let resolve_root = hash_fragment_param(fragment, "resolve") is Some("1")
+  if model.trajectory_root == Some(root.0) && focus_job is None && !resolve_root {
+    return Some((@cmd.none, model))
+  }
+  Some(
+    update(emit, OpenTrajectory(root.0), {
+      ..model,
+      trajectory_focus_job: focus_job,
+      trajectory_focus_job_start: focus_start,
+      trajectory_resolve_root: resolve_root,
+    }),
+  )
+}
+
+///|
 let watch_list_every : Int32 = 5
 
 // ---- update ----------------------------------------------------------------
@@ -311,10 +488,21 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
       // Record the selection in the URL hash so a refresh lands back here.
       // Selecting a different session drops the stale seq= position (the
       // extern compares keys); re-selecting the same one keeps it.
+      // Leaving the waterfall by picking a session must also drop its `t=`, or a
+      // refresh would reopen the page the reader just left.
+      let leaving_trajectory = model.trajectory_root is Some(_)
       let mode = view_mode_value(model.view_mode)
       (
-        @cmd.batch([command, @cmd.effect(() => set_hash_session(key, mode))]),
-        {
+        @cmd.batch([
+          command,
+          @cmd.effect(() => {
+            set_hash_session(key, mode)
+            if leaving_trajectory {
+              clear_trajectory_hash()
+            }
+          }),
+        ]),
+        clear_trajectory_state({
           ..model,
           selected: Some(key),
           dropped: None,
@@ -327,52 +515,400 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
           loading: true,
           status: "loading \{label}…",
           subrun_children: Map([]),
+        }),
+      )
+    }
+    OpenTrajectory(root) => {
+      let ticket = model.trajectory_ticket + 1
+      (
+        trajectory_fetch(
+          emit,
+          root,
+          ticket,
+          resolve_root=model.trajectory_resolve_root,
+        ),
+        {
+          ..model,
+          trajectory_root: Some(root),
+          trajectory: None,
+          trajectory_collapsed: [],
+          trajectory_failed_only: false,
+          trajectory_job_open: [],
+          trajectory_jobs: Map([]),
+          trajectory_job_pending: [],
+          trajectory_focus_span: None,
+          trajectory_scroll_top: 0,
+          trajectory_ticket: ticket,
+          trajectory_pending: true,
+          trajectory_error: None,
+          trajectory_cursor: None,
+          status: "loading trajectory for \{root}…",
         },
       )
     }
-    UrlRequested(request) =>
-      match request {
-        Internal(url) =>
-          if url.fragment is Some(fragment) {
-            try HashSessionKey::from_fragment(fragment) catch {
-              MalformedHashSessionKey =>
+    CloseTrajectory =>
+      (
+        @cmd.effect(() => clear_trajectory_hash()),
+        clear_trajectory_state(model),
+      )
+    ToggleTrajectoryAxis =>
+      (@cmd.none, { ..model, trajectory_compact: !model.trajectory_compact, })
+    ToggleTrajectoryFailures => {
+      let enabling = !model.trajectory_failed_only
+      let collapsed = if enabling {
+        match model.trajectory {
+          Some(trace) =>
+            unfold_failed_ancestors(trace, model.trajectory_collapsed)
+          None => model.trajectory_collapsed
+        }
+      } else {
+        model.trajectory_collapsed
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          trajectory_failed_only: enabling,
+          trajectory_collapsed: collapsed,
+        },
+      )
+    }
+    ToggleJobLog(key) =>
+      if model.trajectory_job_open.contains(key) {
+        (
+          @cmd.none,
+          {
+            ..model,
+            trajectory_job_open: model.trajectory_job_open.filter(open => {
+              open != key
+            }),
+          },
+        )
+      } else {
+        // Opening caches nothing twice: a panel already read stays as it was,
+        // so folding a row away and back does not re-fetch a finished job.
+        let open = model.trajectory_job_open.copy()
+        open.push(key)
+        let (command, jobs, pending) = match model.trajectory_jobs.get(key) {
+          Some(_) =>
+            (@cmd.none, model.trajectory_jobs, model.trajectory_job_pending)
+          None => {
+            let jobs = model.trajectory_jobs.copy()
+            jobs[key] = Loading
+            if model.trajectory_job_pending.contains(key) {
+              (@cmd.none, jobs, model.trajectory_job_pending)
+            } else {
+              let pending = model.trajectory_job_pending.copy()
+              pending.push(key)
+              (
+                job_log_fetch(emit, key, model.trajectory, cursor?=None),
+                jobs,
+                pending,
+              )
+            }
+          }
+        }
+        (
+          command,
+          {
+            ..model,
+            trajectory_job_open: open,
+            trajectory_jobs: jobs,
+            trajectory_job_pending: pending,
+          },
+        )
+      }
+    JobLogFetched(key, cursor, result) => {
+      let pending = model.trajectory_job_pending.filter(item => item != key)
+      let previous = match model.trajectory_jobs.get(key) {
+        Some(panel) => panel
+        None => Loading
+      }
+      let panel = match result {
+        Ok(text) =>
+          match parse_job_reply(text) {
+            Some(reply) => job_panel_after(previous, cursor, reply)
+            None => Missing("this viewer cannot read the job reply")
+          }
+        Err(_) => Missing("could not read this job's log")
+      }
+      let jobs = model.trajectory_jobs.copy()
+      jobs[key] = panel
+      // A cursor the file outgrew puts the panel back to `Loading`; read the
+      // tail again rather than leave the row spinning.
+      let (reread, next_pending) = if panel is Loading && cursor is Some(_) {
+        let next_pending = pending.copy()
+        next_pending.push(key)
+        (job_log_fetch(emit, key, model.trajectory, cursor?=None), next_pending)
+      } else {
+        (@cmd.none, pending)
+      }
+      (
+        reread,
+        {
+          ..model,
+          trajectory_jobs: jobs,
+          trajectory_job_pending: next_pending,
+        },
+      )
+    }
+    ToggleTrajectorySpan(id) => {
+      let folded = model.trajectory_collapsed.contains(id)
+      (
+        @cmd.none,
+        {
+          ..model,
+          trajectory_collapsed: if folded {
+            model.trajectory_collapsed.filter(open_id => open_id != id)
+          } else {
+            [..model.trajectory_collapsed, id]
+          },
+        },
+      )
+    }
+    TrajectoryFetched(root, ticket, result) =>
+      // A response for a run the reader already left cannot replace the one on
+      // screen.
+      if model.trajectory_root != Some(root) ||
+        model.trajectory_ticket != ticket {
+        (@cmd.none, model)
+      } else {
+        match result {
+          Err(_) =>
+            (
+              @cmd.none,
+              {
+                ..model,
+                trajectory_pending: false,
+                trajectory_error: Some("could not load the trajectory"),
+                status: "could not load the trajectory for \{root}",
+              },
+            )
+          Ok(text) =>
+            match parse_trajectory_reply(text) {
+              // Nothing moved since the cursor we sent: keep the trace on
+              // screen instead of re-parsing an identical document.
+              Some(Unchanged) =>
                 (
                   @cmd.none,
                   {
                     ..model,
-                    status: "invalid session link: malformed s= value",
+                    trajectory_pending: false,
+                    trajectory_error: None,
                   },
                 )
-            } noraise {
-              Some(_) => (@nav.push_url(url.to_string()), model)
-              None => (@cmd.none, model)
+              Some(Trace(trace, cursor)) => {
+                let mut next_collapsed = if model.trajectory is None &&
+                  model.trajectory_collapsed.is_empty() &&
+                  model.trajectory_focus_job is None {
+                  auto_collapsed_turns(trace)
+                } else {
+                  model.trajectory_collapsed
+                }
+                let mut next_focus_span = model.trajectory_focus_span
+                let mut next_focus_job = model.trajectory_focus_job
+                let mut next_focus_start = model.trajectory_focus_job_start
+                let mut next_scroll_top = model.trajectory_scroll_top
+                let next_open = model.trajectory_job_open.copy()
+                let next_jobs = model.trajectory_jobs.copy()
+                let next_job_pending = model.trajectory_job_pending.copy()
+                let effects : Array[@cmd.Cmd] = []
+                if model.trajectory_resolve_root ||
+                  trace.root_session_id != root {
+                  let resolved_root = trace.root_session_id
+                  effects.push(
+                    @cmd.effect(() => normalize_trajectory_hash(resolved_root)),
+                  )
+                }
+                if model.trajectory_focus_job is Some(job_id) {
+                  let start_hint = next_focus_start
+                  next_focus_job = None
+                  next_focus_start = None
+                  if find_job_focus_span(trace, job_id, start_hint?)
+                    is Some(span) {
+                    next_focus_span = Some(span.id)
+                    next_collapsed = unfold_span_ancestors(
+                      trace,
+                      next_collapsed,
+                      span.id,
+                    )
+                    if find_span_row_index(
+                        trace,
+                        next_collapsed,
+                        model.trajectory_failed_only,
+                        span.id,
+                      )
+                      is Some(idx) {
+                      let est = idx * WaterfallRowHeightPx -
+                        model.trajectory_viewport_h / 2
+                      next_scroll_top = if est > 0 { est } else { 0 }
+                      effects.push(
+                        @cmd.effect(() => {
+                          scroll_to_waterfall_row(idx, WaterfallRowHeightPx)
+                        }),
+                      )
+                    } else {
+                      effects.push(@cmd.effect(() => scroll_to_focused_job()))
+                    }
+                    let key = job_panel_key(span.session_id, job_id)
+                    if job_log_available(model, key) {
+                      if !next_open.contains(key) {
+                        next_open.push(key)
+                      }
+                      if next_jobs.get(key) is None &&
+                        !next_job_pending.contains(key) {
+                        next_jobs[key] = Loading
+                        next_job_pending.push(key)
+                        effects.push(
+                          job_log_fetch(
+                            emit,
+                            key,
+                            Some(trace),
+                            preferred_span_id=span.id,
+                            start_hint?,
+                            cursor?=None,
+                          ),
+                        )
+                      }
+                    }
+                  }
+                }
+                (
+                  @cmd.batch(effects),
+                  {
+                    ..model,
+                    trajectory_root: Some(trace.root_session_id),
+                    trajectory_resolve_root: false,
+                    trajectory: Some(trace),
+                    trajectory_cursor: cursor,
+                    trajectory_pending: false,
+                    trajectory_error: None,
+                    trajectory_collapsed: next_collapsed,
+                    trajectory_focus_job: next_focus_job,
+                    trajectory_focus_job_start: next_focus_start,
+                    trajectory_focus_span: next_focus_span,
+                    trajectory_scroll_top: next_scroll_top,
+                    trajectory_job_open: next_open,
+                    trajectory_jobs: next_jobs,
+                    trajectory_job_pending: next_job_pending,
+                    status: "\{trace.stats.span_count} span(s) from \{trace.stats.session_count} session(s)",
+                  },
+                )
+              }
+              None =>
+                (
+                  @cmd.none,
+                  {
+                    ..model,
+                    trajectory_pending: false,
+                    trajectory_error: Some("malformed trajectory response"),
+                    status: "malformed trajectory response for \{root}",
+                  },
+                )
             }
-          } else {
-            (@cmd.none, model)
+        }
+      }
+    JumpToFirstFailure => {
+      let collapsed = match model.trajectory {
+        Some(trace) =>
+          unfold_failed_ancestors(trace, model.trajectory_collapsed)
+        None => model.trajectory_collapsed
+      }
+      match
+        model.trajectory.bind(trace => {
+          find_first_failure_row_index(
+            trace,
+            collapsed,
+            model.trajectory_failed_only,
+          )
+        }) {
+        Some(idx) => {
+          let est = idx * WaterfallRowHeightPx - model.trajectory_viewport_h / 2
+          let next_scroll_top = if est > 0 { est } else { 0 }
+          (
+            @cmd.effect(() => scroll_to_waterfall_row(idx, WaterfallRowHeightPx)),
+            {
+              ..model,
+              trajectory_collapsed: collapsed,
+              trajectory_scroll_top: next_scroll_top,
+            },
+          )
+        }
+        None =>
+          (
+            @cmd.effect(() => scroll_to_first_failure()),
+            { ..model, trajectory_collapsed: collapsed, },
+          )
+      }
+    }
+    TrajectoryScroll(top, vh) => {
+      let stride = WaterfallRowHeightPx * 4
+      if (top - model.trajectory_scroll_top).abs() >= stride ||
+        (vh - model.trajectory_viewport_h).abs() >= stride ||
+        (top == 0 && model.trajectory_scroll_top != 0) {
+        (
+          @cmd.none,
+          { ..model, trajectory_scroll_top: top, trajectory_viewport_h: vh, },
+        )
+      } else {
+        (@cmd.none, model)
+      }
+    }
+    UrlRequested(request) =>
+      match request {
+        Internal(url) =>
+          match url.fragment {
+            Some(fragment) =>
+              match open_trajectory_from_fragment(emit, model, fragment) {
+                Some((command, next)) =>
+                  (@cmd.batch([@nav.push_url(url.to_string()), command]), next)
+                None =>
+                  try HashSessionKey::from_fragment(fragment) catch {
+                    MalformedHashSessionKey =>
+                      (
+                        @cmd.none,
+                        {
+                          ..model,
+                          status: "invalid session link: malformed s= value",
+                        },
+                      )
+                  } noraise {
+                    Some(_) => (@nav.push_url(url.to_string()), model)
+                    None => (@cmd.none, model)
+                  }
+              }
+            None => (@cmd.none, model)
           }
         External(_) => (@cmd.none, model)
       }
     UrlChanged(url) =>
-      if url.fragment is Some(fragment) {
-        try HashSessionKey::from_fragment(fragment) catch {
-          MalformedHashSessionKey =>
-            (
-              @cmd.none,
-              { ..model, status: "invalid session link: malformed s= value", },
-            )
-        } noraise {
-          Some(key) =>
-            // Resolve like startup restoration; unknown anchors do not clear
-            // the current session.
-            match resolve_session_key(model.sessions, key.0) {
-              Some(key) if model.selected != Some(key) =>
-                update(emit, Select(key), model)
-              _ => (@cmd.none, model)
-            }
-          None => (@cmd.none, model)
-        }
-      } else {
-        (@cmd.none, model)
+      match url.fragment {
+        Some(fragment) =>
+          match open_trajectory_from_fragment(emit, model, fragment) {
+            Some(result) => result
+            None =>
+              try HashSessionKey::from_fragment(fragment) catch {
+                MalformedHashSessionKey =>
+                  (
+                    @cmd.none,
+                    {
+                      ..model,
+                      status: "invalid session link: malformed s= value",
+                    },
+                  )
+              } noraise {
+                Some(key) =>
+                  // Resolve like startup restoration; unknown anchors do not
+                  // clear the current session.
+                  match resolve_session_key(model.sessions, key.0) {
+                    Some(key) if model.selected != Some(key) =>
+                      update(emit, Select(key), model)
+                    _ => (@cmd.none, model)
+                  }
+                None => (@cmd.none, model)
+              }
+          }
+        None => (@cmd.none, model)
       }
     SubrunFetched(parent_key, child_id, result) =>
       // A child transcript for a parent the user already left is stale;
@@ -481,6 +1017,64 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
       } else {
         []
       }
+      // An open waterfall follows the run: a live trace is re-read every tick,
+      // a settled or failed trace is re-checked every few ticks (with cursor),
+      // and an in-flight request is never overlapped.
+      let (trajectory_refresh, next_trajectory_pending) = if model.trajectory_pending {
+        ([], true)
+      } else {
+        match (model.trajectory_root, model.trajectory) {
+          (Some(root), Some(trace)) =>
+            if trace.live || ticks % watch_list_every == 0 {
+              (
+                [
+                  trajectory_fetch(
+                    emit,
+                    root,
+                    model.trajectory_ticket,
+                    cursor?=model.trajectory_cursor,
+                  ),
+                ],
+                true,
+              )
+            } else {
+              ([], false)
+            }
+          (Some(root), None) =>
+            if model.trajectory_error is None || ticks % watch_list_every == 0 {
+              ([trajectory_fetch(emit, root, model.trajectory_ticket)], true)
+            } else {
+              ([], false)
+            }
+          (None, _) => ([], false)
+        }
+      }
+      let list_refresh = [..trajectory_refresh, ..list_refresh]
+      // An open job log follows its own file while the job runs, from the byte
+      // offset the last page ended at, skipping keys already in flight.
+      let next_job_pending = model.trajectory_job_pending.copy()
+      let job_refresh : Array[@cmd.Cmd] = []
+      for key in model.trajectory_job_open {
+        if next_job_pending.contains(key) {
+          continue
+        }
+        if model.trajectory_jobs.get(key) is Some(panel) &&
+          job_log_wants_more(panel) {
+          let cursor = match panel {
+            Shown(log) => Some(log.next_offset)
+            _ => None
+          }
+          next_job_pending.push(key)
+          job_refresh.push(job_log_fetch(emit, key, model.trajectory, cursor?))
+        }
+      }
+      let list_refresh = [..job_refresh, ..list_refresh]
+      let next_model = {
+        ..model,
+        watch_ticks: ticks,
+        trajectory_pending: next_trajectory_pending,
+        trajectory_job_pending: next_job_pending,
+      }
       match model.selected {
         // Re-check only a settled server session: not while its first load
         // or a previous re-check is still in flight.
@@ -496,9 +1090,9 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
                 ..list_refresh,
               ],
             ),
-            { ..model, watch_ticks: ticks, watch_pending: true, },
+            { ..next_model, watch_pending: true, },
           )
-        _ => (@cmd.batch(list_refresh), { ..model, watch_ticks: ticks, })
+        _ => (@cmd.batch(list_refresh), next_model)
       }
     }
     WatchFetched(key, result) => {
@@ -837,6 +1431,138 @@ fn session_url(id : String) -> String {
 }
 
 ///|
+/// Whether this viewer can open one run's timeline.
+///
+/// A served viewer folds a run on request, so it can offer any run it can see.
+/// A standalone export has no server: it can only open a run it baked into
+/// itself as an `/api/trajectory` document, which is why the archive decides.
+fn trajectory_available(model : Model, root : String) -> Bool {
+  !model.standalone || embedded_has(trajectory_url(root))
+}
+
+///|
+/// The trajectory endpoint for one run root. The root travels as a session id
+/// because a run is several files and no single catalog key names it.
+fn trajectory_url(
+  root : String,
+  cursor? : String,
+  resolve_root~ : Bool = false,
+) -> String {
+  let base = "/api/trajectory/\{encode_uri_component(root)}"
+  let query : Array[String] = []
+  if cursor is Some(token) {
+    query.push("cursor=\{encode_uri_component(token)}")
+  }
+  if resolve_root {
+    query.push("resolve_root=1")
+  }
+  if query.is_empty() {
+    base
+  } else {
+    let joined = query.join("&")
+    "\{base}?\{joined}"
+  }
+}
+
+///|
+/// Fetch one run's waterfall. The ticket rides along so a response that
+/// arrives after the reader opened another run is dropped.
+fn trajectory_fetch(
+  emit : @cmd.Emit[Msg],
+  root : String,
+  ticket : Int32,
+  cursor? : String,
+  resolve_root~ : Bool = false,
+) -> @cmd.Cmd {
+  fetch_text(emit, trajectory_url(root, cursor?, resolve_root~), result => {
+    TrajectoryFetched(root, ticket, result)
+  })
+}
+
+///|
+/// The instant the run drew the job at, preferring the focused `BackgroundJob`
+/// span (or explicit focus start hint) when legacy `bg-1` ids repeat across
+/// generations.
+fn job_start_hint(
+  trace : @trajectory.Trajectory?,
+  key : String,
+  preferred_span_id? : String,
+  start_hint? : Int64,
+) -> Int64? {
+  match trace {
+    Some(trace) => {
+      if preferred_span_id is Some(span_id) {
+        if trace.spans
+          .iter()
+          .find_first(span => {
+            span.id == span_id &&
+            span.kind is BackgroundJob &&
+            span_job_keys(span).contains(key)
+          })
+          is Some(span) {
+          return Some(span.started_at_ms)
+        }
+      }
+      if start_hint is Some(ms) {
+        return Some(ms)
+      }
+      match
+        trace.spans
+        .iter()
+        .find_first(span => {
+          span.kind is BackgroundJob && span_job_keys(span).contains(key)
+        }) {
+        Some(span) => Some(span.started_at_ms)
+        None => None
+      }
+    }
+    None => start_hint
+  }
+}
+
+///|
+/// Whether this viewer can open a job's log. A served viewer asks the store; a
+/// frozen archive could only answer from a baked document, and `--export` bakes
+/// session logs and trajectories, not job outputs — so an archive offers no
+/// button rather than one that fails on click.
+fn job_log_available(model : Model, key : String) -> Bool {
+  !model.standalone ||
+  embedded_has(job_url(session_id_of_job_key(key), job_id_of_key(key)))
+}
+
+///|
+fn session_id_of_job_key(key : String) -> String {
+  match key.split_once("/") {
+    Some(parts) => parts.0.to_owned()
+    None => ""
+  }
+}
+
+///|
+/// Read one job's log. The key names the job (`session/job`), so a reply that
+/// lands after the reader moved to another run still lands on the right panel.
+fn job_log_fetch(
+  emit : @cmd.Emit[Msg],
+  key : String,
+  trace : @trajectory.Trajectory?,
+  preferred_span_id? : String,
+  start_hint? : Int64,
+  cursor? : Int64,
+) -> @cmd.Cmd {
+  let (session_id, job_id) = match key.split_once("/") {
+    Some(parts) => (parts.0.to_owned(), parts.1.to_owned())
+    None => (key, "")
+  }
+  let url = job_url(
+    session_id,
+    job_id,
+    start?=job_start_hint(trace, key, preferred_span_id?, start_hint?),
+    cursor?,
+  )
+  fetch_text(emit, url, result => JobLogFetched(key, cursor, result))
+}
+
+///|
 /// Resolve a hash `s=` value to a listed row key: exact key first, then by
 /// bare session id — subrun chips link `#s=<child session id>`, which the
 /// server resolves as a legacy key but a standalone export's embedded data
@@ -897,6 +1623,40 @@ fn HashSessionKey::from_fragment(
 }
 
 ///|
+/// The run root carried by a `t=` hash parameter: the trajectory page's own
+/// navigation key. Kept apart from `s=` so the two pages cannot fight over one
+/// fragment.
+priv struct HashTrajectoryRoot(String)
+
+///|
+/// Read the first `t=` parameter from a URL fragment.
+fn HashTrajectoryRoot::from_fragment(
+  fragment : StringView,
+) -> HashTrajectoryRoot? {
+  match hash_fragment_param(fragment, "t") {
+    Some(value) => Some(HashTrajectoryRoot(value))
+    None => None
+  }
+}
+
+///|
+fn hash_fragment_param(fragment : StringView, name : String) -> String? {
+  let prefix = "\{name}="
+  for parameter in fragment.split("&") {
+    if parameter.strip_prefix(prefix) is Some(encoded) {
+      let decoded = @percent.decode(encoded.replace_all(old="+", new=" ")) catch {
+        Malformed(_) => return None
+      }
+      if decoded.is_empty() {
+        return None
+      }
+      return Some(decoded)
+    }
+  }
+  None
+}
+
+///|
 fn HashSessionKey::decode(
   encoded : StringView,
 ) -> HashSessionKey raise MalformedHashSessionKey {
@@ -935,9 +1695,21 @@ fn events_status(parsed : @session_log.ParsedLog) -> String {
 
 ///|
 fn view(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let main_attrs = if model.trajectory_root is Some(_) {
+    @html.Attrs::build().on_scroll(_ => {
+      emit(
+        TrajectoryScroll(
+          read_waterfall_scroll_top(),
+          read_waterfall_viewport_h(),
+        ),
+      )
+    })
+  } else {
+    @html.Attrs::build()
+  }
   @html.div(class=app_class(model), attrs=drop_target_attrs(emit)) <| [
     sidebar_pane(emit, model),
-    @html.section(class="main") <| [
+    @html.section(class="main", attrs=main_attrs) <| [
       main_toolbar(emit, model),
       main_pane(emit, model),
     ],
@@ -1251,6 +2023,16 @@ fn sidebar_row(
     "selected",
     selected,
   )
+  let root = match row.run_root {
+    Some(explicit) => explicit
+    None => run_root_of(row.id)
+  }
+  let needs_resolve = !model.standalone && row.run_root is None
+  let timeline_href = if needs_resolve {
+    "#t=\{encode_uri_component(root)}&resolve=1"
+  } else {
+    "#t=\{encode_uri_component(root)}"
+  }
   @html.li(class=classes, on_click=emit(Select(row.key))) <| [
     @html.div(class="session-item-label") <| label,
     @html.div(class="session-item-meta") <| [
@@ -1260,12 +2042,41 @@ fn sidebar_row(
         row.is_marker,
       ),
       last_active_view(row.last_active),
+      if !child && trajectory_available(model, root) {
+        @html.a(
+          class="session-timeline-link",
+          href=timeline_href,
+          title="Open run timeline",
+          attrs=@html.Attrs::build().on_click(event => {
+            event.stop_propagation()
+            @cmd.none
+          }),
+        ) <| "Timeline"
+      } else {
+        @html.nothing
+      },
     ],
   ]
 }
 
 ///|
 fn main_pane(emit : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  // The trajectory page is its own pane: it shows a whole run, which is not
+  // one session's log and outlives the session selection it was opened from.
+  if model.trajectory_root is Some(_) {
+    return match model.trajectory {
+      Some(trace) => trajectory_pane(emit, model, trace)
+      None =>
+        // The whole-run page has its own empty and error states; the class
+        // keeps them apart from the log pane's and from the row spacers that
+        // also carry `placeholder`.
+        @html.div(class="placeholder trajectory-placeholder") <| (match
+          model.trajectory_error {
+          Some(error) => error
+          None => "Loading trajectory…"
+        })
+    }
+  }
   match (model.dropped, model.selected) {
     (Some(name), _) =>
       match model.parsed {
@@ -1376,6 +2187,35 @@ fn header_strip(model : Model, id : String, root_label : String?) -> @html.Html 
   @html.header(class="header-strip") <| [
     @html.div(class="header-id") <| id,
     @html.div(class="header-meta") <| "\{model.status}\{live_note} · \{prompt_note}\{root_note}",
+    // A dropped file is a snapshot with no siblings on disk to walk to, so only
+    // a session whose run the viewer knows offers the link: a served viewer
+    // folds it on request, and a frozen export offers the runs it baked.
+    match model.selected {
+      Some(key) => {
+        let row = session_row(model, key)
+        let root = match row.bind(entry => entry.run_root) {
+          Some(explicit) => explicit
+          None => run_root_of(session_label(model, key))
+        }
+        let needs_resolve = !model.standalone &&
+          row.bind(entry => entry.run_root) is None
+        let href = if needs_resolve {
+          "#t=\{encode_uri_component(root)}&resolve=1"
+        } else {
+          "#t=\{encode_uri_component(root)}"
+        }
+        if trajectory_available(model, root) {
+          @html.a(
+            class="trajectory-open",
+            href~,
+            title="Show this run's timeline: every session, turn and step on one axis",
+          ) <| "Trajectory"
+        } else {
+          @html.nothing
+        }
+      }
+      None => @html.nothing
+    },
   ]
 }
 
@@ -1529,7 +2369,13 @@ fn last_active_label(last_active : Int64?) -> String {
 
 ///|
 fn absolute_time_label(milliseconds : Int64) -> String {
-  format_unix_ms_utc(milliseconds.to_double())
+  let d = milliseconds.to_double()
+  let stamp = format_unix_ms_local(d)
+  if stamp.is_empty() {
+    ""
+  } else {
+    "\{stamp} \{local_tz_label(d)}"
+  }
 }
 
 ///|
@@ -1723,10 +2569,18 @@ fn session_log_view(
   } else if model.build_errors_only && build_error_count == 0 {
     @html.div(class="build-errors-only-empty") <| "No mbtx build errors in this view."
   } else {
+    let tz_offset_ms = local_tz_offset_ms(
+      model.parsed
+      .bind(parsed => parsed.events.last())
+      .map(event => event.unix_ms())
+      .unwrap_or(0L)
+      .to_double(),
+    ).to_int64()
     @viz.render_session(
       session,
       model.view_mode,
       subrun_children=model.subrun_children,
+      tz_offset_ms~,
     )
   }
 }
@@ -1810,12 +2664,16 @@ fn session_row_of(json : Json) -> SessionRow? {
     { "root"? : Some(String(value)) | (_ with value = ""), .. } => value
     _ => ""
   }
+  let run_root = match json {
+    { "run_root": String(value), .. } if !value.is_empty() => Some(value)
+    _ => None
+  }
   let last_active = match json {
     { "last_active": Number(value, ..), .. } => Some(value.to_int64())
     _ => None
   }
   let is_marker = json is { "is_marker": true, .. }
-  Some({ key, id, root_label, last_active, is_marker, first_prompt, })
+  Some({ key, id, root_label, run_root, last_active, is_marker, first_prompt, })
 }
 
 ///|
@@ -1898,13 +2756,15 @@ test "session metadata counts steps and total runtime" {
   inspect(format_log_size(log_bytes), content="307 B")
   inspect(agent_step_count(parsed), content="1")
   inspect(runtime_label(parsed), content="70.3s")
-  inspect(end_time_label(parsed), content="1970-01-01 00:02 UTC")
+  let expected_end = "\{format_unix_ms_local(170300.0)} \{local_tz_label(170300.0)}"
+  assert_eq(end_time_label(parsed), expected_end)
 }
 
 ///|
-test "absolute time labels format UTC timestamps" {
-  inspect(absolute_time_label(0L), content="1970-01-01 00:00 UTC")
-  inspect(last_active_label(Some(0L)), content="1970-01-01 00:00 UTC")
+test "absolute time labels format local timestamps with timezone" {
+  let expected_zero = "\{format_unix_ms_local(0.0)} \{local_tz_label(0.0)}"
+  assert_eq(absolute_time_label(0L), expected_zero)
+  assert_eq(last_active_label(Some(0L)), expected_zero)
   inspect(last_active_label(None), content="")
 }
 
@@ -2112,4 +2972,15 @@ test "session view class includes the escalated filter" {
     session_view_class(filtered),
     content="session-view escalated-only show-original",
   )
+}
+
+///|
+/// The root session a run hangs from: `run-sr-1-sr-2` is `run`. A session id
+/// that merely contains `-sr-` (with a non-numeric tail) is its own root.
+fn run_root_of(id : String) -> String {
+  let mut current = id.to_string()
+  while @trajectory.parent_session_of(current) is Some(parent) {
+    current = parent
+  }
+  current
 }

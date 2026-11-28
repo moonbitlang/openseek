@@ -51,7 +51,8 @@ opening of the reply it drew — and clicking jumps to the prompt's card
 | Package          | Target | Role                                                                 |
 |------------------|--------|---------------------------------------------------------------------|
 | `viz`            | js     | Pure parse + render: session-file text → typed events → `@html.Html`. Reuses `agent_session` decoders and projection, so it stays correct as the format evolves. |
-| `cmd/viz_app`    | js     | The rabbita (TEA) frontend: session browser, fetch, mode toggle.    |
+| `trajectory`     | native+js+wasm | Pure fold of one run's session files into a timeline: sessions, turns, model calls, tool steps, `.mbtx` scripts and their PTC calls, background jobs, waits and milestones, each with a start, an end and a status, plus the axis they are drawn on. A PTC call is a real interval when the trace timed it and a zero-width marker when it predates that. |
+| `cmd/viz_app`    | js     | The rabbita (TEA) frontend: session browser, fetch, mode toggle, run waterfall. |
 | `inspect`        | native+wasm | Read-only web server (`moonbitlang/async/http`, standalone module `moonbitlang/inspect`) exposing a JSON/raw-file API over discovered `openseek_session-*.jsonl` files. It never writes, so pointing it at a live session root is safe. |
 
 The `viz` library keeps its parsing, projection, and error-count rules
@@ -68,6 +69,8 @@ that virtual tree for string-based render assertions. Run
 - `GET /api/sessions` → `[{key, id, root, root_label, last_active, first_prompt}, …]`, most recent first across all roots
 - `GET /api/sessions/<key>` → `{found, events, events_bytes}` envelope for the frontend (`events` is the raw session-file text; its first line is the header record)
 - `GET /api/sessions/<key>/openseek_session-<id>.jsonl` → raw session file
+- `GET /api/trajectory/<root id>` → `{root_session_id, t0_ms, t_end_ms, live, sessions, spans, stats}`, one run folded into a single timeline (see the Trajectory section of `inspect/README.md`)
+- `GET /api/sessions/<key>/jobs/<job>` → `{found, job, output}`, one background job's record plus a page of the text it wrote (`?start=<ms>` picks the generation, `?cursor=<byte>` continues from a page already sent)
 
 ## Drag and drop
 
@@ -111,6 +114,52 @@ have env-var fallbacks (`OPENSEEK_VIZ_SEARCH_DIR`,
 that exited between writing an event and its newline) is reported as a benign
 truncated tail, and any single line that fails to decode becomes an inline error
 card while the rest of the conversation still renders.
+
+## Run waterfall
+
+`Trajectory` in a session header opens `#t=<session id>`: every session the run
+spawned, every turn, every step, on one axis, indented by nesting and coloured by
+kind. A child normally mounts on the exact step that spawned it — the
+`subagent` tool's own result names the child session — and only a child the log
+never named falls back to time (the parent's tool call open when the child's
+first event landed).
+
+Bars keep true durations. The header cards give the run's duration against its
+start and end clock, its shape, and where the time went (model, tools, waiting,
+tokens, failures with a jump to the first one). Below them an activity strip
+draws one column per slice of the same axis — model calls, tool calls and a red
+mark over any slice holding a failure — so a spike sits directly above the steps
+that made it. The ruler draws one block per stretch of work and one narrow
+hatched slot per folded idle stretch, labelled with how long that stretch really
+was, so a gap cannot be mistaken for a pause of the same size. A row with
+children draws them inside its own bar as kind-coloured ticks, which is what
+makes a folded turn readable without expanding a thousand steps; hovering a row
+opens a card with the step's kind, outcome, duration, `brief` and prompt, and the
+`↗` beside its duration opens that session's log at the event the step was read
+from.
+
+A dated scale above the rows names the clock — `Nov 1` at a day boundary,
+`02:00` otherwise, with the seconds when the run is only seconds long — and
+casts that grid down the rows, so a bar can be read against the time of day
+without leaving its line. Each lane's first row carries its role: the run's own
+session, or an agent the run spawned.
+
+A row that names a background job carries a `.out` button beside its label:
+opening it reads that job's own file and draws it in place, under the row. The
+text never comes from the transcript — a job can print megabytes the log never
+carries — so it is fetched as a tail of up to 64 KiB, with one line saying when
+earlier output was left out. A job that is still running is followed from where
+the last page ended, and a record that cannot be read shows as an error block,
+not as an empty log. An `--export` archive bakes session logs and waterflows but
+not job outputs, so its job rows offer no `.out` button rather than one that
+would fail on click.
+
+`Idle folded` collapses the idle stretches between work, because a run saved
+across a night is otherwise almost entirely blank; `Idle at scale` shows the true
+gaps. A step with children folds with its chevron, and a folded row keeps its
+place so the tree stays aligned. `Failures only` — the button carries the count —
+narrows the rows to the failed steps plus the ancestors that place them, and a
+run with none reads `Failures · none` instead of drawing an empty axis.
 
 ## Subagent transcripts
 

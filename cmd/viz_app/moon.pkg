@@ -1,6 +1,7 @@
 import {
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/log" @session_log,
+  "moonbitlang/openseek/trajectory",
   "moonbitlang/openseek/viz",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/dom",

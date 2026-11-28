@@ -33,13 +33,23 @@ the command above.
 
 ## Structure
 
-Two source files:
+The app's files:
 
 - `main.mbt` — mounts the app and issues the initial commands: fetch the
   session listing, install the keyboard shortcuts, the hash-navigation
   listener, and the scroll-position tracker.
 - `app.mbt` — the TEA loop (`Model` / `Msg` / `update` / `view`) plus the
   `extern "js"` DOM glue.
+- `trajectory_view.mbt` — the run waterfall: the header totals, the kind
+  legend, and the rows drawn from `@trajectory.layout_trajectory`. It renders
+  positions in percent and nothing else; deciding which span hangs under which
+  happens server-side in the `trajectory` package. A row that names a
+  background job also carries the way into that job's own `.out` file.
+- `job_log.mbt` — the job log a row opens in place: the
+  `/api/sessions/<key>/jobs/<job>` reply it reads, what a follow-up page does
+  to it, and the words the block draws. The output never comes from the
+  session log — the log names the job, the job's file holds the text — so a
+  forty-minute job reads without loading its transcript.
 
 Everything is private. The parse + render logic (session text → typed events →
 `@html.Html`) lives in the `viz` package. Its parsing and projection rules are
@@ -55,12 +65,16 @@ The repository root exposes the same command as `just viz-test-browser`.
 The same `Model` is fed from three places:
 
 1. **Live server** — the read-only JSON API (`/api/sessions` listing,
-   `/api/sessions/<key>` envelope). Fetch results carry the session id they
-   were issued for, so a slow response for a session the user already left is
-   discarded instead of clobbering the pane.
+   `/api/sessions/<key>` envelope, `/api/trajectory/<root>` waterfall, and
+   `/api/sessions/<key>/jobs/<job>` for one job's output). Fetch results carry
+   the session id they were issued for, so a slow response for a session the
+   user already left is discarded instead of clobbering the pane.
 2. **Standalone export** — `inspect --export` bakes API responses into
    `window.__OPENSEEK_DATA__`; `fetch_text` consults that embedded map first,
-   so an exported page answers its own requests with no server behind it.
+   so an exported page answers its own requests with no server behind it. An
+   export carries session logs and run waterflows, not job outputs, so the
+   waterfall of an archive offers no `.out` button rather than one that would
+   fail on click.
 3. **Drag and drop** — a session `.jsonl` dropped anywhere in the window is
    read and rendered entirely client-side; nothing is uploaded.
 
@@ -70,6 +84,9 @@ The same `Model` is fed from three places:
   a `hashchange` listener turns them into selections. App-initiated hash
   writes use `replaceState`, which never fires `hashchange`, so navigation
   cannot loop.
+- `t=` — the run whose waterfall is open (a session id, usually the run's
+  root). The page replaces the session pane rather than nesting in it, so it
+  survives a selection change; `Back to log` clears the value.
 - `v=` — the view mode (`raw` | `model`). An explicit value wins over the
   defaults: a standalone export opens on the raw log, the live viewer on the
   model view.

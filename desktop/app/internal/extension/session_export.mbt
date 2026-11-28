@@ -69,3 +69,81 @@ async fn save_export(
   let open_code = @platform.open_path(path) catch { _ => -1 }
   { path: Some(path), opened: open_code == 0, }
 }
+
+///|
+fn inject_initial_hash(html : String, hash : String) -> String {
+  let script = "<script>window.__OPENSEEK_INITIAL_HASH__ = \{Json(hash).stringify()};</script>\n"
+  match html.split_once("</head>") {
+    Some((before, after)) => "\{before}\{script}\{after}"
+    None => "\{script}\{html}"
+  }
+}
+
+///|
+const MaxRetainedTrajectoryDirs : Int32 = 3
+
+///|
+let retained_trajectory_dirs : Array[String] = []
+
+///|
+fn trajectory_initial_hash(
+  session : String,
+  job_id : String?,
+  job_started_at_ms : Int64?,
+) -> String {
+  match (job_id, job_started_at_ms) {
+    (Some(job), Some(start_ms)) => "#t=\{session}&job=\{job}&start=\{start_ms}"
+    (Some(job), None) => "#t=\{session}&job=\{job}"
+    (None, _) => "#t=\{session}"
+  }
+}
+
+///|
+/// Render one run's trajectory snapshot into a temporary HTML file and open it
+/// in the browser, bypassing the save dialog.
+async fn open_session_trajectory(
+  state : @api.ApiState,
+  payload : @protocol.SessionTrajectoryPayload,
+) -> @protocol.SessionExportReply {
+  let assets = state.host_state().viz_assets()
+  let (shell, bundle) = assets.read()
+  let files = @engine.ConversationExport::capture(
+    state.manager(),
+    {
+      session: payload.session,
+      workspace: payload.workspace,
+      title: payload.title,
+      archived: payload.archived,
+    },
+    shell,
+    bundle,
+  )
+  let html = inject_initial_hash(
+    files.html,
+    trajectory_initial_hash(
+      payload.session,
+      payload.job_id,
+      payload.job_started_at_ms,
+    ),
+  )
+  let dir = @fs.tmpdir(prefix="openseek-trajectory-") catch {
+    error =>
+      raise @host.HostError(
+        "could not create temporary trajectory directory: \{error}",
+      )
+  }
+  while retained_trajectory_dirs.length() >= MaxRetainedTrajectoryDirs {
+    let stale = retained_trajectory_dirs.remove(0)
+    @fs.rmdir(stale, recursive=true) catch {
+      _ => ()
+    }
+  }
+  retained_trajectory_dirs.push(dir)
+  let path = "\{dir}/trajectory.html"
+  @fs.write_file(path, html, create_mode=CreateOrTruncate) catch {
+    error =>
+      raise @host.HostError("could not write trajectory snapshot: \{error}")
+  }
+  let open_code = @platform.open_path(path) catch { _ => -1 }
+  { path: Some(path), opened: open_code == 0, }
+}
