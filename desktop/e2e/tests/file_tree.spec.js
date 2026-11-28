@@ -19,17 +19,31 @@ test('breadcrumb picker and file tree show the same file-type icons', async ({ p
 
   // Compare the rendered glyphs without fixing the artwork each type must use.
   const glyphs = (root, role) => Promise.all(names.map(name =>
-    root.getByRole(role, { name, exact: true }).locator('[aria-hidden="true"]').first().evaluate(icon =>
-      [getComputedStyle(icon).backgroundImage, icon.innerHTML]
-    )
+    root.getByRole(role, { name, exact: true }).locator('[aria-hidden="true"]').first().evaluate(async icon => {
+      const background = getComputedStyle(icon).backgroundImage;
+      if (background.startsWith('url("')) {
+        const image = new Image();
+        image.src = background.slice(5, -2);
+        await image.decode();
+        return background;
+      }
+      const path = icon.querySelector('svg path');
+      if (path) return path.getAttribute('d');
+      const glyph = icon.querySelector('.codicon');
+      return glyph ? getComputedStyle(glyph, '::before').content.replaceAll('"', '') : null;
+    })
   ));
   const treeGlyphs = await glyphs(tree, 'treeitem');
+  for (const glyph of treeGlyphs) {
+    expect(glyph).toBeTruthy();
+    expect(glyph).not.toMatch(/^(none|normal)$/);
+  }
   await tree.getByRole('treeitem', { name: 'addr_utils.mbt', exact: true }).click();
   await page.locator('.crumb-directory', { hasText: 'socket' }).click();
   const picker = page.getByRole('menu', { name: 'Files in socket' });
   await expect(picker).toBeVisible();
   expect(await glyphs(picker, 'menuitem')).toEqual(treeGlyphs);
-  expect(new Set(treeGlyphs.map(glyph => JSON.stringify(glyph))).size).toBe(4);
+  expect(new Set(treeGlyphs).size).toBe(4);
   await picker.getByRole('menuitem', { name: 'happy_eyeball.mbt', exact: true }).click();
   await expect(page.locator('.crumb-file')).toHaveText('happy_eyeball.mbt');
 });
