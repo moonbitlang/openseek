@@ -4,23 +4,6 @@
 // dispatches pre-mapped to this package's `Msg`.
 
 ///|
-/// The file codicon used by the breadcrumb picker, from Microsoft's
-/// vscode-codicons (CC BY 4.0).
-fn icon_file() -> @html.Html {
-  @svg.svg(
-    width=16,
-    height=16,
-    view_box="0 0 16 16",
-    attrs=@svg.Attrs::build().fill("currentColor"),
-    [
-      @svg.path(
-        d="M13.85 4.44l-3.28-3.3L10.22 1H2.5l-.5.5v13l.5.5h11l.5-.5V4.8l-.15-.36zM13 14H3V2h6v3.5l.5.5H13v8zm0-9h-3V2.1L12.9 5h.1z",
-      ),
-    ],
-  )
-}
-
-///|
 fn icon_git_repository() -> @html.Html {
   @icons.codicon(
     "M12.5 12C12.776 12 13 11.776 13 11.5V3C13 1.895 12.105 1 11 1H5C3.895 1 3 1.895 3 3V13C3 14.105 3.895 15 5 15V15.5C5 15.702 5.122 15.885 5.309 15.962C5.495 16.039 5.711 15.997 5.854 15.854L6.5 15.208L7.146 15.854C7.242 15.95 7.37 16 7.5 16C7.564 16 7.63 15.987 7.691 15.962C7.878 15.885 8 15.702 8 15.5V15H12.5C12.776 15 13 14.776 13 14.5C13 14.224 12.776 14 12.5 14H8V13.5C8 13.224 7.776 13 7.5 13H5.5C5.224 13 5 13.224 5 13.5V14C4.448 14 4 13.552 4 13V12H12.5ZM4 3C4 2.448 4.448 2 5 2H11C11.552 2 12 2.448 12 3V11H4V3Z",
@@ -3397,18 +3380,11 @@ fn breadcrumb_picker_row(
         }
       }),
     [
-      @html.span(
-        class=if entry.is_dir {
-          "breadcrumb-picker-icon folder"
-        } else {
-          "breadcrumb-picker-icon file"
-        },
-        if entry.is_dir {
-          @icons.icon_folder()
-        } else {
-          icon_file()
-        },
-      ),
+      if entry.is_dir {
+        @html.span(class="breadcrumb-picker-icon folder", @icons.icon_folder())
+      } else {
+        workspace_file_icon(entry.name, class="breadcrumb-picker-icon")
+      },
       @html.span(class="breadcrumb-picker-name", entry.name),
       @html.span(
         class=if entry.is_dir {
@@ -3629,7 +3605,15 @@ fn tree_row(
   let indent_style = "--tree-depth: \{depth}"
   let expanded = state.expanded.contains(entry.path)
   let children = [
-    tree_entry_icon(entry),
+    if entry.is_dir {
+      @html.span(
+        class="tree-twistie",
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        @icons.icon_chevron_down(),
+      )
+    } else {
+      workspace_file_icon(entry.name, class="tree-entry-icon")
+    },
     @html.span(class="tree-name", entry.name),
     // Decorative guides never intercept clicks or change the label's slot.
     @html.span(
@@ -3709,21 +3693,26 @@ fn tree_row(
 }
 
 ///|
-fn tree_entry_icon(entry : FileEntry) -> @html.Html {
-  let (class_name, icon) = if entry.is_dir {
-    ("tree-twistie", @icons.icon_chevron_down())
-  } else if entry.name.to_lower().has_suffix(".mbt") {
-    ("tree-entry-icon moonbit-file", @html.nothing)
-  } else {
-    let kind = @workspace_file_ref.file_kind(entry.name)
-    (
-      "tree-entry-icon",
-      @icons.codicon(@workspace_file_ref.file_icon_path(kind)),
-    )
+fn workspace_file_icon(name : String, class~ : String) -> @html.Html {
+  let hidden = @html.Attrs::build().aria_hidden("true")
+  let lower = name.to_lower()
+  let icon = match lower {
+    _ if lower.has_suffix(".mbt") =>
+      return @html.span(
+        class=class + " moonbit-file",
+        attrs=hidden,
+        @html.nothing,
+      )
+    "moon.mod" | "moon.mod.json" => @icons.icon_extensions()
+    "moon.pkg" | "moon.pkg.json" => @icons.icon_package()
+    _ if lower.has_suffix(".md") || lower.has_suffix(".markdown") =>
+      @html.span(class="codicon codicon-markdown", "")
+    _ =>
+      @icons.codicon(
+        @workspace_file_ref.file_icon_path(@workspace_file_ref.file_kind(name)),
+      )
   }
-  @html.span(class=class_name, attrs=@html.Attrs::build().aria_hidden("true"), [
-    icon,
-  ])
+  @html.span(class~, attrs=hidden, [icon])
 }
 
 ///|

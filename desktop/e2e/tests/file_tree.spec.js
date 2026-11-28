@@ -1,6 +1,39 @@
 import { test, expect } from './support/test.js';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+test('breadcrumb picker and file tree show the same file-type icons', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const names = ['addr_utils.mbt', 'happy_eyeball.mbt', 'README.md', 'moon.mod', 'moon.pkg'];
+  app.directoryEntries['/workspace'] = [{ name: 'socket', is_dir: true }];
+  app.directoryEntries['/workspace/socket'] = names.map(name => ({ name, is_dir: false }));
+  app.workingFiles['socket/addr_utils.mbt'] = 'fn ready() -> Bool { true }\n';
+  app.workingFiles['socket/happy_eyeball.mbt'] = 'fn main {}\n';
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await app.openReview();
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  const tree = page.getByRole('tree', { name: 'Workspace files' });
+  await tree.getByRole('treeitem', { name: 'socket', exact: true }).click();
+
+  // Compare the rendered glyphs without fixing the artwork each type must use.
+  const glyphs = (root, role) => Promise.all(names.map(name =>
+    root.getByRole(role, { name, exact: true }).locator('[aria-hidden="true"]').first().evaluate(icon =>
+      [getComputedStyle(icon).backgroundImage, icon.innerHTML]
+    )
+  ));
+  const treeGlyphs = await glyphs(tree, 'treeitem');
+  await tree.getByRole('treeitem', { name: 'addr_utils.mbt', exact: true }).click();
+  await page.locator('.crumb-directory', { hasText: 'socket' }).click();
+  const picker = page.getByRole('menu', { name: 'Files in socket' });
+  await expect(picker).toBeVisible();
+  expect(await glyphs(picker, 'menuitem')).toEqual(treeGlyphs);
+  expect(new Set(treeGlyphs.map(glyph => JSON.stringify(glyph))).size).toBe(4);
+  await picker.getByRole('menuitem', { name: 'happy_eyeball.mbt', exact: true }).click();
+  await expect(page.locator('.crumb-file')).toHaveText('happy_eyeball.mbt');
+});
+
 test('switching editors reveals the active file inside collapsed directories', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.directoryEntries['/workspace'] = [
