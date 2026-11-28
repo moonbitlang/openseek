@@ -231,11 +231,13 @@ pub async fn list_jobs(
 }
 
 ///|
-/// The most record data one history page carries. A record's trace may be
-/// up to 4 MiB, so 100 full records would pass the 128 MiB reply limit of an
-/// SSH host (`desktop/backend/ssh`); a page stops early instead, and its
-/// `next_offset` says where the next one starts.
-const MaxPageBytes : Int32 = 33554432
+/// A job as a history page lists it: without its `data`, a script's trace of
+/// up to 4 MiB (`MaxTraceBytes` in agent_tool/ptc). A hundred full rows, or
+/// every running script's on the first page, could pass the 128 MiB reply
+/// limit of an SSH host; the selected job's view carries its data.
+fn list_row(record : @wire.JobRecord) -> @wire.JobRecord {
+  { ..record, data: None, }
+}
 
 ///|
 /// Enumerate lightweight names, then decode only the requested page. Runtime
@@ -249,7 +251,6 @@ async fn job_history_page(
   offset : Int32,
   errors : Array[String],
   refresh_failed~ : Bool = false,
-  max_bytes~ : Int32 = MaxPageBytes,
 ) -> @protocol.JobsListReply {
   guard offset >= 0 else { raise EngineError("invalid history offset") }
   let names = @fs.readdir(directory) catch {
@@ -316,13 +317,11 @@ async fn job_history_page(
   let jobs : Array[@protocol.JobView] = []
   if offset == 0 {
     for record in running {
-      jobs.push(job_view(directory, record, true, refresh_failed~))
+      jobs.push(job_view(directory, list_row(record), true, refresh_failed~))
     }
   }
   let mut position = 0
   let mut more = false
-  // What the page's records carry, by their data: the rest is small.
-  let mut bytes = 0
   scan~: for (generation, _) in generations {
     let files = @fs.readdir("\{directory}/\{generation}") catch {
       error => {
@@ -341,7 +340,7 @@ async fn job_history_page(
       }
     }
     for id in newest_first(ids, id => id) {
-      if position - offset == 100 || bytes >= max_bytes {
+      if position - offset == 100 {
         more = true
         break scan~
       }
@@ -361,12 +360,13 @@ async fn job_history_page(
             }
           }
       }
-      bytes += match record.data {
-        Some(data) => data.stringify().length()
-        None => 0
-      }
       jobs.push(
-        job_view(directory, record, live.contains(key), refresh_failed~),
+        job_view(
+          directory,
+          list_row(record),
+          live.contains(key),
+          refresh_failed~,
+        ),
       )
     }
   }
@@ -375,7 +375,7 @@ async fn job_history_page(
     errors,
     selected: None,
     next_offset: if more {
-      Some(position)
+      Some(offset + 100)
     } else {
       None
     },

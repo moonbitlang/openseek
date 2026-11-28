@@ -486,12 +486,17 @@ async fn sweep(
     Some(target) => target.base
     None => ""
   }
-  let mut started = 0
+  // Children started and the tokens they spent, counted as they happen, so
+  // a round the host stops still counts.
+  let started : Ref[Int] = Ref(0)
+  let tokens : Ref[Int] = Ref(0)
   // Packages given to workers so far, to measure what one costs the trace.
   let mut worked = 0
-  let mut tokens = 0
   let mut round = 0
   let mut ending = ""
+  // The host refused a call: the run stops with its continuation even when
+  // the abandoned round already recorded failures.
+  let mut refused = false
   for ;; {
     if options.rounds is Some(limit) && round >= limit {
       ending = "stopped: --rounds \{limit}"
@@ -532,7 +537,7 @@ async fn sweep(
       }
       break
     }
-    let room = (StartQuota - started) / 2
+    let room = (StartQuota - started.val) / 2
     guard room > 0 else {
       ending = "stopped: the start quota is spent"
       break
@@ -555,18 +560,17 @@ async fn sweep(
     println(
       "round \{round}: packages=\{open.length()} chosen=\{works.length()}",
     )
-    let (spent, used) = work_and_review(works, base, options.focus, failures) catch {
+    work_and_review(works, base, options.focus, failures, started, tokens) catch {
       HostLimit(why) => {
         // Nothing of this round is kept: its packages are neither given nor
         // skipped, so the continuation offers them again.
         println("round \{round}: stopped by the host: \{first_line(why)}")
         ending = "stopped: the host refused a call in round \{round}"
+        refused = true
         break
       }
       error => raise error
     }
-    started += spent
-    tokens += used
     let accepted = works.filter(work => work.review is Accepted(_))
     for work in works {
       print_work(work)
@@ -644,10 +648,12 @@ async fn sweep(
   for entry in stack {
     println("stack: \{entry.0} \{entry.1}")
   }
-  println("\{ending}: rounds=\{round} starts=\{started} tokens=\{tokens}")
+  println(
+    "\{ending}: rounds=\{round} starts=\{started.val} tokens=\{tokens.val}",
+  )
   // A run that stopped short, or gave packages up, can go on from its last
   // round: check out that branch and run again with these arguments.
-  if failures is [] && ending != "fixed point" {
+  if (failures is [] || refused) && ending != "fixed point" {
     let last = match stack {
       [.., (branch, _)] => Some(branch)
       [] => None
@@ -914,21 +920,27 @@ async fn module_dirs() -> Array[(String, String)] {
 
 ///|
 /// A top-level string field of a module manifest. A `moon.mod.json` is read
-/// as JSON. In a `moon.mod`, top-level fields start their line (`key = "x"`,
-/// with any comment after the value), so the indented fields of a block
-/// such as `rule(...)` are not mistaken for them.
+/// as JSON, or, when it has the comments and trailing commas Moon accepts,
+/// by its `"key": "x"` lines. In a `moon.mod`, a top-level field is an
+/// assignment, `key = "x"` (indented or not, with any comment after the
+/// value), while the arguments of a block such as `rule(...)` are written
+/// `key: "x"`, so a rule's `name` is not the module's.
 fn manifest_field(text : String, key : String) -> String? {
-  if text.trim_start() is ['{', ..] {
+  let json = text.trim_start() is ['{', ..]
+  if json {
     let parsed = try Some(@json.parse(text)) catch { _ => None }
-    guard parsed is Some(Object(fields)) &&
-      fields.get(key) is Some(String(value)) else {
-      return None
+    if parsed is Some(Object(fields)) {
+      return match fields.get(key) {
+        Some(String(value)) => Some(value)
+        _ => None
+      }
     }
-    return Some(value)
   }
+  let (name, separator) = if json { ("\"\{key}\"", ':') } else { (key, '=') }
   for line in text.split("\n") {
-    guard line.strip_prefix(key) is Some(rest) &&
-      rest.trim_start() is ['=', .. value] &&
+    guard line.trim_start().strip_prefix(name) is Some(rest) &&
+      rest.trim_start() is [first, .. value] &&
+      first == separator &&
       value.trim_start() is ['"', .. quoted] else {
       continue
     }
@@ -1034,14 +1046,15 @@ async fn analyze(
   // misread): it is reported, so the run never reads it as a fixed point.
   let unmapped : Array[String] = []
   for name, rows in candidates(output) {
-    guard package_dir(name, modules) is Some(dir) else {
-      unmapped.push(name)
-      continue
-    }
     let rows = if kits.contains(name) {
       rows.filter(row => !row.test_only)
     } else {
       rows
+    }
+    guard rows is [_, ..] else { continue }
+    guard package_dir(name, modules) is Some(dir) else {
+      unmapped.push(name)
+      continue
     }
     let files = listed.filter(file => {
       let (parent, base) = parts(file)
@@ -1401,18 +1414,19 @@ fn short_hash(text : String) -> String {
 
 ///|
 /// Run one round's workers, at most `LiveWorkers` at once, and review each
-/// change that passes the gate as soon as its worker ends. Returns the
-/// children started and the tokens they spent.
+/// change that passes the gate as soon as its worker ends. The children it
+/// starts and the tokens they spend are added to `started` and `tokens` as
+/// they happen.
 async fn work_and_review(
   works : Array[Work],
   head : String,
   focus : String,
   failures : Array[String],
-) -> (Int, Int) {
+  started : Ref[Int],
+  tokens : Ref[Int],
+) -> Unit {
   let live : Map[String, Role] = Map([])
   let mut next = 0
-  let mut started = 0
-  let mut tokens = 0
   for ;; {
     while next < works.length() &&
           live.values().filter(role => role is Worker(_)).count() < LiveWorkers {
@@ -1420,7 +1434,7 @@ async fn work_and_review(
       next += 1
       match start_worker(works[index], focus) {
         Running(id) => {
-          started += 1
+          started.val += 1
           live[id] = Worker(index)
         }
         Refused(why) => {
@@ -1452,7 +1466,7 @@ async fn work_and_review(
         continue
       }
       live.remove(id)
-      tokens += end.tokens
+      tokens.val += end.tokens
       match role {
         Worker(index) => {
           let work = works[index]
@@ -1474,7 +1488,7 @@ async fn work_and_review(
               )
               match launch {
                 Running(id) => {
-                  started += 1
+                  started.val += 1
                   live[id] = Reviewer(index)
                 }
                 Refused(why) => {
@@ -1502,7 +1516,6 @@ async fn work_and_review(
       }
     }
   }
-  (started, tokens)
 }
 
 ///|

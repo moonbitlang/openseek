@@ -447,8 +447,20 @@ Sixth pass (Codex, xhigh, the fifth pass's fixes):
 | P1: round sizing uses an average, results are counted unescaped, and a refused wait still ends the run without its continuation | Results are counted as the host stores them; a refused call raises `HostLimit`, which abandons the round and stops with the continuation (the host-limit mode, whose fake host refuses a wait as agent_tool/ptc does) |
 | P1: the 1,024-call limit is not tracked | Calls are metered beside bytes and rounds sized by both |
 | P1: a cherry-pick sequence between two picks passes preflight | `sequencer/` is a marker too (the sequencing mode) |
-| P2: a `name` inside a `rule(...)` before the module's own wins; compact `moon.mod.json` has no matching line | A `moon.mod.json` is parsed as JSON; a `moon.mod` field must start its line. The fixture's root manifest has such a rule |
+| P2: a `name` inside a `rule(...)` before the module's own wins; compact `moon.mod.json` has no matching line | A `moon.mod.json` is parsed as JSON; a `moon.mod` field must start its line (revised in the seventh pass). The fixture's root manifest has such a rule |
 | P2: a `moon.work` member outside the checkout aborts even a scoped run | Reported as not in this checkout, and the run ends `fixed point except` it rather than failing |
 | P2: a branch named `MERGE_HEAD` reads as a merge | Every marker is a file looked up with `git rev-parse --git-path` |
 | P2: `--exclude ./-vendor` continues as `--exclude -vendor`, which is refused | Continuation arguments keep `./` before a leading `-` (the rounds mode's continuation, which the continue mode replays) |
-| P2: 100 records with 4 MiB traces pass an SSH host's 128 MiB reply | A history page also stops once its records' data reaches 32 MiB; `next_offset` is the position after it |
+| P2: 100 records with 4 MiB traces pass an SSH host's 128 MiB reply | A history page also stopped once its records' data reached 32 MiB (replaced in the seventh pass) |
+
+Seventh pass (Codex, xhigh, both fix commits):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: requiring a `moon.mod` field at column 0 drops a valid indented one (`  source = "src"`), faking a fixed point | Fields are told apart by syntax: a top-level field is an assignment, `key = "x"`, at any indentation, while a `rule(...)` argument is `key: "x"`. The fixture's root `name` is indented, after a rule with a `name:` |
+| P2: a legacy `moon.mod.json` with comments or a trailing comma fails strict JSON | Such a file is read by its `"key": "x"` lines; the fixture's nested manifest has both |
+| P2: a refusal after a child failed suppresses the continuation | A host refusal prints the continuation whatever the round recorded |
+| P2: an abandoned round's starts and tokens are lost | Counted as they happen; the host-limit mode checks its whole stop line (`starts=5`) and continuation |
+| P2: a test kit's test-only rows are reported as unmapped | The kit filter runs first; a package left with no candidates is neither |
+| P2: size-bounded history pages break the desktop's paging cursor, miss the first page's running jobs, and count UTF-16 units | Replaced: listed jobs leave out their `data` (the trace), so a page stays small at 100 rows; `selected`, which every desktop list request asks for, carries it |
+| P2: an external module whose name extends a local module's maps to a local directory | Not fixed: needs the analyzer's package locations. A follow-up |

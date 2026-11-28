@@ -349,17 +349,18 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     @fs.mkdir(repo + "/" + dir, recursive=true)
   }
   write(repo + "/README.md", "fixture\n")
-  // The module's name is the top-level field, after a rule with a `name` of
-  // its own and despite a trailing comment: a module the script cannot map
-  // would drop its packages and read as a fixed point.
+  // The module's name is its top-level assignment: after a rule whose
+  // `name:` argument is not, indented, and with a trailing comment. A module
+  // the script cannot map would drop its packages and read as a fixed point.
   write(
     repo + "/moon.mod",
-    "rule(\n  name: \"generate\", // code-generation rule\n  command: \"true\",\n)\n\nname = \"fx/app\" // the fixture app\n\nversion = \"0.1.0\"\n",
+    "rule(\n  name: \"generate\", // code-generation rule\n  command: \"true\",\n)\n\n  name = \"fx/app\" // the fixture app\n\nversion = \"0.1.0\"\n",
   )
-  // A module whose packages live under its `source` directory.
+  // A module whose packages live under its `source` directory, in a legacy
+  // manifest with the comment and trailing comma Moon accepts.
   write(
     repo + "/sub/moon.mod.json",
-    "{\n  \"name\": \"fx/sub\",\n  \"source\": \"src/\"\n}\n",
+    "{\n  // the nested module\n  \"name\": \"fx/sub\",\n  \"source\": \"src/\",\n}\n",
   )
   write(
     repo + "/alpha/moon.pkg",
@@ -857,14 +858,31 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         )
       // The host refuses the round's first wait: the run stops with a
       // continuation that offers the round's packages again.
-      "shrink-host-limit" =>
+      "shrink-host-limit" => {
+        // The workers it started still count, and the continuation is whole:
+        // no package of the abandoned round is given up.
+        let ends = output
+          .split("\n")
+          .filter(line => {
+            line.has_prefix("stopped:") || line.has_prefix("continue from")
+          })
+          .map(line => line.to_owned())
+          .collect()
+        assert_eq(
+          ends,
+          [
+            "stopped: the host refused a call in round 1: rounds=1 starts=5 tokens=0",
+            "continue from main: --no-pr --rounds 2",
+          ],
+          msg=output,
+        )
         (
           true,
           [
             "round 1: stopped by the host: PTC trace budget exhausted; no tool executed",
-            "stopped: the host refused a call in round 1: rounds=1", "continue from main: --no-pr --rounds 2",
           ],
         )
+      }
       // A package of a module outside the checkout is reported, never read
       // as done.
       "shrink-unmapped" => {

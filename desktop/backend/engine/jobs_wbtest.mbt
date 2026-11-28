@@ -120,34 +120,24 @@ async test "job history distinguishes dead owner from disconnected client and ma
 }
 
 ///|
-async test "a history page of large records stops early and the next one goes on from it" {
-  let root = @fs.tmpdir(prefix="job-history-bytes-")
+async test "history rows leave out a job's trace and the selected job keeps it" {
+  let root = @fs.tmpdir(prefix="job-history-data-")
   defer @fs.remove(root, recursive=true)
   @fs.mkdir("\{root}/gen-1")
   @fs.write_text("\{root}/gen-1/owner.lock", "")
-  // Five records whose traces carry 1,000 bytes each, under a 2,500-byte
-  // page: three fit before a page is full.
-  let trace : Json = {
-    "ptc_calls": [{ "name": "large", "content": "x".repeat(990) }],
+  let trace : Json = { "ptc_calls": [{ "name": "large", "content": "trace" }] }
+  let record = {
+    ..job_record_fixture(),
+    id: "bg-1",
+    state: Exited(0),
+    data: Some(trace),
   }
-  for index in 1..<=5 {
-    let record = {
-      ..job_record_fixture(),
-      id: "bg-\{index}",
-      state: Exited(0),
-      data: Some(trace),
-    }
-    @fs.write_text(
-      "\{root}/gen-1/bg-\{index}.json",
-      record.to_json().stringify(),
-    )
-  }
-  let first = job_history_page(root, Map([]), 0, [], max_bytes=2500)
-  assert_eq(first.jobs.map(view => view.job.id), ["bg-5", "bg-4", "bg-3"])
-  assert_eq(first.next_offset, Some(3))
-  let second = job_history_page(root, Map([]), 3, [], max_bytes=2500)
-  assert_eq(second.jobs.map(view => view.job.id), ["bg-2", "bg-1"])
-  assert_eq(second.next_offset, None)
+  @fs.write_text("\{root}/gen-1/bg-1.json", record.to_json().stringify())
+  let page = job_history_page(root, Map([]), 0, [])
+  assert_eq(page.jobs.map(view => view.job.id), ["bg-1"])
+  assert_true(page.jobs[0].job.data is None)
+  let selected = selected_job_view(root, Map([]), "gen-1", "bg-1")
+  assert_eq(selected.job.data, Some(trace))
 }
 
 ///|
