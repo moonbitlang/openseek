@@ -50,26 +50,6 @@ struct ReviewReport {
 }
 
 ///|
-/// Encode the report as a single-line JSON string (the CLI stdout contract).
-pub fn ReviewReport::to_json_string(self : ReviewReport) -> String {
-  ToJson::to_json(self).stringify()
-}
-
-///|
-/// True when the report carries at least one blocker finding: the audit's
-/// verdict is that the reviewed claim does NOT hold. Callers use this for
-/// exit codes and error flags without reaching into the findings shape.
-pub fn ReviewReport::has_blockers(self : ReviewReport) -> Bool {
-  self.findings.any(f => f.severity == "blocker")
-}
-
-///|
-/// Number of findings carried by the report, for summaries and briefs.
-pub fn ReviewReport::finding_count(self : ReviewReport) -> Int32 {
-  self.findings.length()
-}
-
-///|
 /// The schema version this build emits and accepts.
 let current_schema_version : Int32 = 1
 

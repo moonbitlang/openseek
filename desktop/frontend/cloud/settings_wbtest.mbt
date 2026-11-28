@@ -64,20 +64,20 @@ test "inference saves update only the selected option after confirmation" {
     )
     assert_false(pending.can_send("a"))
     assert_false(pending.can_choose_settings("a"))
-    assert_true(pending.model("a") is V4Flash)
-    assert_true(pending.thinking("a") is ThinkingHigh)
+    assert_true(stored_model(pending, "a") is V4Flash)
+    assert_true(stored_thinking(pending, "a") is ThinkingHigh)
     let request = pending.metadata_saves["a"].request
     let saved = metadata_update(pending, Edited(2, "a", request))
     assert_true(saved.can_send("a"))
     assert_true(saved.can_choose_settings("a"))
     match edit {
       SetModel(_) => {
-        assert_true(saved.model("a") is V4Pro)
-        assert_true(saved.thinking("a") is ThinkingHigh)
+        assert_true(stored_model(saved, "a") is V4Pro)
+        assert_true(stored_thinking(saved, "a") is ThinkingHigh)
       }
       SetThinking(_) => {
-        assert_true(saved.model("a") is V4Flash)
-        assert_true(saved.thinking("a") is ThinkingMax)
+        assert_true(stored_model(saved, "a") is V4Flash)
+        assert_true(stored_thinking(saved, "a") is ThinkingMax)
       }
       _ => fail("inference edit")
     }
@@ -143,8 +143,8 @@ test "created sessions inherit both draft inference choices" {
     pending,
     Created(1, pending.creation.unwrap().request, "new"),
   )
-  assert_true(created.model("new") is V4Pro)
-  assert_true(created.thinking("new") is ThinkingOff)
+  assert_true(stored_model(created, "new") is V4Pro)
+  assert_true(stored_thinking(created, "new") is ThinkingOff)
 }
 
 ///|
@@ -203,4 +203,16 @@ test "uncertain option saves stay fenced until a fresh catalog succeeds" {
       assert_true(confirmed.can_send("a"))
     }
   }
+}
+
+///|
+/// The inference options the catalog stores for `id`; its next turn starts with
+/// them.
+fn stored_model(state : State, id : String) -> @deepseek.DsVariant {
+  state.sessions.iter().find_first(session => session.id == id).unwrap().model
+}
+
+///|
+fn stored_thinking(state : State, id : String) -> @protocol.Thinking {
+  state.sessions.iter().find_first(session => session.id == id).unwrap().thinking
 }

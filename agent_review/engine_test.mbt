@@ -99,7 +99,7 @@ async test "run_review forwards the model and base, records the turn, and return
       },
     )
     guard report is Some(report) else { fail("expected a report") }
-    assert_true(report.has_blockers())
+    assert_true(report.digest().contains("1 blocker"))
     assert_true(recorded > 0)
     guard requests is [{ "model": String(model), "messages": messages, .. }, ..] else {
       fail("expected a chat request")

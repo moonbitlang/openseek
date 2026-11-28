@@ -293,7 +293,7 @@ pub extend MetadataSave with Eq::{equal, not_equal}
 
 ///|
 #derive(Eq)
-pub(all) enum SessionListStatus {
+pub enum SessionListStatus {
   Idle
   Retrying
   Failed

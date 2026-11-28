@@ -36,18 +36,6 @@ test "from_pairs rejects duplicate paths" {
 }
 
 ///|
-test "json fixture rejects non-string contents" {
-  let files = @filesystem.FileSystem({ "src/count.txt": 1 })
-  let _ = files.validate() catch {
-    error => {
-      assert_true("\{error}".contains("must be a string"))
-      return
-    }
-  }
-  fail("non-string content accepted")
-}
-
-///|
 async test "fixture writes to disk and reports mismatches" {
   @filesystem.with_tmpdir(prefix="openseek-testkit-fs", root => {
     let files = @filesystem.FileSystem({

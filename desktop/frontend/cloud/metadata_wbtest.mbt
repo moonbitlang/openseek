@@ -481,7 +481,7 @@ test "Cloud sessions decode their approval mode and treat an absent one as ask" 
 test "approval mode saves only between turns and holds sending until saved" {
   let initial = deletion_state()
   assert_true(initial.can_choose_settings("a"))
-  assert_eq(initial.approval("a"), "ask")
+  assert_eq(stored_approval(initial, "a"), "ask")
   // Choosing the mode already in effect saves nothing.
   assert_true(
     metadata_update(
@@ -517,7 +517,7 @@ test "approval mode saves only between turns and holds sending until saved" {
     Edit(account="fixture", session="a", edit=SetApproval("review")),
   )
   assert_true(pending.metadata_saves["a"].edit is SetApproval("review"))
-  assert_eq(pending.approval("a"), "ask")
+  assert_eq(stored_approval(pending, "a"), "ask")
   assert_false(pending.can_choose_settings("a"))
   // The next turn's engine starts with the mode the server holds.
   assert_false(pending.can_send("a"))
@@ -525,7 +525,7 @@ test "approval mode saves only between turns and holds sending until saved" {
     pending,
     Edited(2, "a", pending.metadata_saves["a"].request),
   )
-  assert_eq(saved.approval("a"), "review")
+  assert_eq(stored_approval(saved, "a"), "review")
   assert_true(saved.metadata_saves.is_empty())
   assert_true(saved.can_send("a"))
   assert_true(saved.can_choose_settings("a"))
@@ -537,7 +537,7 @@ test "approval mode saves only between turns and holds sending until saved" {
     pending,
     EditFailed(2, "a", pending.metadata_saves["a"].request, Http(409)),
   )
-  assert_eq(refused.approval("a"), "review")
+  assert_eq(stored_approval(refused, "a"), "review")
   assert_true(refused.can_choose_settings("a"))
   assert_true(refused.can_send("a"))
   assert_true(refused.notice is Some(SettingsSaveRaced))
@@ -545,5 +545,11 @@ test "approval mode saves only between turns and holds sending until saved" {
   let drafting = metadata_update(initial, Create)
   guard drafting.creation is Some(creation) else { fail("expected a draft") }
   assert_true(drafting.can_choose_settings(creation.id))
-  assert_eq(drafting.approval(creation.id), "review")
+  assert_eq(creation.approval, "review")
+}
+
+///|
+/// The approval mode the catalog stores for `id`; its next turn starts with it.
+fn stored_approval(state : State, id : String) -> String {
+  state.sessions.iter().find_first(session => session.id == id).unwrap().approval
 }

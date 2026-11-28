@@ -14,23 +14,6 @@ pub struct FileEntry {
 pub(all) struct FileSystem(Json)
 
 ///|
-/// Build a filesystem from `(path, content)` pairs — the convenient form for
-/// literal fixtures in test code. Rejects invalid paths and duplicates.
-pub fn FileSystem::from_pairs(
-  files : Array[(String, String)],
-) -> FileSystem raise {
-  let object : Map[String, Json] = Map([])
-  for (path, content) in files {
-    validate_relative_path(path)
-    if object.contains(path) {
-      fail("duplicate file path: \{path}")
-    }
-    object[path] = Json(content)
-  }
-  FileSystem(Json(object))
-}
-
-///|
 /// The underlying JSON object's fields, raising when the top-level JSON is not
 /// an object as the convention requires.
 fn FileSystem::object_fields(self : FileSystem) -> Map[String, Json] raise {
@@ -44,16 +27,8 @@ fn FileSystem::object_fields(self : FileSystem) -> Map[String, Json] raise {
 ///|
 /// Check the whole filesystem against the convention, raising on the first
 /// violation. Equivalent to `entries()` with the result discarded.
-pub fn FileSystem::validate(self : FileSystem) -> Unit raise {
+fn FileSystem::validate(self : FileSystem) -> Unit raise {
   let _ = self.entries()
-}
-
-///|
-/// Every file path, sorted — the entries without their contents.
-pub fn FileSystem::paths(self : FileSystem) -> Array[String] raise {
-  [
-    for entry in self.entries() => entry.path
-  ]
 }
 
 ///|
@@ -101,15 +76,6 @@ pub async fn FileSystem::mismatch_on_disk(
     }
   }
   ""
-}
-
-///|
-/// Write one text file at `root`/`path` (relative, validated), creating
-/// parent directories and truncating any existing file.
-pub async fn write_text(root : String, path : String, content : String) -> Unit {
-  validate_relative_path(path)
-  ensure_parent_dir(root, path)
-  @fs.write_text("\{root}/\{path}", content, create_mode=CreateOrTruncate)
 }
 
 ///|
