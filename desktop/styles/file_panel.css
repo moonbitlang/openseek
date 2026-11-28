@@ -2066,7 +2066,7 @@ button.git-history-file.selected {
 
 /* 64px rendition of MoonBit's website favicon: https://www.moonbitlang.com/img/favicon.ico
    Upstream asset: https://github.com/moonbitlang/moonbit-docs/blob/d97695ba86fd53ea8ceaf0508d4b587ce96a0375/next/_static/favicon.ico */
-.tree-entry-icon.moonbit-file {
+.moonbit-file {
   background: url("./moonbit-file.png") center / contain no-repeat;
 }
 
