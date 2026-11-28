@@ -182,6 +182,7 @@ async fn moon_child(dir : String) -> Unit {
       } : Json).stringify(),
   )
   match args {
+    ["check", "--dry-run"] => println(DryRun)
     ["ide", "analyze"] => {
       let turn = calls
         .filter(call => call is { "args": ["ide", ..], .. })
@@ -200,7 +201,25 @@ async fn moon_child(dir : String) -> Unit {
 }
 
 ///|
-/// A package of a module no manifest in the repository names.
+/// What `moon check --dry-run` prints for the fixture: one `moonc check` per
+/// package, naming its files. The nested module's package lives under its
+/// `source` directory, `ghost` has no tracked file, and `fx/elsewhere/z` is a
+/// `moon.work` member beside the checkout, in a directory whose name needs
+/// quoting.
+const DryRun : String =
+  #|moonc check ./alpha/a.mbt ./alpha/generated_x.mbt ./alpha/reexport.mbt -w -a -o ./_build/native/debug/check/fx/app/alpha/alpha.mi -pkg fx/app/alpha -pkg-type library
+  #|moonc check ./alpha/a.mbt ./alpha/a_test.mbt -o ./_build/native/debug/check/fx/app/alpha/alpha.blackbox_test.mi -pkg fx/app/alpha_blackbox_test -pkg-type library
+  #|moonc check ./alpha/nested/n.mbt -o ./_build/native/debug/check/fx/app/alpha/nested/nested.mi -pkg fx/app/alpha/nested -pkg-type library
+  #|moonc check ./beta/b.mbt -pkg fx/app/beta -pkg-type library
+  #|moonc check ./gamma/g.mbt -pkg fx/app/gamma -pkg-type library
+  #|moonc check ./kit/k.mbt -pkg fx/app/kit -pkg-type library
+  #|moonc check ./ghost/g.mbt -pkg fx/app/ghost -pkg-type library
+  #|moonc check ./sub/src/delta/d.mbt -pkg fx/sub/delta -pkg-type library
+  #|moonc check '../side by side/z/z.mbt' -pkg fx/elsewhere/z -pkg-type library
+  #|moonc check ./.mooncakes/moonbitlang/x/path/path.mbt -pkg moonbitlang/x/path -pkg-type library
+
+///|
+/// A package of a module beside the checkout, with candidates.
 const UnmappedAnalysis : String =
   #|package "fx/elsewhere/z"
   #|
@@ -349,19 +368,12 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     @fs.mkdir(repo + "/" + dir, recursive=true)
   }
   write(repo + "/README.md", "fixture\n")
-  // The root module is a legacy manifest with the comments and trailing
-  // comma Moon accepts, one of them before its brace. A module the script
-  // cannot map would drop its packages and read as a fixed point.
+  write(repo + "/moon.mod", "name = \"fx/app\"\n\nversion = \"0.1.0\"\n")
+  // A module whose packages live under its `source` directory: the script
+  // learns where each package is from `moon check --dry-run` (DryRun).
   write(
-    repo + "/moon.mod.json",
-    "// the fixture app\n{\n  // its name\n  \"name\": \"fx/app\",\n  \"version\": \"0.1.0\",\n}\n",
-  )
-  // A module whose packages live under its `source` directory, set in its
-  // `options(...)` block. Its name is the top-level assignment, indented and
-  // with a trailing comment, after a rule whose `name:` argument is not.
-  write(
-    repo + "/sub/moon.mod",
-    "rule(\n  name: \"generate\", // code-generation rule\n  command: \"true\",\n)\n\n  name = \"fx/sub\" // the nested module\n\noptions(\n  source: \"src/\",\n)\n",
+    repo + "/sub/moon.mod.json",
+    "{\n  \"name\": \"fx/sub\",\n  \"source\": \"src/\"\n}\n",
   )
   write(
     repo + "/alpha/moon.pkg",
@@ -619,23 +631,27 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       }
     })
     let gh_calls = read_calls(calls + "/gh.jsonl")
-    let moon_calls = read_calls(calls + "/moon.jsonl").map(call => {
-      guard call is { "args": Array(args), "head": String(at), .. } else {
-        fail("moon call: \{call.stringify()}")
-      }
-      let at = if at == head {
-        "head"
-      } else if at == tip1 {
-        "tip1"
-      } else if at == tip2 {
-        "tip2"
-      } else {
-        at
-      }
-      let words = [ for arg in args if arg is String(word) => word ]
-      let place = if call is { "in_sub": True, .. } { " in sub" } else { "" }
-      "\{words.join(" ")} @\{at}\{place}"
-    })
+    // Every analysis asks where the packages are; those calls are not
+    // what the modes compare.
+    let moon_calls = read_calls(calls + "/moon.jsonl")
+      .filter(call => !(call is { "args": ["check", "--dry-run"], .. }))
+      .map(call => {
+        guard call is { "args": Array(args), "head": String(at), .. } else {
+          fail("moon call: \{call.stringify()}")
+        }
+        let at = if at == head {
+          "head"
+        } else if at == tip1 {
+          "tip1"
+        } else if at == tip2 {
+          "tip2"
+        } else {
+          at
+        }
+        let words = [ for arg in args if arg is String(word) => word ]
+        let place = if call is { "in_sub": True, .. } { " in sub" } else { "" }
+        "\{words.join(" ")} @\{at}\{place}"
+      })
     let (succeeds, expected) : (Bool, Array[String]) = match mode {
       "shrink-publish" => {
         assert_eq(
@@ -891,8 +907,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         (
           true,
           [
-            "not in this checkout (no tracked moon.mod or moon.mod.json names their module): fx/elsewhere/z",
-            "fixed point except fx/elsewhere/z: rounds=0",
+            "not in this checkout: fx/elsewhere/z", "fixed point except fx/elsewhere/z: rounds=0",
           ],
         )
       }

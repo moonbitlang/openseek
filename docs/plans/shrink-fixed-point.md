@@ -115,8 +115,7 @@ clean. Unless `--no-pr`, the PR target is resolved: the repository comes from
 `origin`'s URL, `gh auth status` must succeed, and HEAD must be an ancestor
 of `origin/HEAD` (or equal `origin/<--stack-on>`). Then:
 
-- the module manifests are read once (package name to directory);
-- so are the package manifests (test kits);
+- the package manifests are read once (test kits);
 - the starting HEAD is recorded: its branch name if attached, else its
   commit.
 
@@ -128,9 +127,11 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
 
 1. **Analyze.** Run `moon ide analyze`, then require tracked files to still
    be clean (its check could rewrite a stale `pkg.generated.mbti`). Parse the
-   candidates and map each package name to its directory by the longest
-   tracked module name it falls under (`moon.mod` or `moon.mod.json`),
-   below the module's `source` directory when it declares one. Keep
+   candidates and map each package name to its directory as Moon resolves
+   it: `moon check --dry-run` prints one `moonc check` per package, naming
+   its source files and `-pkg <name>`. A package whose files are outside the
+   checkout (a `moon.work` member beside it) is reported as not in this
+   checkout and keeps the run from a plain fixed point. Keep
    packages under `--path`, not under `--exclude`, not named by `--skip`, and
    not given up earlier in this run (see Progress). With none left, the run has reached the fixed
    point: "fixed point" when the analyzer reports nothing in scope, else
@@ -320,8 +321,8 @@ host. The repository is a temporary one with:
 Committers are pinned, so the test predicts each round's cherry-picked tip
 and the scripted workers report commits on it. The modes cover:
 
-- **publish:** a nested module (in `moon.mod.json` format, with
-  `"source": "src/"`) whose package lives under its source directory; two
+- **publish:** a nested module whose package lives under its `source`
+  directory, as the fake `moon check --dry-run` places it; two
   stacked PRs; round 1 combining two packages' commits,
   with the test file one worker emptied removed in its own commit;
   `--check-in`;
@@ -480,3 +481,10 @@ Ninth pass (Codex, xhigh, P1 findings only, the four fix commits):
 | Codex finding | Resolution |
 |---|---|
 | P1: `moon.mod` sets `source` in an `options(...)` block (`source: "custom"`), which the assignment-only reader missed, faking a fixed point | A `moon.mod` field is a top-level assignment or an `options(...)` argument; other blocks' arguments are not. The fixture's nested module is a `moon.mod` with a rule, an indented `name =` and `options(source: ...)`, and its root a legacy `moon.mod.json` that opens with a comment (the previous reader loses `sub/src/delta`) |
+
+Tenth pass (Codex, xhigh, P1 findings only, the five fix commits):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: a quoted `"source":` key in `options(...)` is missed, faking a fixed point | Superseded: the script no longer reads module manifests. Each pass found another way a `moon.mod` can set a name or `source` (comments, indentation, `rule(...)` arguments, `options(...)`, quoted keys, parentheses in comments), so packages are mapped to directories from `moon check --dry-run`, Moon's own resolution, which the analyzer shares. On this repository it maps all 333 analyzed packages |
+| P1: a `)` in a comment ends the `options(...)` block early | Superseded likewise |

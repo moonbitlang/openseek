@@ -6258,14 +6258,13 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  } else {
           #|    None
           #|  }
-          #|  let modules = module_dirs()
           #|  let kits = test_kits()
           #|  println(
           #|    "shrink: from \{start} at \{short(head)}; if the run is killed, finish or abort any cherry-pick and check out \{start} again",
           #|  )
           #|  // Rounds move HEAD; whatever else happens, the checkout is put back.
           #|  let swept : Result[Unit, Error] = try {
-          #|    sweep(options, head, start, target, modules, kits)
+          #|    sweep(options, head, start, target, kits)
           #|    Ok(())
           #|  } catch {
           #|    error => Err(error)
@@ -6342,7 +6341,6 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  head : String,
           #|  start : String,
           #|  target : Target?,
-          #|  modules : Array[(String, String)],
           #|  kits : Array[String],
           #|) -> Unit {
           #|  // Packages given up this run: never offered again, so the rounds end.
@@ -6375,10 +6373,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      ending = "stopped: --rounds \{limit}"
           #|      break
           #|    }
-          #|    let (analyzed, unmapped) = analyze(modules, kits)
+          #|    let (analyzed, unmapped) = analyze(kits)
           #|    if unmapped is [_, ..] {
           #|      println(
-          #|        "  not in this checkout (no tracked moon.mod or moon.mod.json names their module): \{unmapped.join(" ")}",
+          #|        "  not in this checkout: \{unmapped.join(" ")}",
           #|      )
           #|    }
           #|    let packages = analyzed.filter(pkg => within(pkg.dir, options.paths))
@@ -6774,105 +6772,6 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// Each tracked module's name and the directory its packages live under:
-          #|/// the manifest's directory ("" at the root), joined with the module's
-          #|/// `source` directory when it declares one. Analyzer package names map to
-          #|/// directories through it.
-          #|async fn module_dirs() -> Array[(String, String)] {
-          #|  let modules : Array[(String, String)] = []
-          #|  // The file name says the format: a legacy `moon.mod.json` may open with a
-          #|  // comment rather than its brace.
-          #|  for format in [("moon.mod", false), ("moon.mod.json", true)] {
-          #|    let (file, json) = format
-          #|    for entry in manifests([file]) {
-          #|      guard manifest_field(entry.1, "name", json~) is Some(name) else {
-          #|        continue
-          #|      }
-          #|      let dir = match
-          #|        manifest_field(entry.1, "source", json~).map(directory) {
-          #|        None | Some("") => entry.0
-          #|        Some(source) if entry.0.is_empty() => source
-          #|        Some(source) => "\{entry.0}/\{source}"
-          #|      }
-          #|      modules.push((name, dir))
-          #|    }
-          #|  }
-          #|  modules
-          #|}
-          #|
-          #|///|
-          #|/// A top-level string field of a module manifest. A `moon.mod.json` is read
-          #|/// as JSON, or, when it has the comments and trailing commas Moon accepts,
-          #|/// by its `"key": "x"` lines. A `moon.mod` sets a field with an assignment,
-          #|/// `key = "x"` (indented or not, with any comment after the value), or as
-          #|/// an argument of its `options(...)` block, `key: "x"`; the arguments of
-          #|/// any other block, such as `rule(...)`, are not the module's.
-          #|fn manifest_field(text : String, key : String, json~ : Bool) -> String? {
-          #|  if json {
-          #|    let parsed = try Some(@json.parse(text)) catch { _ => None }
-          #|    if parsed is Some(Object(fields)) {
-          #|      return match fields.get(key) {
-          #|        Some(String(value)) => Some(value)
-          #|        _ => None
-          #|      }
-          #|    }
-          #|    for line in text.split("\n") {
-          #|      if quoted_after(line, "\"\{key}\"", ':') is Some(value) {
-          #|        return Some(value)
-          #|      }
-          #|    }
-          #|    return None
-          #|  }
-          #|  // The block a line is inside, by the name before its `(`.
-          #|  let mut block : String? = None
-          #|  for line in text.split("\n") {
-          #|    let line = line.trim()
-          #|    let args = match block {
-          #|      Some(name) => Some((name, line))
-          #|      None => {
-          #|        if quoted_after(line, key, '=') is Some(value) {
-          #|          return Some(value)
-          #|        }
-          #|        match line.find("(") {
-          #|          Some(open) => {
-          #|            let name = line[:open].trim().to_owned()
-          #|            block = Some(name)
-          #|            Some((name, line[open + 1:]))
-          #|          }
-          #|          None => None
-          #|        }
-          #|      }
-          #|    }
-          #|    guard args is Some((name, rest)) else { continue }
-          #|    if name == "options" {
-          #|      for arg in rest.split(",") {
-          #|        if quoted_after(arg, key, ':') is Some(value) {
-          #|          return Some(value)
-          #|        }
-          #|      }
-          #|    }
-          #|    if rest.contains(")") {
-          #|      block = None
-          #|    }
-          #|  }
-          #|  None
-          #|}
-          #|
-          #|///|
-          #|/// The quoted value of `key`, then `separator`, at the start of `text`: `x`
-          #|/// in `key = "x" // note` or `key: "x",`.
-          #|fn quoted_after(text : StringView, key : String, separator : Char) -> String? {
-          #|  guard text.trim_start().strip_prefix(key) is Some(rest) &&
-          #|    rest.trim_start() is [first, .. value] &&
-          #|    first == separator &&
-          #|    value.trim_start() is ['"', .. quoted] &&
-          #|    quoted.find("\"") is Some(end) else {
-          #|    return None
-          #|  }
-          #|  Some(quoted[:end].to_owned())
-          #|}
-          #|
-          #|///|
           #|/// Packages that other packages import only for their tests: test kits,
           #|/// whose test-only items are their purpose (shrink_package.md).
           #|async fn test_kits() -> Array[String] {
@@ -6943,13 +6842,73 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
+          #|/// Each workspace package's directory in this checkout, by package name, as
+          #|/// Moon itself resolves it: `moon check --dry-run` prints one `moonc check`
+          #|/// command per package, naming its source files and `-pkg <name>`. Reading
+          #|/// the manifests instead would mean parsing every way a `moon.mod` can set a
+          #|/// module's name and `source`. A package whose files are outside the
+          #|/// checkout (a dependency, or a `moon.work` member beside it) is left out.
+          #|async fn package_dirs() -> Map[String, String] {
+          #|  let dirs : Map[String, String] = Map([])
+          #|  for line in run("moon", ["check", "--dry-run"]).split("\n") {
+          #|    guard line.strip_prefix("moonc check ") is Some(rest) else { continue }
+          #|    let args = words(rest)
+          #|    guard args.search("-pkg") is Some(at) &&
+          #|      args.get(at + 1) is Some(name) &&
+          #|      !dirs.contains(name) &&
+          #|      args.iter().find_first(arg => arg.has_suffix(".mbt")) is Some(file) else {
+          #|      continue
+          #|    }
+          #|    let file = file.strip_prefix("./").unwrap_or(file)
+          #|    guard !file.has_prefix("../") &&
+          #|      !file.has_prefix("/") &&
+          #|      !file.has_prefix(".mooncakes/") else {
+          #|      continue
+          #|    }
+          #|    dirs[name] = parts(file.to_owned()).0
+          #|  }
+          #|  dirs
+          #|}
+          #|
+          #|///|
+          #|/// The words of a command line as a shell would split it, with single or
+          #|/// double quotes around a word that holds a space.
+          #|fn words(line : StringView) -> Array[String] {
+          #|  let found : Array[String] = []
+          #|  let word = StringBuilder()
+          #|  let mut quote : Char? = None
+          #|  let mut started = false
+          #|  for char in line {
+          #|    match (quote, char) {
+          #|      (Some(open), char) if char == open => quote = None
+          #|      (Some(_), char) => word.write_char(char)
+          #|      (None, '\'' | '"') => {
+          #|        quote = Some(char)
+          #|        started = true
+          #|      }
+          #|      (None, ' ' | '\t') =>
+          #|        if started {
+          #|          found.push(word.to_string())
+          #|          word.reset()
+          #|          started = false
+          #|        }
+          #|      (None, char) => {
+          #|        word.write_char(char)
+          #|        started = true
+          #|      }
+          #|    }
+          #|  }
+          #|  if started {
+          #|    found.push(word.to_string())
+          #|  }
+          #|  found
+          #|}
+          #|
+          #|///|
           #|/// Run the analyzer over the whole workspace and return the packages that
-          #|/// have candidates, sorted by directory, and the names of those in no module
-          #|/// of this checkout. A test kit's test-only items are not candidates.
-          #|async fn analyze(
-          #|  modules : Array[(String, String)],
-          #|  kits : Array[String],
-          #|) -> (Array[Package], Array[String]) {
+          #|/// have candidates, sorted by directory, and the names of those whose files
+          #|/// are not in this checkout. A test kit's test-only items are not candidates.
+          #|async fn analyze(kits : Array[String]) -> (Array[Package], Array[String]) {
           #|  let output = run("moon", ["ide", "analyze"])
           #|  // The analyzer checks first, and a check may rewrite interface files;
           #|  // the next round's checkout must not lose or trip over that.
@@ -6961,10 +6920,11 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      entry.to_owned()
           #|    }
           #|  ]
+          #|  let dirs = package_dirs()
           #|  let packages : Array[Package] = []
-          #|  // A package with candidates in no module of this checkout cannot be
-          #|  // worked on (a `moon.work` member outside it, or a manifest the script
-          #|  // misread): it is reported, so the run never reads it as a fixed point.
+          #|  // A package with candidates whose files are not in this checkout (a
+          #|  // `moon.work` member beside it) cannot be worked on: it is reported, so
+          #|  // the run never reads it as a fixed point.
           #|  let unmapped : Array[String] = []
           #|  for name, rows in candidates(output) {
           #|    let rows = if kits.contains(name) {
@@ -6973,7 +6933,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      rows
           #|    }
           #|    guard rows is [_, ..] else { continue }
-          #|    guard package_dir(name, modules) is Some(dir) else {
+          #|    guard dirs.get(name) is Some(dir) else {
           #|      unmapped.push(name)
           #|      continue
           #|    }
@@ -7133,31 +7093,6 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    result = result * 10 + char.to_int() - '0'.to_int()
           #|  }
           #|  Some(result)
-          #|}
-          #|
-          #|///|
-          #|/// The directory of an analyzer package: the longest module name it falls
-          #|/// under, plus the rest of its name.
-          #|fn package_dir(name : String, modules : Array[(String, String)]) -> String? {
-          #|  let mut best : (String, String)? = None
-          #|  for entry in modules {
-          #|    let (module_name, _) = entry
-          #|    let inside = name == module_name || name.has_prefix("\{module_name}/")
-          #|    if inside &&
-          #|      (
-          #|        best is None ||
-          #|        (best is Some((longest, _)) && module_name.length() > longest.length())
-          #|      ) {
-          #|      best = Some(entry)
-          #|    }
-          #|  }
-          #|  guard best is Some((module_name, dir)) else { return None }
-          #|  let rest = name[module_name.length():].trim_start(chars="/").to_owned()
-          #|  match (dir, rest) {
-          #|    ("", rest) => Some(rest)
-          #|    (dir, "") => Some(dir)
-          #|    (dir, rest) => Some("\{dir}/\{rest}")
-          #|  }
           #|}
           #|
           #|///|
