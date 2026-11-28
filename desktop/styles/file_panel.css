@@ -2064,9 +2064,8 @@ button.git-history-file.selected {
 }
 .tree-entry-icon svg { width: 100%; height: 100%; }
 
-/* MoonBit VS Code extension's images/moonbit.png (International Digital Economy Academy). */
 .tree-entry-icon.moonbit-file {
-  background: url("./moonbit-file.png") center / contain no-repeat;
+  color: var(--color-moonbit-file);
 }
 
 .tree-name {

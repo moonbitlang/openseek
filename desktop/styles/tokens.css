@@ -122,6 +122,7 @@
   );
 
   --color-moonbit-logo-primary: light-dark(#2c2932, #a5a1ad);
+  --color-moonbit-file: light-dark(#ac277a, #ef76b9);
   --color-moonbit-logo-primary-hover: light-dark(#514b5a, #d9d5e1);
   --color-moonbit-logo-secondary: color-mix(in srgb, var(--color-text-primary) 20%, transparent);
 
