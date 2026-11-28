@@ -71,6 +71,7 @@ fn goal_test_state() -> State {
     system_prompt_addendum_file: None,
     engine: "openseek",
     engine_args_prefix: [],
+    engine_version: Some(EngineModuleVersion),
   })
 }
 

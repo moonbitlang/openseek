@@ -23,5 +23,5 @@ async test "EngineModuleVersion matches the moonbitlang/openseek import and the 
   @debug.assert_eq(quoted_after("\"moonbitlang/openseek@"), [
     EngineModuleVersion,
   ])
-  @debug.assert_eq(quoted_after("version = \""), [EngineModuleVersion])
+  @debug.assert_eq(quoted_after("version = \""), [TuiModuleVersion])
 }

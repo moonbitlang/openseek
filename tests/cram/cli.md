@@ -33,6 +33,7 @@ Commands:
 
 Options:
   -h, --help                             Show help information.
+  -V, --version                          Show version information.
   --api-key <api-key>                    API key for the selected chat provider. [env: OPENSEEK_API_KEY] [default: ]
   --model <model>                        Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, glm-5.3-flash, or any model id configured in Settings. [env: OPENSEEK_MODEL] [default: deepseek-flash]
   --api-url <api-url>                    OpenAI-compatible chat completions endpoint. [env: OPENSEEK_API_URL] [default: ]
@@ -48,6 +49,15 @@ The root carries the engine-shared options (`--api-key`, `--model`, …) as
 globals, so any subcommand sees them. The interactive UI's own options
 (`--prompt`, `--engine`, `--continue`) live on the separate `openseek_tui`
 binary (its own repository, `moonbitlang/openseek_tui`).
+
+## Version
+
+`openseek --version` prints the engine's module version and exits successfully.
+
+```mooncram
+$ openseek.exe --version
+openseek 0.8.1
+```
 
 ## A Misspelled Subcommand Is An Error, Not A Prompt
 

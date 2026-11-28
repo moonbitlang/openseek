@@ -32,6 +32,10 @@ priv struct AppConfig {
   // `moonbitlang/openseek@<version>` coordinate for the default `moonx` engine,
   // empty for an explicit `--engine`.
   engine_args_prefix : Array[String]
+  // Version of the openseek engine in use: `Some(EngineModuleVersion)` for the
+  // default pinned `moonx` engine, or the version reported by `--version` for
+  // an explicit `--engine` (`None` when a custom engine does not report one).
+  engine_version : String?
 }
 
 ///|

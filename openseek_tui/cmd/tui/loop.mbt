@@ -498,6 +498,19 @@ fn handle_compact_command(
 }
 
 ///|
+fn handle_status_command(
+  state : State,
+  arguments : String,
+  cmds : Array[Cmd],
+) -> Unit {
+  if !arguments.is_blank() {
+    cmds.push(AppendItem(Error("/status does not accept arguments")))
+    return
+  }
+  cmds.push(AppendItem(Response(status_banner(state.config))))
+}
+
+///|
 fn handle_slash_command(
   state : State,
   name : String,
@@ -525,6 +538,7 @@ fn handle_slash_command(
       } else {
         cmds.push(AppendItem(Error("/inspect does not accept arguments")))
       }
+    "status" => handle_status_command(state, arguments, cmds)
     other => cmds.push(AppendItem(Error("Unknown slash command: /\{other}")))
   }
 }
@@ -993,6 +1007,7 @@ fn drain_test_state() -> State {
     system_prompt_addendum_file: None,
     engine: "openseek",
     engine_args_prefix: [],
+    engine_version: Some(EngineModuleVersion),
   })
 }
 
@@ -1254,6 +1269,35 @@ test "unknown slash command reports an error" {
   let cmds = update(state, UiInput(SlashCommand(name="unknown", arguments="")))
   assert_eq(error_item_count(cmds), 1)
   assert_true(state.run is Idle)
+}
+
+///|
+test "/status shows tui and openseek versions and rejects arguments" {
+  let state = drain_test_state()
+  assert_true(tui_slash_commands().iter().any(spec => spec.name() == "status"))
+  assert_eq(
+    status_banner(state.config),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek v\{EngineModuleVersion} · session test",
+  )
+  assert_eq(
+    status_banner({ ..state.config, engine_version: Some("0.9.0"), }),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek v0.9.0 · session test",
+  )
+  assert_eq(
+    status_banner({ ..state.config, engine_version: None, }),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek unknown · session test",
+  )
+  let cmds = update(state, UiInput(SlashCommand(name="STATUS", arguments="")))
+  guard cmds is [AppendItem(Response(text))] else {
+    fail("expected a single status banner response")
+  }
+  assert_eq(
+    text,
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek v\{EngineModuleVersion} · session test",
+  )
+  assert_true(state.run is Idle)
+  let bad = update(state, UiInput(SlashCommand(name="status", arguments="now")))
+  assert_eq(error_item_count(bad), 1)
 }
 
 ///|

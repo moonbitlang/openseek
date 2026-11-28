@@ -151,10 +151,11 @@ dispatch) using the organization's mooncakes token.
 
 It is released in lockstep with the engine: `moonbitlang/openseek_tui@X`
 imports and runs `moonbitlang/openseek@X`. The release PR that bumps the root
-`moon.mod` to `X` also sets this module's `version`, its `moonbitlang/openseek`
-import, `EngineModuleVersion` in `cmd/tui/main.mbt`, and the cram fixtures to
-`X` (a test and a CI step fail until they agree). The workflow checks the
-staged package against the registry, so dispatch it after
+`moon.mod` to `X` also sets `ModuleVersion` in
+`internal/openseek/options/command.mbt`, this module's `version`, its
+`moonbitlang/openseek` import, `EngineModuleVersion` in `cmd/tui/main.mbt`, and
+the cram fixtures to `X` (a test and a CI step fail until they agree). The
+workflow checks the staged package against the registry, so dispatch it after
 `publish-openseek-protocol` (when the protocol changed) and `publish-openseek`,
 and check that the engine release has a published linear-Wasm build, since that
 is what `moonx` downloads.

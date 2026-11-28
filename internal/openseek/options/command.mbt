@@ -63,6 +63,12 @@ fn prompt_options() -> Array[@argparse.OptionArg] {
 }
 
 ///|
+/// The `moonbitlang/openseek` module version advertised by `openseek --version`.
+/// Must match `version` in the root `moon.mod` (`version_wbtest.mbt` keeps them
+/// in step).
+const ModuleVersion : String = "0.8.1"
+
+///|
 /// The whole `openseek` command tree: the headless engine under
 /// `run`/`serve`/`mcp`/`sessions`. The shared agent options
 /// (`--api-key`, `--model`, …) sit on the root as globals, so every engine
@@ -75,6 +81,7 @@ pub fn root_command() -> @argparse.Command {
   Command(
     "openseek",
     about="DeepSeek-backed MoonBit coding agent (headless automation CLI).",
+    version="openseek \{ModuleVersion}",
     options=@cli.agent_shared_options(global=true),
     subcommands=[
       Command(

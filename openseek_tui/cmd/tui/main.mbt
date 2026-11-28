@@ -58,6 +58,7 @@ pub fn cli_command() -> @argparse.Command {
   Command(
     "openseek_tui",
     about="OpenSeek terminal UI.",
+    version="openseek_tui \{TuiModuleVersion} (openseek \{EngineModuleVersion})",
     options=[..@cli.agent_shared_options(), ..tui_ui_options()],
     flags=tui_ui_flags(),
   )
@@ -223,9 +224,12 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
   guard @cli.resolve_api_key(model, matches) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
-  let (engine, engine_args_prefix) = match explicit_engine {
-    Some(engine) => (engine, [])
-    None => default_engine()
+  let (engine, engine_args_prefix, engine_version) = match explicit_engine {
+    Some(engine) => (engine, [], None)
+    None => {
+      let (engine, args_prefix) = default_engine()
+      (engine, args_prefix, Some(EngineModuleVersion))
+    }
   }
   {
     api_key,
@@ -259,6 +263,7 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
     system_prompt_addendum_file: prompt_file_option(prompt_addendum_input),
     engine,
     engine_args_prefix,
+    engine_version,
   }
 }
 
@@ -268,6 +273,29 @@ fn parse_config(matches : @argparse.Matches) -> AppConfig raise {
 /// them in step), so the spawned engine speaks exactly the `serve` protocol and
 /// session format the UI was compiled against.
 const EngineModuleVersion : String = "0.8.1"
+
+///|
+/// This `moonbitlang/openseek_tui` module's own version. It moves in lockstep
+/// with `EngineModuleVersion` (`engine_version_wbtest.mbt` verifies it against
+/// `version` in `moon.mod`).
+const TuiModuleVersion : String = EngineModuleVersion
+
+///|
+/// Format the engine version for display in the status banner.
+fn format_engine_version(version : String?) -> String {
+  match version {
+    Some(version) => "v\{version}"
+    None => "unknown"
+  }
+}
+
+///|
+/// The single-line status banner shown on startup and in response to `/status`:
+/// names the TUI version, the openseek engine version, and the session id so
+/// the conversation is resumable later with `--session <id>`.
+fn status_banner(config : AppConfig) -> String {
+  "OpenSeek TUI v\{TuiModuleVersion} · openseek \{format_engine_version(config.engine_version)} · session \{config.session_id.value()}"
+}
 
 ///|
 /// The engine command when `--engine` is unset: the pinned `moonbitlang/openseek`
@@ -333,6 +361,10 @@ fn tui_slash_commands() -> Array[@ui.SlashCommandSpec] {
       name="inspect",
       description="watch this session live in the browser (starts the session viewer)",
     ),
+    SlashCommandSpec(
+      name="status",
+      description="show TUI and openseek versions and session status",
+    ),
   ]
 }
 
@@ -349,12 +381,9 @@ async fn run_app(config : AppConfig, initial : String?, ui : @ui.Ui) -> Unit {
   let state = State::State(config)
   let messages = @async.Queue(kind=Unbounded)
   append_session_history(state, ui)
-  // Name the session so the conversation is resumable later with
-  // `--session <id>` — for generated ids this line is the only place the user
-  // ever sees one.
-  ui.append_item(
-    Response("OpenSeek TUI ready · session \{config.session_id.value()}"),
-  )
+  // Show the status banner on startup (same line as `/status`) so the TUI and
+  // openseek versions and generated session id are immediately visible.
+  ui.append_item(Response(status_banner(config)))
   refresh_ui(ui, state)
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true) <| () => { read_ui_events(ui, messages) }
@@ -498,6 +527,76 @@ fn engine_probe_error(config : AppConfig, probe : EngineProbe) -> String {
 }
 
 ///|
+/// Maximum time to wait for an explicit `--engine`'s `--version` reply.
+/// Best-effort only: a timeout falls back to `unknown` without blocking launch.
+const EngineVersionProbeTimeoutMs : Int32 = 2000
+
+///|
+/// Parse an openseek version token from `--version` stdout. Accepts `openseek
+/// <ver>`, `v<ver>`, or `<ver>` on the first non-blank line; rejects unrelated
+/// output (such as help text or another tool's multi-word banner) so custom
+/// engines that ignore `--version` show `unknown` rather than noise.
+fn parse_engine_version(output : String) -> String? {
+  let first_line = for line in output.split("\n") {
+    let trimmed = line.trim()
+    if !trimmed.is_empty() {
+      break Some(trimmed)
+    }
+  } nobreak {
+    None
+  }
+  guard first_line is Some(line) else { return None }
+  let without_name = line.strip_prefix("openseek ").unwrap_or(line).trim()
+  let token = without_name.strip_prefix("v").unwrap_or(without_name)
+  guard !token.is_empty() && token.contains(".") else { return None }
+  let valid = for ch in token; first = true {
+    if first && !(ch is ('0'..<='9')) {
+      break false
+    }
+    if !(ch is ('0'..<='9' | 'a'..<='z' | 'A'..<='Z' | '.' | '-' | '+' | '_')) {
+      break false
+    }
+    continue false
+  } nobreak {
+    true
+  }
+  if valid {
+    Some(token.to_owned())
+  } else {
+    None
+  }
+}
+
+///|
+/// Best-effort version probe for an explicit `--engine` binary. Runs
+/// `<engine> [args_prefix...] --version` with empty stdin and a short timeout
+/// so an older engine or stub that rejects or ignores `--version` never blocks
+/// or fails startup.
+async fn probe_engine_version(
+  engine : String,
+  args_prefix : Array[String],
+) -> String? {
+  let args = args_prefix.copy()
+  args.push("--version")
+  let outcome = @async.with_timeout_opt(EngineVersionProbeTimeoutMs, () => {
+    @process.run(
+      engine,
+      args,
+      stdin=Empty,
+      stdout=Collect,
+      stderr=Discard,
+      inherit_env=true,
+    )
+  }) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return None
+  }
+  guard outcome is Some(result) && result.exit_code == 0 else { return None }
+  let stdout = result.stdout_text() catch { _ => return None }
+  parse_engine_version(stdout)
+}
+
+///|
 /// Run the interactive UI from already-parsed argparse `matches` — the
 /// `openseek_tui` command at the module root owns parsing and calls here.
 pub async fn run(matches : @argparse.Matches) -> Unit {
@@ -516,6 +615,15 @@ pub async fn run(matches : @argparse.Matches) -> Unit {
     println(engine_probe_error(config, probe))
     @sys.exit(1)
   }
+  if config.engine_version is None {
+    config = {
+      ..config,
+      engine_version: probe_engine_version(
+        config.engine,
+        config.engine_args_prefix,
+      ),
+    }
+  }
   // with_ui opens the controlling terminal independently of stdin/stdout.
   // Redirected streams are fine; failure to open the terminal propagates to
   // the command's stderr error handler before the UI starts drawing.
@@ -533,6 +641,7 @@ test "cli accepts no initial task" {
   // With no --engine, the pinned openseek release runs through moonx.
   assert_eq(config.engine, "moonx")
   @debug.assert_eq(config.engine_args_prefix, ["moonbitlang/openseek@0.8.1"])
+  assert_eq(config.engine_version, Some(EngineModuleVersion))
   // No --session still converses in a session: a generated per-launch id, so
   // consecutive prompts share context instead of running amnesiac one-shots.
   assert_true(config.session_id.value().has_prefix("tui-"))
@@ -747,6 +856,52 @@ test "cli overrides the engine binary" {
   let config = parse_config(parsed)
   assert_eq(config.engine, "./fake-engine")
   @debug.assert_eq(config.engine_args_prefix, [])
+  assert_eq(config.engine_version, None)
+}
+
+///|
+test "cli reports tui and pinned openseek versions for --version and -V" {
+  for flag in ["--version", "-V"] {
+    guard @argparse.parse_outcome(cli_command(), argv=[flag]) is Version(text) else {
+      fail("expected Version outcome for \{flag}")
+    }
+    assert_eq(
+      text,
+      "openseek_tui \{TuiModuleVersion} (openseek \{EngineModuleVersion})",
+    )
+  }
+}
+
+///|
+test "parse_engine_version extracts openseek version tokens and rejects noise" {
+  assert_eq(parse_engine_version("openseek 0.8.1\n"), Some("0.8.1"))
+  assert_eq(
+    parse_engine_version("  openseek v0.8.1-rc1+abc  \n"),
+    Some("0.8.1-rc1+abc"),
+  )
+  assert_eq(parse_engine_version("0.8.1\n"), Some("0.8.1"))
+  assert_eq(parse_engine_version("v0.8.1"), Some("0.8.1"))
+  assert_eq(
+    parse_engine_version("\n  openseek 0.9.0\nextra line"),
+    Some("0.9.0"),
+  )
+  assert_eq(parse_engine_version(""), None)
+  assert_eq(parse_engine_version("   \n"), None)
+  assert_eq(parse_engine_version("Usage: openseek [options]\n"), None)
+  assert_eq(
+    parse_engine_version("moon 0.1.20261126 (ccd306a 2026-11-26)\n"),
+    None,
+  )
+  assert_eq(parse_engine_version("0.8.1 extra"), None)
+  assert_eq(parse_engine_version("42"), None)
+}
+
+///|
+async test "probe_engine_version returns None for missing or non-openseek binaries" {
+  assert_eq(probe_engine_version("openseek-not-a-real-binary-xyz", []), None)
+  // `moon --version` outputs a multi-word toolchain string, not an openseek
+  // version, so the probe ignores it instead of surfacing unrelated text.
+  assert_eq(probe_engine_version("moon", []), None)
 }
 
 ///|
