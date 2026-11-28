@@ -54,14 +54,6 @@ fn status_segments(state : State) -> Array[Segment] {
       text: format_usage_segment(state.usage),
       style: Style(foreground=Basic(Magenta)),
     },
-    // Version fields sit at the tail so they remain visible on typical widths
-    // without displacing the model, active loop/commands, cwd, or token usage
-    // when the status line clips on narrow terminals.
-    { text: "tui v\{TuiModuleVersion}", style: @style.dim, },
-    {
-      text: "openseek \{format_engine_version(state.config.engine_version)}",
-      style: @style.dim,
-    },
   ]
 }
 
@@ -307,33 +299,4 @@ test "streaming activity preview keeps a floor on absurdly narrow rows" {
   let preview = tail_columns(String::make(100, 'y'), 16)
   assert_true(@displaytext.DisplayText(preview).width() <= 16)
   assert_true(preview.has_prefix("…"))
-}
-
-///|
-test "status segments show tui and openseek versions after cwd and usage" {
-  let state = drain_test_state()
-  let segments = status_segments(state)
-  guard segments.search_by(segment => segment.text == state.config.cwd)
-    is Some(cwd_index) else {
-    fail("expected cwd segment")
-  }
-  guard segments.search_by(segment => segment.text == "tui v\{TuiModuleVersion}")
-    is Some(tui_index) else {
-    fail("expected tui version segment")
-  }
-  guard segments.search_by(segment => {
-      segment.text == "openseek v\{EngineModuleVersion}"
-    })
-    is Some(engine_index) else {
-    fail("expected openseek version segment")
-  }
-  assert_true(cwd_index < tui_index)
-  assert_true(tui_index < engine_index)
-  // An explicit --engine that does not report a version shows `unknown`.
-  let custom = State({ ..state.config, engine_version: None, })
-  assert_true(
-    status_segments(custom)
-    .iter()
-    .any(segment => segment.text == "openseek unknown"),
-  )
 }

@@ -498,6 +498,47 @@ fn handle_compact_command(
 }
 
 ///|
+fn status_command_title(config : AppConfig) -> String {
+  "OpenSeek TUI v\{TuiModuleVersion} · openseek \{format_engine_version(config.engine_version)}"
+}
+
+///|
+fn status_command_details(state : State) -> Array[String] {
+  let lines = [
+    "session: \{state.config.session_id.value()}",
+    "model: \{state.config.model}",
+    "engine: \{state.config.engine_display()}",
+    "cwd: \{state.config.cwd}",
+  ]
+  if state.usage is Some(usage) {
+    lines.push("tokens: \{usage.total_tokens}")
+  }
+  lines
+}
+
+///|
+fn handle_status_command(
+  state : State,
+  arguments : String,
+  cmds : Array[Cmd],
+) -> Unit {
+  if !arguments.is_blank() {
+    cmds.push(AppendItem(Error("/status does not accept arguments")))
+    return
+  }
+  cmds.push(
+    AppendItem(
+      Notice(
+        ToolCall(
+          @doc.Text::plain(status_command_title(state.config)),
+          details=detail_texts(status_command_details(state)),
+        ),
+      ),
+    ),
+  )
+}
+
+///|
 fn handle_slash_command(
   state : State,
   name : String,
@@ -525,6 +566,7 @@ fn handle_slash_command(
       } else {
         cmds.push(AppendItem(Error("/inspect does not accept arguments")))
       }
+    "status" => handle_status_command(state, arguments, cmds)
     other => cmds.push(AppendItem(Error("Unknown slash command: /\{other}")))
   }
 }
@@ -1255,6 +1297,34 @@ test "unknown slash command reports an error" {
   let cmds = update(state, UiInput(SlashCommand(name="unknown", arguments="")))
   assert_eq(error_item_count(cmds), 1)
   assert_true(state.run is Idle)
+}
+
+///|
+test "/status shows tui and openseek versions and rejects arguments" {
+  let state = drain_test_state()
+  assert_true(tui_slash_commands().iter().any(spec => spec.name() == "status"))
+  assert_eq(
+    status_command_title(state.config),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek v\{EngineModuleVersion}",
+  )
+  assert_eq(
+    status_command_title({ ..state.config, engine_version: Some("0.9.0"), }),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek v0.9.0",
+  )
+  assert_eq(
+    status_command_title({ ..state.config, engine_version: None, }),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek unknown",
+  )
+  @debug.assert_eq(status_command_details(state), [
+    "session: test", "model: deepseek-v4-pro", "engine: openseek", "cwd: .",
+  ])
+  let cmds = update(state, UiInput(SlashCommand(name="STATUS", arguments="")))
+  guard cmds is [AppendItem(Notice(_))] else {
+    fail("expected a single status notice card")
+  }
+  assert_true(state.run is Idle)
+  let bad = update(state, UiInput(SlashCommand(name="status", arguments="now")))
+  assert_eq(error_item_count(bad), 1)
 }
 
 ///|

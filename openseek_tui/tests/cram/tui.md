@@ -109,7 +109,7 @@ Pass --engine <path> to a working openseek binary, or omit --engine to run the p
 
 Once an explicit `--engine` passes `--help`, the UI also asks it for
 `--version` (best-effort; non-zero exit or unrecognized output never blocks
-startup) so the startup banner and status bar display the engine's actual
+startup) so the startup banner and `/status` display the engine's actual
 version.
 
 ```mooncram

@@ -361,6 +361,10 @@ fn tui_slash_commands() -> Array[@ui.SlashCommandSpec] {
       name="inspect",
       description="watch this session live in the browser (starts the session viewer)",
     ),
+    SlashCommandSpec(
+      name="status",
+      description="show TUI and openseek versions and session status",
+    ),
   ]
 }
 
