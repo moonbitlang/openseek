@@ -130,8 +130,9 @@ Each round, from its base commit B (round 1: the starting HEAD; HEAD is B):
    candidates and map each package name to its directory as Moon resolves
    it: `moon check --dry-run` prints one `moonc check` per package, naming
    its source files and `-pkg <name>`, from Moon's workspace root: the
-   nearest `moon.work` at or above the checkout root that lists the
-   checkout, as Moon finds it. A
+   directory at or above the checkout under which most printed files exist.
+   Each package's real path then says whether it is in the checkout, so
+   neither manifests nor `moon.work` are read. A
    package whose files are outside the checkout
    (a `moon.work` member beside it) is reported as not in this checkout and
    keeps the run from a plain fixed point. Keep
@@ -510,3 +511,9 @@ Thirteenth pass (Codex, xhigh, P1 findings only, the eight fix commits):
 | Codex finding | Resolution |
 |---|---|
 | P1: an ancestor `moon.work` that does not list the checkout is used, though Moon ignores it, so the checkout's own paths lose a real prefix | An ancestor `moon.work` counts only when its `members` hold the checkout (or a module in it); the workspace-sibling mode (the previous script fails it) |
+
+Fourteenth pass (Codex, xhigh, P1 findings only, the nine fix commits):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: a parent `moon.work` that lists the checkout by absolute path or through a symlink, or one chosen by `MOON_WORK`, is missed, so the checkout's packages drop out | The script no longer reads `moon.work` either: Moon's workspace root is the directory at or above the checkout under which most printed files exist, and a package is in the checkout when its first existing file's real path is. A workspace-symlink mode prints paths through a symlink to the checkout (the previous script fails it); the fixture's `ghost` file and the member beside the checkout now exist on disk |

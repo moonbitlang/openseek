@@ -182,15 +182,17 @@ async fn moon_child(dir : String) -> Unit {
       } : Json).stringify(),
   )
   match args {
-    // With `moon.work` above the checkout, Moon prints paths from there,
-    // when it lists the checkout; it ignores one that does not.
-    ["check", "--dry-run"] if @fs.exists("../moon.work") &&
-      @fs.read_text("../moon.work").contains("shrink-repo") =>
+    // Moon prints paths from its workspace root: from above the checkout,
+    // they carry the checkout's place there (`shrink-repo/`, or `link/`
+    // through a symlink).
+    ["check", "--dry-run"] if @fs.exists(dir + "/dry-run-prefix") => {
+      let prefix = @fs.read_text(dir + "/dry-run-prefix")
       println(
         DryRun
-        .replace_all(old=" ./", new=" ./shrink-repo/")
+        .replace_all(old=" ./", new=" ./\{prefix}")
         .replace_all(old="'../side by side/", new="'side by side/"),
       )
+    }
     ["check", "--dry-run"] => println(DryRun)
     ["ide", "analyze"] => {
       let turn = calls
@@ -418,6 +420,13 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
   ignore(git(repo, ["config", "commit.gpgsign", "false"]))
   ignore(git(repo, ["add", "-A"]))
   ignore(git(repo, ["commit", "-q", "-m", "fixture"]))
+  // A package Moon compiles whose file git ignores, and a `moon.work` member
+  // beside the checkout, as files Moon would find on disk.
+  write(repo + "/.git/info/exclude", "ghost/\n")
+  @fs.mkdir(repo + "/ghost")
+  write(repo + "/ghost/g.mbt", "pub fn g() -> Int {\n  9\n}\n")
+  @fs.mkdir(temp + "/side by side/z", recursive=true)
+  write(temp + "/side by side/z/z.mbt", "pub fn z() -> Int {\n  0\n}\n")
   ignore(git(temp, ["init", "-q", "--bare", origin]))
   ignore(git(repo, ["remote", "add", "origin", origin]))
   ignore(git(repo, ["push", "-q", "origin", "main"]))
@@ -519,6 +528,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-subdir", "shrink-dirty", "shrink-ahead", "shrink-stack-on", "shrink-option-value",
       "shrink-unknown-option", "shrink-merging", "shrink-sequencing", "shrink-unmapped",
       "shrink-host-limit", "shrink-workspace-above", "shrink-workspace-sibling",
+      "shrink-workspace-symlink",
     ] {
     let host = fake_host("shrink", mode)
     host.fixture["base#1"] = head
@@ -562,8 +572,16 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-unmapped" => write(calls + "/analyze-1.txt", UnmappedAnalysis)
       // Moon's workspace root is the directory above the checkout, found by
       // its `moon.work` as Moon finds it.
-      "shrink-workspace-above" =>
+      "shrink-workspace-above" => {
         write(temp + "/moon.work", "members = [\n  \"./shrink-repo\",\n]\n")
+        write(calls + "/dry-run-prefix", "shrink-repo/")
+      }
+      // Moon's workspace lists the checkout through a symlink to it.
+      "shrink-workspace-symlink" => {
+        @fs.symlink(target=repo, temp + "/link")
+        write(temp + "/moon.work", "members = [\n  \"./link\",\n]\n")
+        write(calls + "/dry-run-prefix", "link/")
+      }
       // A `moon.work` above that does not list the checkout: Moon, and so
       // the script, ignores it.
       "shrink-workspace-sibling" =>
@@ -589,8 +607,10 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-check-fails" | "shrink-conflict" => ["--no-pr"]
       // A directory that starts with `-` must replay as one, not as an option.
       "shrink-rounds" => ["--no-pr", "--rounds", "1", "--exclude", "./-vendor"]
-      "shrink-none" | "shrink-workspace-above" | "shrink-workspace-sibling" =>
-        ["--no-pr", "--path", "beta"]
+      "shrink-none"
+      | "shrink-workspace-above"
+      | "shrink-workspace-sibling"
+      | "shrink-workspace-symlink" => ["--no-pr", "--path", "beta"]
       "shrink-skip" => ["--no-pr", "--rounds", "1", "--skip", "alpha"]
       "shrink-stack-on" => ["--stack-on", "other"]
       "shrink-fixed" => ["--no-pr", "--path", "nowhere"]
@@ -623,8 +643,17 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         @fs.remove(repo + "/.git/sequencer", recursive=true)
       }
       "shrink-unmapped" => write(calls + "/analyze-1.txt", FirstAnalysis)
-      "shrink-workspace-above" | "shrink-workspace-sibling" =>
+      "shrink-workspace-above" | "shrink-workspace-sibling" => {
         @fs.remove(temp + "/moon.work")
+        if @fs.exists(calls + "/dry-run-prefix") {
+          @fs.remove(calls + "/dry-run-prefix")
+        }
+      }
+      "shrink-workspace-symlink" => {
+        @fs.remove(temp + "/moon.work")
+        @fs.remove(temp + "/link")
+        @fs.remove(calls + "/dry-run-prefix")
+      }
       _ => ()
     }
     // Whatever happened, the checkout is back where it was, with no pick
@@ -840,7 +869,10 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       }
       // The same run as shrink-none, with `moon.work` one level above the
       // checkout: its packages are found under the checkout's prefix.
-      "shrink-none" | "shrink-workspace-above" | "shrink-workspace-sibling" => {
+      "shrink-none"
+      | "shrink-workspace-above"
+      | "shrink-workspace-sibling"
+      | "shrink-workspace-symlink" => {
         // A round with nothing accepted publishes nothing, and its package
         // is not offered again.
         assert_eq(labels, ["shrink:beta", "shrink:review-beta"], msg=output)

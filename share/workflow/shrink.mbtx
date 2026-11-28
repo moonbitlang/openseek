@@ -969,81 +969,82 @@ priv struct Package {
 }
 
 ///|
-/// The checkout's prefix in Moon's paths, which start at its workspace root:
-/// the directory of the nearest `moon.work` at or above the checkout root
-/// whose members hold the checkout, as Moon finds it (it ignores one that
-/// does not list the checkout). `""` when that is the checkout root or there
-/// is none, `repo/` when `moon.work` is one level up.
-async fn workspace_prefix() -> String {
-  let root = run("git", ["rev-parse", "--show-toplevel"]).trim().to_owned()
-  let mut dir = root
-  for ;; {
-    let manifest = "\{dir}/moon.work"
-    if dir == root && @fs.exists(manifest) {
-      return ""
-    }
-    if dir != root && @fs.exists(manifest) {
-      let inside = root[dir.length():].trim_start(chars="/").to_owned()
-      let lists = members(@fs.read_file(manifest).text()).any(listed => {
-        listed == inside || listed.has_prefix("\{inside}/")
-      })
-      if lists {
-        return "\{inside}/"
-      }
-    }
-    match dir.rev_split_once("/") {
-      Some((parent, _)) if !parent.is_empty() => dir = parent.to_owned()
-      _ => return ""
-    }
-  }
-}
-
-///|
-/// The member directories a `moon.work` lists, `members = ["./a", "b/c"]`,
-/// without `./` or a trailing `/`.
-fn members(text : String) -> Array[String] {
-  guard text.split_once("members") is Some((_, rest)) &&
-    rest.split_once("[") is Some((_, rest)) &&
-    rest.split_once("]") is Some((list, _)) else {
-    return []
-  }
-  let found : Array[String] = []
-  // Between the quotes: every second piece.
-  for index, part in list.split("\"").collect() {
-    if index % 2 == 1 {
-      let path = part.strip_prefix("./").unwrap_or(part).trim_end(chars="/")
-      found.push(path.to_owned())
-    }
-  }
-  found
-}
-
-///|
 /// Each workspace package's directory in this checkout, by package name, as
 /// Moon itself resolves it: `moon check --dry-run` prints one `moonc check`
 /// command per package, naming its source files and `-pkg <name>`. Reading
 /// the manifests instead would mean parsing every way a `moon.mod` can set a
-/// module's name and `source`. Moon's paths start at its workspace root,
-/// where the checkout is at `prefix` (`workspace_prefix`); a package outside
-/// it (a dependency, or a `moon.work` member beside the checkout) is left
-/// out.
-async fn package_dirs(prefix : String) -> Map[String, String] {
-  let dirs : Map[String, String] = Map([])
+/// module's name and `source`, and every way Moon picks its workspace (an
+/// ancestor `moon.work`, its members by relative or absolute path or through
+/// a symlink, `MOON_WORK`). The printed paths start at the workspace root:
+/// the directory at or above the checkout under which most of them exist.
+/// A package's real path then says whether it is in the checkout; one that
+/// is not (a dependency, or a `moon.work` member beside the checkout) is
+/// left out.
+async fn package_dirs() -> Map[String, String] {
+  let root = @fs.realpath(
+    run("git", ["rev-parse", "--show-toplevel"]).trim(),
+  )
+  let packages : Array[(String, Array[String])] = []
+  let seen : Set[String] = Set([])
   for line in run("moon", ["check", "--dry-run"]).split("\n") {
     guard line.strip_prefix("moonc check ") is Some(rest) else { continue }
     let args = words(rest)
     guard args.search("-pkg") is Some(at) &&
       args.get(at + 1) is Some(name) &&
-      !dirs.contains(name) &&
-      args.iter().find_first(arg => arg.has_suffix(".mbt")) is Some(file) &&
-      file.strip_prefix("./").unwrap_or(file).strip_prefix(prefix)
-      is Some(path) &&
-      !path.has_prefix("../") &&
-      !path.has_prefix("/") &&
-      !path.has_prefix(".mooncakes/") else {
+      !seen.contains(name) else {
       continue
     }
-    dirs[name] = parts(path.to_owned()).0
+    seen.insert(name)
+    let files = [
+      for arg in args if arg.has_suffix(".mbt") => {
+        arg.strip_prefix("./").unwrap_or(arg).to_owned()
+      }
+    ]
+    packages.push((name, files))
+  }
+  // Moon's workspace root: the nearest directory, from the checkout up,
+  // under which the most printed files exist. A file Moon would generate
+  // first may not exist yet, so the count need not be all of them.
+  let sample : Array[String] = []
+  for entry in packages {
+    for file in entry.1 {
+      if sample.length() < 400 && !file.has_prefix("/") {
+        sample.push(file)
+      }
+    }
+  }
+  let mut base = root
+  let mut most = 0
+  let mut dir = root
+  for ;; {
+    let mut found = 0
+    for file in sample {
+      if @fs.exists("\{dir}/\{file}") {
+        found += 1
+      }
+    }
+    if found > most {
+      base = dir
+      most = found
+    }
+    match dir.rev_split_once("/") {
+      Some((parent, _)) if !parent.is_empty() => dir = parent.to_owned()
+      _ => break
+    }
+  }
+  let dirs : Map[String, String] = Map([])
+  for entry in packages {
+    let (name, files) = entry
+    for file in files {
+      let path = if file.has_prefix("/") { file } else { "\{base}/\{file}" }
+      guard @fs.exists(path) else { continue }
+      let real = @fs.realpath(path)
+      if real.strip_prefix("\{root}/") is Some(inside) &&
+        !inside.has_prefix(".mooncakes/") {
+        dirs[name] = parts(inside.to_owned()).0
+      }
+      break
+    }
   }
   dirs
 }
@@ -1098,7 +1099,7 @@ async fn analyze(kits : Array[String]) -> (Array[Package], Array[String]) {
       entry.to_owned()
     }
   ]
-  let dirs = package_dirs(workspace_prefix())
+  let dirs = package_dirs()
   let packages : Array[Package] = []
   // A package with candidates whose files are not in this checkout (a
   // `moon.work` member beside it) cannot be worked on: it is reported, so
