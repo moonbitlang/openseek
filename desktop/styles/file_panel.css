@@ -1212,8 +1212,8 @@ button.panel-toggle:not(:disabled):hover {
 }
 
 .file-tree.workspace-file-list {
-  --tree-step: 14px;
-  --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
+  --tree-step: var(--space-5);
+  --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
   overscroll-behavior: contain;
   padding: var(--space-2) max(0px, var(--space-2) - var(--scrollbar-lane)) var(--space-4) var(--space-2);
 }
@@ -1915,6 +1915,16 @@ button.git-history-file.selected {
   color: var(--color-accent);
 }
 
+.workspace-file-list .tree-row {
+  min-height: 2rem;
+  gap: var(--space-3);
+}
+
+.workspace-file-list .tree-row.selected {
+  color: var(--color-text-primary);
+  background: var(--color-conversation-selected);
+}
+
 .change-tree {
   --tree-step: 14px;
   --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
@@ -2036,18 +2046,28 @@ button.git-history-file.selected {
   color: var(--color-text-secondary);
 }
 .tree-twistie svg { width: 16px; height: 16px; transform: rotate(-90deg); }
-.tree-twistie.expanded svg { transform: rotate(0deg); }
+.tree-twistie.expanded svg,
+.tree-dir[aria-expanded="true"] .tree-twistie svg { transform: rotate(0deg); }
+
+.workspace-file-list .tree-twistie svg {
+  width: 12px;
+  height: 12px;
+}
 
 .tree-entry-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 var(--icon-lg);
-  width: var(--icon-lg);
+  flex: 0 0 16px;
   height: var(--icon-lg);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
-.tree-entry-icon svg { width: var(--icon-lg); height: var(--icon-lg); }
+.tree-entry-icon svg { width: 100%; height: 100%; }
+
+/* MoonBit VS Code extension's images/moonbit.png (International Digital Economy Academy). */
+.tree-entry-icon.moonbit-file {
+  background: url("./moonbit-file.png") center / contain no-repeat;
+}
 
 .tree-name {
   overflow: hidden;
