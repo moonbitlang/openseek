@@ -204,7 +204,7 @@ fn CodexDraftTask::grouping_root(self : CodexDraftTask) -> String {
 /// One Codex thread's contribution to a shared project row: the component
 /// input plus the app-server activity stamp the root needs to interleave it
 /// with OpenSeek's own conversations by recency.
-pub(all) struct CodexProjectRow {
+pub struct CodexProjectRow {
   input : @conversation.Input
   updated_at_ms : Double?
 }

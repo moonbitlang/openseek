@@ -330,7 +330,7 @@ pub fn ApiState::auth_store(self : ApiState) -> @auth.AuthStore {
 ///|
 /// The engine event sink: fan out to every subscriber, and hand finished
 /// runs to the notification hook.
-pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
+fn ApiState::sink(self : ApiState) -> @engine.EventSink {
   self.hub.sink(on_finished=payload => {
     if self.hub.active_starts.get(payload.run_id) is Some(run) {
       self.messages.detach(run.session)
@@ -373,18 +373,6 @@ pub fn ApiState::publish(
   notification : @protocol.Notification,
 ) -> Unit {
   self.hub.publish(notification)
-}
-
-///|
-/// The host-op state, for the pumps spawned beside the dispatcher.
-pub fn ApiState::host_state(self : ApiState) -> @host.HostState {
-  self.host
-}
-
-///|
-/// The request-side engine coordination handle.
-pub fn ApiState::manager(self : ApiState) -> @engine.EngineManager {
-  self.manager
 }
 
 ///|

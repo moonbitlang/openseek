@@ -128,7 +128,7 @@ fn State::refresh_catalog(
 }
 
 ///|
-pub fn State::refresh(
+fn State::refresh(
   self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,

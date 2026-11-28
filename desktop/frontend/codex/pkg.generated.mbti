@@ -30,7 +30,7 @@ pub enum CodexModelListing {
   CodexModelsUnavailable(String)
 }
 
-pub(all) struct CodexProjectRow {
+pub struct CodexProjectRow {
   input : @conversation.Input
   updated_at_ms : Double?
 }
@@ -120,7 +120,6 @@ pub fn State::project_activation(Self, SidebarContext, String) -> String?
 pub fn State::project_conversations(locale? : @i18n.Locale, Self, SidebarContext, String) -> Array[CodexProjectRow]
 pub fn State::project_draft(locale? : @i18n.Locale, Self, SidebarContext, String) -> @conversation.Input?
 pub fn State::reasoning_effort_chip(locale? : @i18n.Locale, Self, Bool) -> @composer.ReasoningSelect?
-pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::refresh_git(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::reset_for_channel(Self) -> Self
 pub fn State::restore_navigation_draft(Self, @cmd.Emit[Msg], @interop.ChannelId, String) -> (@cmd.Cmd, Self)?
@@ -134,7 +133,6 @@ pub fn State::with_git_details_closed(Self) -> Self
 pub fn State::with_office_selection(Self, String?) -> Self
 pub fn State::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
 pub fn State::with_semantic_selection(Self, @mention_context.SemanticSearchReference?) -> Self
-pub fn State::worktree_launch_workspace(Self, @interop.ChannelId) -> @common.Uri?
 
 // Type aliases
 

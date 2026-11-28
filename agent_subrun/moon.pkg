@@ -10,8 +10,15 @@ import {
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/core/async",
   "moonbitlang/core/async/fs",
-  "moonbitlang/openseek/agent_session/store",
 } for "test"
+
+import {
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/core/async",
+  "moonbitlang/core/async/fs",
+  "moonbitlang/workflow/spawn",
+} for "wbtest"
 
 supported_targets = "+wasm+native"
 
