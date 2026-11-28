@@ -498,25 +498,6 @@ fn handle_compact_command(
 }
 
 ///|
-fn status_command_title(config : AppConfig) -> String {
-  "OpenSeek TUI v\{TuiModuleVersion} · openseek \{format_engine_version(config.engine_version)}"
-}
-
-///|
-fn status_command_details(state : State) -> Array[String] {
-  let lines = [
-    "session: \{state.config.session_id.value()}",
-    "model: \{state.config.model}",
-    "engine: \{state.config.engine_display()}",
-    "cwd: \{state.config.cwd}",
-  ]
-  if state.usage is Some(usage) {
-    lines.push("tokens: \{usage.total_tokens}")
-  }
-  lines
-}
-
-///|
 fn handle_status_command(
   state : State,
   arguments : String,
@@ -526,16 +507,7 @@ fn handle_status_command(
     cmds.push(AppendItem(Error("/status does not accept arguments")))
     return
   }
-  cmds.push(
-    AppendItem(
-      Notice(
-        ToolCall(
-          @doc.Text::plain(status_command_title(state.config)),
-          details=detail_texts(status_command_details(state)),
-        ),
-      ),
-    ),
-  )
+  cmds.push(AppendItem(Response(status_banner(state.config))))
 }
 
 ///|
@@ -1304,24 +1276,25 @@ test "/status shows tui and openseek versions and rejects arguments" {
   let state = drain_test_state()
   assert_true(tui_slash_commands().iter().any(spec => spec.name() == "status"))
   assert_eq(
-    status_command_title(state.config),
-    "OpenSeek TUI v\{TuiModuleVersion} · openseek v\{EngineModuleVersion}",
+    status_banner(state.config),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek v\{EngineModuleVersion} · session test",
   )
   assert_eq(
-    status_command_title({ ..state.config, engine_version: Some("0.9.0"), }),
-    "OpenSeek TUI v\{TuiModuleVersion} · openseek v0.9.0",
+    status_banner({ ..state.config, engine_version: Some("0.9.0"), }),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek v0.9.0 · session test",
   )
   assert_eq(
-    status_command_title({ ..state.config, engine_version: None, }),
-    "OpenSeek TUI v\{TuiModuleVersion} · openseek unknown",
+    status_banner({ ..state.config, engine_version: None, }),
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek unknown · session test",
   )
-  @debug.assert_eq(status_command_details(state), [
-    "session: test", "model: deepseek-v4-pro", "engine: openseek", "cwd: .",
-  ])
   let cmds = update(state, UiInput(SlashCommand(name="STATUS", arguments="")))
-  guard cmds is [AppendItem(Notice(_))] else {
-    fail("expected a single status notice card")
+  guard cmds is [AppendItem(Response(text))] else {
+    fail("expected a single status banner response")
   }
+  assert_eq(
+    text,
+    "OpenSeek TUI v\{TuiModuleVersion} · openseek v\{EngineModuleVersion} · session test",
+  )
   assert_true(state.run is Idle)
   let bad = update(state, UiInput(SlashCommand(name="status", arguments="now")))
   assert_eq(error_item_count(bad), 1)

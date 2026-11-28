@@ -281,7 +281,7 @@ const EngineModuleVersion : String = "0.8.1"
 const TuiModuleVersion : String = EngineModuleVersion
 
 ///|
-/// Format the engine version for display in the startup banner and status bar.
+/// Format the engine version for display in the status banner.
 fn format_engine_version(version : String?) -> String {
   match version {
     Some(version) => "v\{version}"
@@ -290,10 +290,10 @@ fn format_engine_version(version : String?) -> String {
 }
 
 ///|
-/// The startup banner appended to the transcript when the TUI opens: names
-/// both the TUI version and the openseek engine version alongside the session
-/// id so the conversation is resumable later with `--session <id>`.
-fn startup_banner(config : AppConfig) -> String {
+/// The single-line status banner shown on startup and in response to `/status`:
+/// names the TUI version, the openseek engine version, and the session id so
+/// the conversation is resumable later with `--session <id>`.
+fn status_banner(config : AppConfig) -> String {
   "OpenSeek TUI v\{TuiModuleVersion} · openseek \{format_engine_version(config.engine_version)} · session \{config.session_id.value()}"
 }
 
@@ -381,10 +381,9 @@ async fn run_app(config : AppConfig, initial : String?, ui : @ui.Ui) -> Unit {
   let state = State::State(config)
   let messages = @async.Queue(kind=Unbounded)
   append_session_history(state, ui)
-  // Name the versions and session so the conversation is resumable later with
-  // `--session <id>` — for generated ids this line is the only place the user
-  // ever sees one.
-  ui.append_item(Response(startup_banner(config)))
+  // Show the status banner on startup (same line as `/status`) so the TUI and
+  // openseek versions and generated session id are immediately visible.
+  ui.append_item(Response(status_banner(config)))
   refresh_ui(ui, state)
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true) <| () => { read_ui_events(ui, messages) }
@@ -895,30 +894,6 @@ test "parse_engine_version extracts openseek version tokens and rejects noise" {
   )
   assert_eq(parse_engine_version("0.8.1 extra"), None)
   assert_eq(parse_engine_version("42"), None)
-}
-
-///|
-test "startup_banner names both tui and openseek versions" {
-  let config = {
-    ..parse_config(
-      cli_command().parse(argv=["--session", "demo"], env={
-        "DEEPSEEK": "test-key",
-      }),
-    ),
-    cwd: ".",
-  }
-  assert_eq(
-    startup_banner(config),
-    "OpenSeek TUI v\{TuiModuleVersion} · openseek v\{EngineModuleVersion} · session demo",
-  )
-  assert_eq(
-    startup_banner({ ..config, engine_version: Some("0.9.0"), }),
-    "OpenSeek TUI v\{TuiModuleVersion} · openseek v0.9.0 · session demo",
-  )
-  assert_eq(
-    startup_banner({ ..config, engine_version: None, }),
-    "OpenSeek TUI v\{TuiModuleVersion} · openseek unknown · session demo",
-  )
 }
 
 ///|
