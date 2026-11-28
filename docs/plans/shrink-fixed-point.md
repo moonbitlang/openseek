@@ -255,14 +255,19 @@ to. Run it in a checkout of its own: a worktree at the default branch.
   packages costs at most 2k starts. A round starts only if a package fits,
   so a run does at least eight rounds of 8.
 - The host retains every tool call's arguments and result, up to 4 MiB per
-  script (`MaxTraceBytes`); a call past it is refused, which would end the
-  run without its continuation. The second live run retained 37.5 KB per
-  package (two briefs of about 9 KB, two reports of about 8 KB, and the
-  waits), so the 512 KiB budget it had would have run out in a default run's
-  second round. The script meters its calls and sizes each round to what
-  fits, at least 48 KB per package or a quarter over the measured average;
-  a run that cannot fit one more package stops with
-  `stopped: the trace budget is spent` and its continuation.
+  script (`MaxTraceBytes`), and serves at most 1,024 calls
+  (`MaxCallsPerProgram`; a wait that times out counts). The second live run
+  retained 37.5 KB and 7.4 calls per package (two briefs of about 9 KB, two
+  reports of about 8 KB, and the waits), so the 512 KiB budget it had would
+  have run out in a default run's second round. The script meters both,
+  counting each result JSON-escaped as the host does, and sizes each round
+  to what fits beyond a reserve (512 KiB, 128 calls): each package costs a
+  quarter over the measured average, and at least 48 KB and 16 calls. A run
+  that cannot fit one more package stops with `stopped: the host's call or
+  trace budget is spent`. A round that runs over anyway meets a refusal; the
+  run abandons that round, neither giving nor skipping its packages, and
+  stops with `stopped: the host refused a call in round <k>` and its
+  continuation.
 - Live: at most 8 workers plus their reviewers (16 children).
 - A run that stops short (`--rounds`, the start quota, the trace budget) or
   gives packages up prints
@@ -432,5 +437,18 @@ for follow-ups.
 |---|---|
 | P1: `--exclude --no-pr` takes `--no-pr` as the directory, so a local run publishes; unknown options become focus text | A flag's value may not start with `-`, and an unknown option before `--` is refused; the option-value and unknown-option modes |
 | P1: a merge whose result is HEAD leaves `git status --porcelain` empty, and the final checkout discards it | Preflight refuses a pending merge, cherry-pick, revert, rebase or bisect; the merging mode checks `MERGE_HEAD` survives |
-| P1: `name = "x" // comment` is not parsed, so the module's packages drop out and the run reports a fixed point | The value is the first quoted string; a package with candidates in no known module fails the run. The fixture's root manifest has a trailing comment (the old script reports `fixed point except sub/src/delta`) and the unmapped mode |
+| P1: `name = "x" // comment` is not parsed, so the module's packages drop out and the run reports a fixed point | The value is the first quoted string; a package with candidates in no known module is reported and keeps the run from a plain fixed point. The fixture's root manifest has a trailing comment (the old script reports `fixed point except sub/src/delta`) and the unmapped mode |
 | P1: the host retains every call against a 512 KiB budget, and a refused call ends the run without its continuation | Measured on the second live run: 450,674 bytes for 12 packages. The host budget is 4 MiB (job records 8 MiB) and a script may start 128 children; the script meters its calls and sizes rounds to fit, stopping with its continuation. The 40-character fake host cannot reach 4 MiB, so the stop was checked by hand with the budget set to 120,000 bytes |
+
+Sixth pass (Codex, xhigh, the fifth pass's fixes):
+
+| Codex finding | Resolution |
+|---|---|
+| P1: round sizing uses an average, results are counted unescaped, and a refused wait still ends the run without its continuation | Results are counted as the host stores them; a refused call raises `HostLimit`, which abandons the round and stops with the continuation (the host-limit mode, whose fake host refuses a wait as agent_tool/ptc does) |
+| P1: the 1,024-call limit is not tracked | Calls are metered beside bytes and rounds sized by both |
+| P1: a cherry-pick sequence between two picks passes preflight | `sequencer/` is a marker too (the sequencing mode) |
+| P2: a `name` inside a `rule(...)` before the module's own wins; compact `moon.mod.json` has no matching line | A `moon.mod.json` is parsed as JSON; a `moon.mod` field must start its line. The fixture's root manifest has such a rule |
+| P2: a `moon.work` member outside the checkout aborts even a scoped run | Reported as not in this checkout, and the run ends `fixed point except` it rather than failing |
+| P2: a branch named `MERGE_HEAD` reads as a merge | Every marker is a file looked up with `git rev-parse --git-path` |
+| P2: `--exclude ./-vendor` continues as `--exclude -vendor`, which is refused | Continuation arguments keep `./` before a leading `-` (the rounds mode's continuation, which the continue mode replays) |
+| P2: 100 records with 4 MiB traces pass an SSH host's 128 MiB reply | A history page also stops once its records' data reaches 32 MiB; `next_offset` is the position after it |

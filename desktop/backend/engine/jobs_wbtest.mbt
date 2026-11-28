@@ -120,6 +120,37 @@ async test "job history distinguishes dead owner from disconnected client and ma
 }
 
 ///|
+async test "a history page of large records stops early and the next one goes on from it" {
+  let root = @fs.tmpdir(prefix="job-history-bytes-")
+  defer @fs.remove(root, recursive=true)
+  @fs.mkdir("\{root}/gen-1")
+  @fs.write_text("\{root}/gen-1/owner.lock", "")
+  // Five records whose traces carry 1,000 bytes each, under a 2,500-byte
+  // page: three fit before a page is full.
+  let trace : Json = {
+    "ptc_calls": [{ "name": "large", "content": "x".repeat(990) }],
+  }
+  for index in 1..<=5 {
+    let record = {
+      ..job_record_fixture(),
+      id: "bg-\{index}",
+      state: Exited(0),
+      data: Some(trace),
+    }
+    @fs.write_text(
+      "\{root}/gen-1/bg-\{index}.json",
+      record.to_json().stringify(),
+    )
+  }
+  let first = job_history_page(root, Map([]), 0, [], max_bytes=2500)
+  assert_eq(first.jobs.map(view => view.job.id), ["bg-5", "bg-4", "bg-3"])
+  assert_eq(first.next_offset, Some(3))
+  let second = job_history_page(root, Map([]), 3, [], max_bytes=2500)
+  assert_eq(second.jobs.map(view => view.job.id), ["bg-2", "bg-1"])
+  assert_eq(second.next_offset, None)
+}
+
+///|
 async test "history decodes only its requested page and preserves runtime job order" {
   let root = @fs.tmpdir(prefix="job-history-pages-")
   defer @fs.remove(root, recursive=true)

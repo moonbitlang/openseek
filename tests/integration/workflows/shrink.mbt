@@ -349,11 +349,12 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
     @fs.mkdir(repo + "/" + dir, recursive=true)
   }
   write(repo + "/README.md", "fixture\n")
-  // A trailing comment must not hide the module's name: a module the
-  // script cannot map would drop its packages and read as a fixed point.
+  // The module's name is the top-level field, after a rule with a `name` of
+  // its own and despite a trailing comment: a module the script cannot map
+  // would drop its packages and read as a fixed point.
   write(
     repo + "/moon.mod",
-    "name = \"fx/app\" // the fixture app\n\nversion = \"0.1.0\"\n",
+    "rule(\n  name: \"generate\", // code-generation rule\n  command: \"true\",\n)\n\nname = \"fx/app\" // the fixture app\n\nversion = \"0.1.0\"\n",
   )
   // A module whose packages live under its `source` directory.
   write(
@@ -492,7 +493,8 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-publish", "shrink-check-fails", "shrink-conflict", "shrink-rounds",
       "shrink-continue", "shrink-none", "shrink-skip", "shrink-fixed", "shrink-bad-number",
       "shrink-subdir", "shrink-dirty", "shrink-ahead", "shrink-stack-on", "shrink-option-value",
-      "shrink-unknown-option", "shrink-merging", "shrink-unmapped",
+      "shrink-unknown-option", "shrink-merging", "shrink-sequencing", "shrink-unmapped",
+      "shrink-host-limit",
     ] {
     let host = fake_host("shrink", mode)
     host.fixture["base#1"] = head
@@ -527,6 +529,12 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-check-fails" => write(calls + "/fail-check", "")
       // A merge whose result is HEAD: `git status --porcelain` is empty.
       "shrink-merging" => write(repo + "/.git/MERGE_HEAD", head + "\n")
+      // A cherry-pick sequence between two picks: no CHERRY_PICK_HEAD, a
+      // clean index, and the rest of the sequence in `sequencer/`.
+      "shrink-sequencing" => {
+        @fs.mkdir(repo + "/.git/sequencer")
+        write(repo + "/.git/sequencer/todo", "pick \{beta1}\n")
+      }
       "shrink-unmapped" => write(calls + "/analyze-1.txt", UnmappedAnalysis)
       "shrink-ahead" => {
         append(repo + "/README.md", "local")
@@ -547,7 +555,8 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-continue" =>
         continued.split(" ").map(arg => arg.to_owned()).collect()
       "shrink-check-fails" | "shrink-conflict" => ["--no-pr"]
-      "shrink-rounds" => ["--no-pr", "--rounds", "1"]
+      // A directory that starts with `-` must replay as one, not as an option.
+      "shrink-rounds" => ["--no-pr", "--rounds", "1", "--exclude", "./-vendor"]
       "shrink-none" => ["--no-pr", "--path", "beta"]
       "shrink-skip" => ["--no-pr", "--rounds", "1", "--skip", "alpha"]
       "shrink-stack-on" => ["--stack-on", "other"]
@@ -555,7 +564,8 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       "shrink-bad-number" => ["--max-packages", "17"]
       "shrink-option-value" => ["--exclude", "--no-pr"]
       "shrink-unknown-option" => ["--no-pr", "--bogus"]
-      "shrink-merging" | "shrink-unmapped" => ["--no-pr"]
+      "shrink-merging" | "shrink-sequencing" | "shrink-unmapped" => ["--no-pr"]
+      "shrink-host-limit" => ["--no-pr", "--rounds", "2"]
       _ => []
     }
     let cwd = if mode == "shrink-subdir" { repo + "/alpha" } else { repo }
@@ -574,6 +584,10 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
         // Refused before anything ran: the merge is still there.
         assert_true(@fs.exists(repo + "/.git/MERGE_HEAD"), msg=output)
         @fs.remove(repo + "/.git/MERGE_HEAD")
+      }
+      "shrink-sequencing" => {
+        assert_true(@fs.exists(repo + "/.git/sequencer/todo"), msg=output)
+        @fs.remove(repo + "/.git/sequencer", recursive=true)
       }
       "shrink-unmapped" => write(calls + "/analyze-1.txt", FirstAnalysis)
       _ => ()
@@ -765,7 +779,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
           [
             "round 1: accepted=2 tip=\{tip1[:10]} api: pkg.generated.mbti -1 +0, exports.mbt +5 pr=branch \{branch1}",
             "stopped: --rounds 1: rounds=1",
-            "\{prefix}--no-pr --rounds 1 --skip beta --skip kit --skip sub/src/delta",
+            "\{prefix}--no-pr --rounds 1 --exclude ./-vendor --skip beta --skip kit --skip sub/src/delta",
           ],
         )
       }
@@ -834,12 +848,32 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
           false,
           ["a merge is in progress (MERGE_HEAD): finish or abort it first"],
         )
-      "shrink-unmapped" => {
-        assert_true(!output.contains("fixed point"), msg=output)
+      "shrink-sequencing" =>
         (
           false,
           [
-            "no tracked moon.mod or moon.mod.json names the module of fx/elsewhere/z",
+            "a cherry-pick or revert sequence is in progress (sequencer): finish or abort it first",
+          ],
+        )
+      // The host refuses the round's first wait: the run stops with a
+      // continuation that offers the round's packages again.
+      "shrink-host-limit" =>
+        (
+          true,
+          [
+            "round 1: stopped by the host: PTC trace budget exhausted; no tool executed",
+            "stopped: the host refused a call in round 1: rounds=1", "continue from main: --no-pr --rounds 2",
+          ],
+        )
+      // A package of a module outside the checkout is reported, never read
+      // as done.
+      "shrink-unmapped" => {
+        assert_true(!output.contains("fixed point:"), msg=output)
+        (
+          true,
+          [
+            "not in this checkout (no tracked moon.mod or moon.mod.json names their module): fx/elsewhere/z",
+            "fixed point except fx/elsewhere/z: rounds=0",
           ],
         )
       }
@@ -854,6 +888,7 @@ async fn verify_shrink(root : String, temp : String, exe : String) -> Unit {
       | "shrink-option-value"
       | "shrink-unknown-option"
       | "shrink-merging"
+      | "shrink-sequencing"
       | "shrink-unmapped") {
       // Preflight stops the run before any child starts.
       assert_eq(labels, [], msg=output)

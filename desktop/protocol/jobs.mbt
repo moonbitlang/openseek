@@ -292,9 +292,10 @@ pub extend JobView with ToJson::{to_json}
 pub extend JobView with FromJson::{from_json}
 
 ///|
-/// One page of a conversation's jobs, newest first. Each page covers the next
-/// 100 positions of the history, and `next_offset` is present while more
-/// positions follow. Positions follow creation order alone.
+/// One page of a conversation's jobs, newest first. Each page covers at most
+/// the next 100 positions of the history, fewer once its records' data
+/// reaches 32 MiB, and `next_offset`, the position after the page, is present
+/// while more positions follow. Positions follow creation order alone.
 ///
 /// Jobs the live engine still runs are listed on the first page (offset 0),
 /// all of them ahead of its history, instead of at their positions. A client

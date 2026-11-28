@@ -100,6 +100,14 @@ fn FakeHost::answer(
       guard arguments is { "job_ids": Array(ids), .. } else {
         return reply("error: job_ids", is_error=true)
       }
+      // A host whose per-script trace budget ran out refuses the next call,
+      // as agent_tool/ptc does, without running it.
+      if self.mode == "shrink-host-limit" {
+        return reply(
+          "PTC trace budget exhausted; no tool executed",
+          is_error=true,
+        )
+      }
       // The sweep's host ends one job per wait, as a real session does
       // when its children finish at different times; the others end all.
       let waiting = [

@@ -5942,23 +5942,35 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
           #|///|
           #|/// Bytes of tool calls the host retains for one script (`MaxTraceBytes` in
-          #|/// agent_tool/ptc): a call past it is refused, which would end the run
-          #|/// without its continuation, so rounds are sized to stay under it.
+          #|/// agent_tool/ptc). A call past it, or past `CallBudget`, is refused.
           #|const TraceBudget : Int = 4194304
           #|
           #|///|
+          #|/// Tool calls the host serves one script (`MaxCallsPerProgram` in
+          #|/// agent_tool/ptc). A wait that times out with nothing ended counts too.
+          #|const CallBudget : Int = 1024
+          #|
+          #|///|
           #|/// What one package was assumed to add to the trace before any is measured:
-          #|/// run 2 on this repository averaged 37.5 KB (two briefs of about 9 KB, two
+          #|/// the second live run averaged 37.5 KB (two briefs of about 9 KB, two
           #|/// reports of about 8 KB, and the waits).
           #|const PackageTraceBytes : Int = 48000
           #|
           #|///|
-          #|/// Trace kept free for the end of a round and for calls whose size the
-          #|/// estimate missed.
-          #|const TraceReserve : Int = 65536
+          #|/// Calls one package was assumed to take before any is measured: the second
+          #|/// live run averaged 7.4, four packages a round.
+          #|const PackageCalls : Int = 16
           #|
           #|///|
-          #|/// The host's per-call framing around a call's arguments and result.
+          #|/// Trace kept free beyond the estimate, for a round that runs over it.
+          #|const TraceReserve : Int = 524288
+          #|
+          #|///|
+          #|/// Calls kept free beyond the estimate, for a round that runs over it.
+          #|const CallReserve : Int = 128
+          #|
+          #|///|
+          #|/// The host's framing around one call's arguments and result.
           #|const TraceEntryBytes : Int = 256
           #|
           #|///|
@@ -5966,38 +5978,63 @@ fn bundled_workflow(name : StringView) -> String? {
           #|let traced : Ref[Int] = Ref(0)
           #|
           #|///|
-          #|/// How many more packages fit in the host's trace, after `worked` packages:
-          #|/// each is assumed to cost what they averaged so far, a quarter more for
-          #|/// the spread between packages, and never less than `PackageTraceBytes`.
-          #|fn trace_room(worked : Int) -> Int {
-          #|  let measured = if worked > 0 { traced.val * 5 / (worked * 4) } else { 0 }
-          #|  let each = if measured > PackageTraceBytes {
-          #|    measured
-          #|  } else {
-          #|    PackageTraceBytes
+          #|/// The tool calls this script has made.
+          #|let called : Ref[Int] = Ref(0)
+          #|
+          #|///|
+          #|/// The host refused a call for one of its per-script limits. Nothing ran;
+          #|/// the round in flight is abandoned and the run stops with its continuation.
+          #|suberror HostLimit {
+          #|  HostLimit(String)
+          #|}
+          #|
+          #|///|
+          #|/// How many more packages fit in what is left of the host's limits, after
+          #|/// `worked` packages: each is assumed to cost a quarter more than they
+          #|/// averaged so far, and never less than the starting estimates. Rounds are
+          #|/// sized by this; a round that still runs over is stopped by `HostLimit`.
+          #|fn host_room(worked : Int) -> Int {
+          #|  let room = (budget : Int, reserve : Int, used : Int, floor : Int) => {
+          #|    let measured = if worked > 0 { used * 5 / (worked * 4) } else { 0 }
+          #|    let each = if measured > floor { measured } else { floor }
+          #|    let left = budget - reserve - used
+          #|    if left > 0 {
+          #|      left / each
+          #|    } else {
+          #|      0
+          #|    }
           #|  }
-          #|  let left = TraceBudget - TraceReserve - traced.val
-          #|  if left > 0 {
-          #|    left / each
+          #|  let bytes = room(TraceBudget, TraceReserve, traced.val, PackageTraceBytes)
+          #|  let calls = room(CallBudget, CallReserve, called.val, PackageCalls)
+          #|  if bytes < calls {
+          #|    bytes
           #|  } else {
-          #|    0
+          #|    calls
           #|  }
           #|}
           #|
           #|///|
-          #|/// Call a host tool and count what the host retains of the call: its name,
-          #|/// arguments and result, in UTF-8 bytes as the host measures them.
+          #|/// Call a host tool and count what the host retains of it: the call and its
+          #|/// JSON result, in UTF-8 bytes, as the host measures them.
           #|async fn tool(name : String, arguments : Json) -> @tools.CallResult {
           #|  let result = @tools.call(name, arguments)
-          #|  let data = match result.data {
-          #|    Some(data) => data.stringify()
-          #|    None => ""
+          #|  called.val += 1
+          #|  let reply : Map[String, Json] = {
+          #|    "content": Json::string(result.content),
+          #|    "is_error": Json::boolean(result.is_error),
+          #|  }
+          #|  if result.data is Some(data) {
+          #|    reply["data"] = data
           #|  }
           #|  traced.val += TraceEntryBytes +
           #|    @utf8.encode(name).length() +
           #|    @utf8.encode(arguments.stringify()).length() +
-          #|    @utf8.encode(result.content).length() +
-          #|    @utf8.encode(data).length()
+          #|    @utf8.encode(Json::object(reply).stringify()).length()
+          #|  if result.is_error &&
+          #|    (result.content.contains("PTC trace budget exhausted") ||
+          #|    result.content.contains("PTC program exhausted its")) {
+          #|    raise HostLimit(result.content)
+          #|  }
           #|  result
           #|}
           #|
@@ -6274,23 +6311,17 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
           #|///|
           #|/// Fail when a git operation is in progress. A merge whose result matches
-          #|/// HEAD leaves `git status --porcelain` empty, and the checkout that ends
-          #|/// every run would silently discard it.
+          #|/// HEAD leaves `git status --porcelain` empty, and so does a cherry-pick
+          #|/// sequence between two picks; the checkout that ends every run, or the
+          #|/// script's own `cherry-pick --abort`, would silently discard either. The
+          #|/// markers are files in this worktree's git directory, looked up by path:
+          #|/// as revisions, a branch named `MERGE_HEAD` would resolve too.
           #|async fn idle() -> Unit {
           #|  for operation in [
           #|      ("MERGE_HEAD", "merge"),
           #|      ("CHERRY_PICK_HEAD", "cherry-pick"),
           #|      ("REVERT_HEAD", "revert"),
-          #|    ] {
-          #|    let (pseudo, name) = operation
-          #|    let found = @shell.Cmd("git", ["rev-parse", "-q", "--verify", pseudo]).output(
-          #|      timeout_ms=30000,
-          #|    )
-          #|    guard found.exit_code() != 0 else {
-          #|      fail("a \{name} is in progress (\{pseudo}): finish or abort it first")
-          #|    }
-          #|  }
-          #|  for operation in [
+          #|      ("sequencer", "cherry-pick or revert sequence"),
           #|      ("rebase-merge", "rebase"),
           #|      ("rebase-apply", "rebase"),
           #|      ("BISECT_LOG", "bisect"),
@@ -6298,7 +6329,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    let (entry, name) = operation
           #|    let path = run("git", ["rev-parse", "--git-path", entry]).trim().to_owned()
           #|    guard !@fs.exists(path) else {
-          #|      fail("a \{name} is in progress (\{path}): finish or abort it first")
+          #|      fail("a \{name} is in progress (\{entry}): finish or abort it first")
           #|    }
           #|  }
           #|}
@@ -6339,9 +6370,13 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      ending = "stopped: --rounds \{limit}"
           #|      break
           #|    }
-          #|    let packages = analyze(modules, kits).filter(pkg => {
-          #|      within(pkg.dir, options.paths)
-          #|    })
+          #|    let (analyzed, unmapped) = analyze(modules, kits)
+          #|    if unmapped is [_, ..] {
+          #|      println(
+          #|        "  not in this checkout (no tracked moon.mod or moon.mod.json names their module): \{unmapped.join(" ")}",
+          #|      )
+          #|    }
+          #|    let packages = analyzed.filter(pkg => within(pkg.dir, options.paths))
           #|    let open : Array[Package] = []
           #|    for pkg in packages {
           #|      if skipped.contains(pkg.dir) ||
@@ -6362,10 +6397,11 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      open.push(pkg)
           #|    }
           #|    guard open is [_, ..] else {
-          #|      ending = if packages is [] {
+          #|      let left = [..packages.map(pkg => shown(pkg.dir)), ..unmapped]
+          #|      ending = if left is [] {
           #|        "fixed point"
           #|      } else {
-          #|        "fixed point except \{packages.map(pkg => shown(pkg.dir)).join(" ")}"
+          #|        "fixed point except \{left.join(" ")}"
           #|      }
           #|      break
           #|    }
@@ -6374,9 +6410,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      ending = "stopped: the start quota is spent"
           #|      break
           #|    }
-          #|    let fits = trace_room(worked)
+          #|    let fits = host_room(worked)
           #|    guard fits > 0 else {
-          #|      ending = "stopped: the trace budget is spent"
+          #|      ending = "stopped: the host's call or trace budget is spent"
           #|      break
           #|    }
           #|    round += 1
@@ -6392,7 +6428,16 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    println(
           #|      "round \{round}: packages=\{open.length()} chosen=\{works.length()}",
           #|    )
-          #|    let (spent, used) = work_and_review(works, base, options.focus, failures)
+          #|    let (spent, used) = work_and_review(works, base, options.focus, failures) catch {
+          #|      HostLimit(why) => {
+          #|        // Nothing of this round is kept: its packages are neither given nor
+          #|        // skipped, so the continuation offers them again.
+          #|        println("round \{round}: stopped by the host: \{first_line(why)}")
+          #|        ending = "stopped: the host refused a call in round \{round}"
+          #|        break
+          #|      }
+          #|      error => raise error
+          #|    }
           #|    started += spent
           #|    tokens += used
           #|    let accepted = works.filter(work => work.review is Accepted(_))
@@ -6499,7 +6544,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|) -> String {
           #|  let args : Array[String] = []
           #|  for dir in options.paths {
-          #|    args.append(["--path", shown(dir)])
+          #|    args.append(["--path", argument(dir)])
           #|  }
           #|  if options.max_packages != DefaultPackages {
           #|    args.append(["--max-packages", options.max_packages.to_string()])
@@ -6508,7 +6553,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    args.append(["--check-target", target])
           #|  }
           #|  for dir in options.check_dirs {
-          #|    args.append(["--check-in", shown(dir)])
+          #|    args.append(["--check-in", argument(dir)])
           #|  }
           #|  match (options.publish, last, options.stack_on) {
           #|    (false, _, _) => args.push("--no-pr")
@@ -6520,10 +6565,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    args.append(["--rounds", limit.to_string()])
           #|  }
           #|  for dir in options.excludes {
-          #|    args.append(["--exclude", shown(dir)])
+          #|    args.append(["--exclude", argument(dir)])
           #|  }
           #|  for dir in [..options.skips, ..skipped] {
-          #|    args.append(["--skip", shown(dir)])
+          #|    args.append(["--skip", argument(dir)])
           #|  }
           #|  if !options.focus.is_empty() {
           #|    args.append(["--", options.focus])
@@ -6741,22 +6786,25 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// A string field a module manifest declares, in either format: `key = "x"`
-          #|/// or `"key": "x"`. The value is the first quoted string, so a trailing
-          #|/// `// comment` or `,` does not hide it.
+          #|/// A top-level string field of a module manifest. A `moon.mod.json` is read
+          #|/// as JSON. In a `moon.mod`, top-level fields start their line (`key = "x"`,
+          #|/// with any comment after the value), so the indented fields of a block
+          #|/// such as `rule(...)` are not mistaken for them.
           #|fn manifest_field(text : String, key : String) -> String? {
-          #|  for line in text.split("\n") {
-          #|    let line = line.trim()
-          #|    let rest = match line.strip_prefix(key) {
-          #|      Some(rest) => rest
-          #|      None =>
-          #|        match line.strip_prefix("\"\{key}\"") {
-          #|          Some(rest) => rest
-          #|          None => continue
-          #|        }
+          #|  if text.trim_start() is ['{', ..] {
+          #|    let parsed = try Some(@json.parse(text)) catch { _ => None }
+          #|    guard parsed is Some(Object(fields)) &&
+          #|      fields.get(key) is Some(String(value)) else {
+          #|      return None
           #|    }
-          #|    guard rest.trim_start() is ['=' | ':', .. value] else { continue }
-          #|    guard value.trim_start() is ['"', .. quoted] else { continue }
+          #|    return Some(value)
+          #|  }
+          #|  for line in text.split("\n") {
+          #|    guard line.strip_prefix(key) is Some(rest) &&
+          #|      rest.trim_start() is ['=', .. value] &&
+          #|      value.trim_start() is ['"', .. quoted] else {
+          #|      continue
+          #|    }
           #|    if quoted.find("\"") is Some(end) {
           #|      return Some(quoted[:end].to_owned())
           #|    }
@@ -6836,12 +6884,12 @@ fn bundled_workflow(name : StringView) -> String? {
           #|
           #|///|
           #|/// Run the analyzer over the whole workspace and return the packages that
-          #|/// have candidates, sorted by directory. A test kit's test-only items are
-          #|/// not candidates.
+          #|/// have candidates, sorted by directory, and the names of those in no module
+          #|/// of this checkout. A test kit's test-only items are not candidates.
           #|async fn analyze(
           #|  modules : Array[(String, String)],
           #|  kits : Array[String],
-          #|) -> Array[Package] {
+          #|) -> (Array[Package], Array[String]) {
           #|  let output = run("moon", ["ide", "analyze"])
           #|  // The analyzer checks first, and a check may rewrite interface files;
           #|  // the next round's checkout must not lose or trip over that.
@@ -6854,8 +6902,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    }
           #|  ]
           #|  let packages : Array[Package] = []
-          #|  // A package with candidates that maps to no module would be dropped and
-          #|  // read as a fixed point: say which instead.
+          #|  // A package with candidates in no module of this checkout cannot be
+          #|  // worked on (a `moon.work` member outside it, or a manifest the script
+          #|  // misread): it is reported, so the run never reads it as a fixed point.
           #|  let unmapped : Array[String] = []
           #|  for name, rows in candidates(output) {
           #|    guard package_dir(name, modules) is Some(dir) else {
@@ -6890,13 +6939,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      packages.push({ dir, files, candidates: rows, })
           #|    }
           #|  }
-          #|  guard unmapped is [] else {
-          #|    fail(
-          #|      "no tracked moon.mod or moon.mod.json names the module of \{unmapped.join(", ")}: the analyzer lists candidates there, so the run cannot treat them as done",
-          #|    )
-          #|  }
           #|  packages.sort_by((a, b) => a.dir.lexical_compare(b.dir))
-          #|  packages
+          #|  (packages, unmapped)
           #|}
           #|
           #|///|
@@ -7114,6 +7158,17 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    "."
           #|  } else {
           #|    dir
+          #|  }
+          #|}
+          #|
+          #|///|
+          #|/// `dir` as a continuation argument: a directory that starts with `-` keeps
+          #|/// its `./`, or it would read as an option.
+          #|fn argument(dir : String) -> String {
+          #|  if dir.has_prefix("-") {
+          #|    "./\{dir}"
+          #|  } else {
+          #|    shown(dir)
           #|  }
           #|}
           #|
